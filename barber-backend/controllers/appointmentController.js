@@ -1,5 +1,5 @@
 const Appointment = require("../models/appointment");
-
+const mongoose = require("mongoose");
 // Create a new appointment
 const createAppointment = async (req, res, next) => {
   try {
