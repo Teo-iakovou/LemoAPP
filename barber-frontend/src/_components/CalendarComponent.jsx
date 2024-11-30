@@ -24,6 +24,13 @@ const CalendarComponent = ({
       className={`relative z-0 ${
         disabled ? "pointer-events-none opacity-50" : ""
       }`}
+      formats={{
+        timeGutterFormat: "HH:mm", // Format the left time gutter in 24-hour format
+        eventTimeRangeFormat: ({ start, end }) =>
+          `${moment(start).format("HH:mm")} - ${moment(end).format("HH:mm")}`,
+        agendaTimeRangeFormat: ({ start, end }) =>
+          `${moment(start).format("HH:mm")} - ${moment(end).format("HH:mm")}`,
+      }}
     />
   );
 };

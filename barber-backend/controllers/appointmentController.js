@@ -1,41 +1,107 @@
 const Appointment = require("../models/appointment");
 const mongoose = require("mongoose");
+const Joi = require("joi");
+const { format } = require("date-fns");
+// Validation Schema
+const appointmentSchema = Joi.object({
+  customerName: Joi.string().required(),
+  phoneNumber: Joi.string().required(),
+  appointmentDateTime: Joi.date().required(),
+});
+
+// Utility for ObjectId validation
+const isValidObjectId = (id) => mongoose.Types.ObjectId.isValid(id);
+
+// Standardized Response
+const response = (res, status, message, data = null) => {
+  res.status(status).json({ message, data });
+};
+
 // Create a new appointment
 const createAppointment = async (req, res, next) => {
   try {
-    const { customerName, phoneNumber, appointmentDateTime } = req.body;
+    const { error } = appointmentSchema.validate(req.body);
+    if (error) return response(res, 400, error.details[0].message);
 
-    if (!customerName || !phoneNumber || !appointmentDateTime) {
-      return res.status(400).json({ message: "All fields are required" });
-    }
+    const { appointmentDateTime } = req.body;
 
-    if (typeof customerName !== "string" || typeof phoneNumber !== "string") {
-      return res.status(400).json({ message: "Invalid data format" });
+    const startTime = new Date(appointmentDateTime);
+    const endTime = new Date(startTime);
+    endTime.setMinutes(startTime.getMinutes() + 30); // Add 30 minutes
+
+    // Check for overlapping appointments
+    const overlappingAppointment = await Appointment.findOne({
+      $or: [
+        {
+          appointmentDateTime: { $lt: endTime },
+          appointmentEndTime: { $gt: startTime },
+        },
+      ],
+    });
+
+    if (overlappingAppointment) {
+      return response(res, 400, "Appointment time conflict");
     }
 
     // Create and save the new appointment
     const newAppointment = new Appointment({
-      customerName,
-      phoneNumber,
-      appointmentDateTime,
+      ...req.body,
+      appointmentDateTime: startTime,
     });
 
     const savedAppointment = await newAppointment.save();
-    res
-      .status(201)
-      .json({ message: "Appointment created successfully", savedAppointment });
+
+    // Format the response times into 24-hour format
+    const formattedAppointment = {
+      ...savedAppointment._doc,
+      appointmentDateTime: format(
+        new Date(savedAppointment.appointmentDateTime),
+        "HH:mm"
+      ),
+      appointmentEndTime: format(
+        new Date(savedAppointment.appointmentEndTime),
+        "HH:mm"
+      ),
+    };
+
+    response(
+      res,
+      201,
+      "Appointment created successfully",
+      formattedAppointment
+    );
   } catch (error) {
-    next(error); // Pass the error to the error-handling middleware
+    next(error);
   }
 };
 
 // Get all appointments
 const getAppointments = async (req, res, next) => {
   try {
-    const appointments = await Appointment.find().sort({
-      appointmentDateTime: 1,
-    });
-    res.json(appointments);
+    const { page = 1, limit = 10, sortBy = "appointmentDateTime" } = req.query;
+
+    const appointments = await Appointment.find()
+      .sort({ [sortBy]: 1 })
+      .skip((page - 1) * limit)
+      .limit(parseInt(limit))
+      .lean();
+
+    const total = await Appointment.countDocuments();
+
+    // Format appointment times into 24-hour format
+    const formattedAppointments = appointments.map((appointment) => ({
+      ...appointment,
+      appointmentDateTime: format(
+        new Date(appointment.appointmentDateTime),
+        "HH:mm"
+      ),
+      appointmentEndTime: format(
+        new Date(appointment.appointmentEndTime),
+        "HH:mm"
+      ),
+    }));
+
+    res.json({ total, page, appointments: formattedAppointments });
   } catch (error) {
     next(error);
   }
@@ -45,23 +111,18 @@ const getAppointments = async (req, res, next) => {
 const updateAppointment = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const updatedData = req.body;
+    if (!isValidObjectId(id))
+      return response(res, 400, "Invalid appointment ID");
 
     const updatedAppointment = await Appointment.findByIdAndUpdate(
       id,
-      updatedData,
-      {
-        new: true,
-      }
+      req.body,
+      { new: true }
     );
-    if (!updatedAppointment) {
-      return res.status(404).json({ message: "Appointment not found" });
-    }
 
-    res.json({
-      message: "Appointment updated successfully",
-      updatedAppointment,
-    });
+    if (!updatedAppointment) return response(res, 404, "Appointment not found");
+
+    response(res, 200, "Appointment updated successfully", updatedAppointment);
   } catch (error) {
     next(error);
   }
@@ -71,18 +132,13 @@ const updateAppointment = async (req, res, next) => {
 const deleteAppointment = async (req, res, next) => {
   try {
     const { id } = req.params;
-
-    // Validate if the `id` is a valid MongoDB ObjectId
-    if (!id || !mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ message: "Invalid appointment ID" });
-    }
+    if (!isValidObjectId(id))
+      return response(res, 400, "Invalid appointment ID");
 
     const deletedAppointment = await Appointment.findByIdAndDelete(id);
-    if (!deletedAppointment) {
-      return res.status(404).json({ message: "Appointment not found" });
-    }
+    if (!deletedAppointment) return response(res, 404, "Appointment not found");
 
-    res.json({ message: "Appointment deleted successfully" });
+    response(res, 200, "Appointment deleted successfully");
   } catch (error) {
     next(error);
   }
