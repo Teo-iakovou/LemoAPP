@@ -3,14 +3,27 @@ const mongoose = require("mongoose");
 // Create a new appointment
 const createAppointment = async (req, res, next) => {
   try {
-    const { customerName, phoneNumber, appointmentDateTime } = req.body;
+    const { customerName, phoneNumber, appointmentDateTime, barber } = req.body;
 
-    if (!customerName || !phoneNumber || !appointmentDateTime) {
+    // Validate required fields
+    if (!customerName || !phoneNumber || !appointmentDateTime || !barber) {
       return res.status(400).json({ message: "All fields are required" });
     }
 
-    if (typeof customerName !== "string" || typeof phoneNumber !== "string") {
+    // Validate data types
+    if (
+      typeof customerName !== "string" ||
+      typeof phoneNumber !== "string" ||
+      typeof barber !== "string"
+    ) {
       return res.status(400).json({ message: "Invalid data format" });
+    }
+
+    // Validate barber value
+    if (!["Lemo", "Assistant"].includes(barber)) {
+      return res
+        .status(400)
+        .json({ message: "Barber must be either 'Lemo' or 'Assistant'" });
     }
 
     // Create and save the new appointment
@@ -18,6 +31,7 @@ const createAppointment = async (req, res, next) => {
       customerName,
       phoneNumber,
       appointmentDateTime,
+      barber,
     });
 
     const savedAppointment = await newAppointment.save();
@@ -45,15 +59,23 @@ const getAppointments = async (req, res, next) => {
 const updateAppointment = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const updatedData = req.body;
+    const { barber } = req.body;
+
+    // Validate barber if provided
+    if (barber && !["Lemo", "Assistant"].includes(barber)) {
+      return res
+        .status(400)
+        .json({ message: "Barber must be either 'Lemo' or 'Assistant'" });
+    }
 
     const updatedAppointment = await Appointment.findByIdAndUpdate(
       id,
-      updatedData,
+      req.body, // Update all provided fields, including barber
       {
-        new: true,
+        new: true, // Return the updated document
       }
     );
+
     if (!updatedAppointment) {
       return res.status(404).json({ message: "Appointment not found" });
     }

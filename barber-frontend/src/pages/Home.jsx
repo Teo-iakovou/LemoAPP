@@ -15,6 +15,7 @@ const Home = () => {
       try {
         const response = await fetch("http://localhost:5001/api/appointments");
         const data = await response.json();
+
         const events = data.map((appointment) => ({
           id: appointment._id,
           title: appointment.customerName,
@@ -22,6 +23,7 @@ const Home = () => {
           end: new Date(
             new Date(appointment.appointmentDateTime).getTime() + 30 * 60 * 1000 // Add 30 minutes in milliseconds
           ),
+          barber: appointment.barber,
         }));
         setAppointments(events);
       } catch (error) {
@@ -71,6 +73,7 @@ const Home = () => {
                 new Date(updatedAppointment.appointmentDateTime).getTime() +
                   30 * 60 * 1000 // Add 30 minutes in milliseconds
               ),
+              barber: updatedAppointment.barber,
             }
           : appt
       );
@@ -85,6 +88,7 @@ const Home = () => {
           new Date(updatedAppointment.appointmentDateTime).getTime() +
             30 * 60 * 1000 // Add 30 minutes in milliseconds
         ),
+        barber: updatedAppointment.barber,
       };
       setAppointments([...appointments, newEvent]);
     }

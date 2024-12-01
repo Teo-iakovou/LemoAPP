@@ -11,6 +11,18 @@ const CalendarComponent = ({
   onSelectEvent,
   disabled,
 }) => {
+  const eventStyleGetter = (event) => {
+    const backgroundColor = event.barber === "Lemo" ? "blue" : "orange";
+    return {
+      style: {
+        backgroundColor,
+        color: "white",
+        borderRadius: "5px",
+        border: "none",
+        padding: "5px",
+      },
+    };
+  };
   return (
     <Calendar
       localizer={localizer}
@@ -21,6 +33,7 @@ const CalendarComponent = ({
       selectable={!disabled}
       onSelectSlot={onSelectSlot}
       onSelectEvent={onSelectEvent}
+      eventPropGetter={eventStyleGetter}
       className={`relative z-0 ${
         disabled ? "pointer-events-none opacity-50" : ""
       }`}
