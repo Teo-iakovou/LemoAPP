@@ -18,6 +18,11 @@ const appointmentSchema = new mongoose.Schema({
       message: "Appointment date must be in the future",
     },
   },
+  barber: {
+    type: String,
+    enum: ["Lemo", "Assistant"],
+    required: true,
+  },
   appointmentStatus: {
     type: String,
     enum: ["confirmed", "pending", "canceled"],

@@ -15,6 +15,7 @@ function AppointmentForm({
     defaultValues: {
       customerName: appointmentData?.customerName || "",
       phoneNumber: appointmentData?.phoneNumber || "",
+      barber: appointmentData?.barber || "Lemo", // Default barber is Lemo
     },
   });
   const [appointmentDateTime, setAppointmentDateTime] = useState(
@@ -113,6 +114,19 @@ function AppointmentForm({
               className="mt-1 block w-full p-2 border border-gray-300 rounded"
               placeholder="Select a date and time"
             />
+          </div>
+          <div className="mb-4">
+            <label htmlFor="barber" className="block text-gray-700">
+              Select Barber:
+            </label>
+            <select
+              {...register("barber")}
+              id="barber"
+              className="mt-1 block w-full p-2 border border-gray-300 rounded"
+            >
+              <option value="Lemo">Lemo</option>
+              <option value="Assistant">Assistant</option>
+            </select>
           </div>
           <button
             type="submit"
