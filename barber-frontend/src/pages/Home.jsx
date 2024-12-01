@@ -4,10 +4,12 @@ import AppointmentForm from "../_components/AppointmentForm";
 
 const Home = () => {
   const [appointments, setAppointments] = useState([]);
+  const [filteredAppointments, setFilteredAppointments] = useState([]);
   const [selectedDate, setSelectedDate] = useState(null);
   const [selectedAppointment, setSelectedAppointment] = useState(null);
   const [showForm, setShowForm] = useState(false);
 
+  // Fetch appointments from the backend
   useEffect(() => {
     const fetchAppointments = async () => {
       try {
@@ -17,7 +19,9 @@ const Home = () => {
           id: appointment._id,
           title: appointment.customerName,
           start: new Date(appointment.appointmentDateTime),
-          end: new Date(appointment.appointmentDateTime),
+          end: new Date(
+            new Date(appointment.appointmentDateTime).getTime() + 30 * 60 * 1000 // Add 30 minutes in milliseconds
+          ),
         }));
         setAppointments(events);
       } catch (error) {
@@ -27,6 +31,19 @@ const Home = () => {
 
     fetchAppointments();
   }, []);
+
+  // Filter out past appointments without causing an infinite loop
+  useEffect(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // Set to the start of the current day
+
+    // Filter appointments to show only today or future
+    const upcomingAppointments = appointments.filter(
+      (appointment) => new Date(appointment.start) >= today
+    );
+
+    setFilteredAppointments(upcomingAppointments); // Update the filtered state
+  }, [appointments]); // Run this effect only when `appointments` changes
 
   const handleSelectSlot = (slotInfo) => {
     setSelectedDate(slotInfo.start);
@@ -50,7 +67,10 @@ const Home = () => {
               id: updatedAppointment._id,
               title: updatedAppointment.customerName,
               start: new Date(updatedAppointment.appointmentDateTime),
-              end: new Date(updatedAppointment.appointmentDateTime),
+              end: new Date(
+                new Date(updatedAppointment.appointmentDateTime).getTime() +
+                  30 * 60 * 1000 // Add 30 minutes in milliseconds
+              ),
             }
           : appt
       );
@@ -61,7 +81,10 @@ const Home = () => {
         id: updatedAppointment._id,
         title: updatedAppointment.customerName,
         start: new Date(updatedAppointment.appointmentDateTime),
-        end: new Date(updatedAppointment.appointmentDateTime),
+        end: new Date(
+          new Date(updatedAppointment.appointmentDateTime).getTime() +
+            30 * 60 * 1000 // Add 30 minutes in milliseconds
+        ),
       };
       setAppointments([...appointments, newEvent]);
     }
@@ -103,7 +126,7 @@ const Home = () => {
     <div className="min-h-screen bg-gray-100 p-6">
       <h1 className="text-2xl font-bold mb-4">Appointment Scheduler</h1>
       <CalendarComponent
-        events={appointments}
+        events={filteredAppointments} // Pass only filtered appointments
         onSelectSlot={handleSelectSlot}
         onSelectEvent={handleSelectEvent}
       />

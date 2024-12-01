@@ -107,7 +107,7 @@ function AppointmentForm({
               onChange={(date) => setAppointmentDateTime(date[0])}
               options={{
                 enableTime: true,
-                dateFormat: "Y-m-d H:i",
+                dateFormat: "d/m/Y H:i",
                 minDate: "today", // Restrict past dates
               }}
               className="mt-1 block w-full p-2 border border-gray-300 rounded"

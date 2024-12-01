@@ -24,6 +24,7 @@ const CalendarComponent = ({
       className={`relative z-0 ${
         disabled ? "pointer-events-none opacity-50" : ""
       }`}
+      min={new Date(1970, 1, 1, 7, 0, 0)} // Start at 7:00 AM
       formats={{
         timeGutterFormat: "HH:mm", // Format the left time gutter in 24-hour format
         eventTimeRangeFormat: ({ start, end }) =>
