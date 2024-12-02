@@ -3,7 +3,13 @@ const mongoose = require("mongoose");
 // Create a new appointment
 const createAppointment = async (req, res, next) => {
   try {
-    const { customerName, phoneNumber, appointmentDateTime, barber } = req.body;
+    const {
+      customerName,
+      phoneNumber,
+      appointmentDateTime,
+      barber,
+      recurrence,
+    } = req.body;
 
     // Validate required fields
     if (!customerName || !phoneNumber || !appointmentDateTime || !barber) {
@@ -26,7 +32,7 @@ const createAppointment = async (req, res, next) => {
         .json({ message: "Barber must be either 'Lemo' or 'Assistant'" });
     }
 
-    // Create and save the new appointment
+    // Create the initial appointment
     const newAppointment = new Appointment({
       customerName,
       phoneNumber,
@@ -34,10 +40,48 @@ const createAppointment = async (req, res, next) => {
       barber,
     });
 
+    // Save the initial appointment
     const savedAppointment = await newAppointment.save();
-    res
-      .status(201)
-      .json({ message: "Appointment created successfully", savedAppointment });
+
+    // Generate additional appointments if recurrence is provided
+    const additionalAppointments = [];
+    if (recurrence && ["daily", "weekly", "monthly"].includes(recurrence)) {
+      let startDate = new Date(appointmentDateTime);
+
+      for (let i = 1; i <= 5; i++) {
+        // Create new dates based on recurrence type
+        let nextDate = new Date(startDate);
+        if (recurrence === "daily") {
+          nextDate.setDate(startDate.getDate() + i);
+        } else if (recurrence === "weekly") {
+          nextDate.setDate(startDate.getDate() + i * 7);
+        } else if (recurrence === "monthly") {
+          nextDate.setMonth(startDate.getMonth() + i);
+        }
+
+        // Create additional appointments
+        additionalAppointments.push(
+          new Appointment({
+            customerName,
+            phoneNumber,
+            appointmentDateTime: nextDate,
+            barber,
+          }).save()
+        );
+      }
+    }
+
+    // Save all additional appointments
+    const savedAdditionalAppointments = await Promise.all(
+      additionalAppointments
+    );
+
+    // Respond with all created appointments
+    res.status(201).json({
+      message: "Appointments created successfully",
+      initialAppointment: savedAppointment,
+      recurringAppointments: savedAdditionalAppointments,
+    });
   } catch (error) {
     next(error); // Pass the error to the error-handling middleware
   }

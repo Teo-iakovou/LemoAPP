@@ -21,13 +21,14 @@ function AppointmentForm({
   const [appointmentDateTime, setAppointmentDateTime] = useState(
     appointmentData?.appointmentDateTime || initialDate || null
   );
-
+  const [recurrence, setRecurrence] = useState("none");
   const [error, setError] = useState(null);
 
   const submitForm = async (data) => {
     const appointmentDetails = {
       ...data,
       appointmentDateTime,
+      recurrence,
     };
 
     try {
@@ -45,15 +46,17 @@ function AppointmentForm({
       );
 
       if (response.ok) {
-        const savedAppointment = await response.json();
-        onSubmit(savedAppointment.savedAppointment);
+        const result = await response.json();
+        onSubmit(result);
         reset();
         setError(null);
       } else {
         const errorData = await response.json();
+        console.error("Error from server:", errorData);
         setError(errorData.message || "An error occurred.");
       }
     } catch (error) {
+      console.error("Fetch failed:", error);
       setError("Failed to connect to the server. Please try again.");
     }
   };
@@ -126,6 +129,22 @@ function AppointmentForm({
             >
               <option value="Lemo">Lemo</option>
               <option value="Assistant">Assistant</option>
+            </select>
+          </div>
+          <div className="mb-4">
+            <label htmlFor="recurrence" className="block text-gray-700">
+              Repeat Appointment:
+            </label>
+            <select
+              id="recurrence"
+              value={recurrence}
+              onChange={(e) => setRecurrence(e.target.value)}
+              className="mt-1 block w-full p-2 border border-gray-300 rounded"
+            >
+              <option value="none">None</option>
+              <option value="daily">Daily</option>
+              <option value="weekly">Weekly</option>
+              <option value="monthly">Monthly</option>
             </select>
           </div>
           <button

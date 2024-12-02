@@ -60,39 +60,29 @@ const Home = () => {
     setShowForm(true);
   };
 
-  const handleFormSubmit = (updatedAppointment) => {
-    if (selectedAppointment) {
-      // Update an existing appointment
-      const updatedEvents = appointments.map((appt) =>
-        appt.id === updatedAppointment._id
-          ? {
-              id: updatedAppointment._id,
-              title: updatedAppointment.customerName,
-              start: new Date(updatedAppointment.appointmentDateTime),
-              end: new Date(
-                new Date(updatedAppointment.appointmentDateTime).getTime() +
-                  30 * 60 * 1000 // Add 30 minutes in milliseconds
-              ),
-              barber: updatedAppointment.barber,
-            }
-          : appt
-      );
-      setAppointments(updatedEvents);
-    } else {
-      // Add a new appointment
-      const newEvent = {
-        id: updatedAppointment._id,
-        title: updatedAppointment.customerName,
-        start: new Date(updatedAppointment.appointmentDateTime),
-        end: new Date(
-          new Date(updatedAppointment.appointmentDateTime).getTime() +
-            30 * 60 * 1000 // Add 30 minutes in milliseconds
-        ),
-        barber: updatedAppointment.barber,
-      };
-      setAppointments([...appointments, newEvent]);
-    }
-    setShowForm(false);
+  const handleFormSubmit = (result) => {
+    const { initialAppointment, recurringAppointments } = result;
+
+    // Combine initial and recurring appointments into one array
+    const allAppointments = [
+      initialAppointment,
+      ...(recurringAppointments || []),
+    ];
+
+    // Map appointments into calendar events
+    const newEvents = allAppointments.map((appointment) => ({
+      id: appointment._id,
+      title: appointment.customerName,
+      start: new Date(appointment.appointmentDateTime),
+      end: new Date(
+        new Date(appointment.appointmentDateTime).getTime() + 30 * 60 * 1000 // Add 30 minutes in milliseconds
+      ),
+      barber: appointment.barber,
+    }));
+
+    // Update the state to include new appointments
+    setAppointments((prevAppointments) => [...prevAppointments, ...newEvents]);
+    setShowForm(false); // Close the form after submission
   };
 
   const handleDelete = async (appointmentId) => {
