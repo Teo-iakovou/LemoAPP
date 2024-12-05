@@ -112,6 +112,8 @@ function AppointmentForm({
               options={{
                 enableTime: true,
                 dateFormat: "d/m/Y H:i",
+                minTime: "07:00",
+                maxTime: "23:00",
                 minDate: "today", // Restrict past dates
               }}
               className="mt-1 block w-full p-2 border border-gray-300 rounded"
