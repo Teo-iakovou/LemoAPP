@@ -21,7 +21,7 @@ const Home = () => {
           title: appointment.customerName,
           start: new Date(appointment.appointmentDateTime),
           end: new Date(
-            new Date(appointment.appointmentDateTime).getTime() + 30 * 60 * 1000 // Add 30 minutes in milliseconds
+            new Date(appointment.appointmentDateTime).getTime() + 30 * 60 * 1000
           ),
           barber: appointment.barber,
         }));
@@ -44,7 +44,7 @@ const Home = () => {
       (appointment) => new Date(appointment.start) >= today
     );
 
-    setFilteredAppointments(upcomingAppointments); // Update the filtered state
+    setFilteredAppointments(upcomingAppointments);
   }, [appointments]); // Run this effect only when `appointments` changes
 
   const handleSelectSlot = (slotInfo) => {
@@ -75,7 +75,7 @@ const Home = () => {
       title: appointment.customerName,
       start: new Date(appointment.appointmentDateTime),
       end: new Date(
-        new Date(appointment.appointmentDateTime).getTime() + 30 * 60 * 1000 // Add 30 minutes in milliseconds
+        new Date(appointment.appointmentDateTime).getTime() + 30 * 60 * 1000
       ),
       barber: appointment.barber,
     }));
