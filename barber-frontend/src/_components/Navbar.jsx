@@ -17,14 +17,14 @@ const Navbar = () => {
   };
 
   return (
-    <nav className="bg-gray-100 shadow-lg px-6 py-3 flex justify-between items-center">
+    <nav className="bg-gray-100 shadow-sm px-6  flex justify-between items-center">
       {/* Left Section: Logo and Links */}
       <div className="flex items-center space-x-8">
         <div className="py-4">
           <img
             src={LemoLogo}
             alt="Lemo Barber Shop Logo"
-            className="w-20 h-20 rounded-full mx-auto object-cover" // Adjusted size and object-cover for better fit
+            className="w-14 h-14 rounded-full mx-auto object-cover" // Adjusted size and object-cover for better fit
           />
         </div>{" "}
         <ul className="flex items-center space-x-6">
@@ -66,7 +66,7 @@ const Navbar = () => {
           )}
         </button>
 
-        {/* Profile Avatar */}
+        {/* {DropDown} */}
         <div className="relative">
           <img
             src="https://via.placeholder.com/40"
@@ -75,7 +75,7 @@ const Navbar = () => {
             onClick={toggleDropdown}
           />
           {isDropdownOpen && (
-            <div className="absolute right-0 mt-2 bg-white shadow-lg rounded-md py-2 w-48">
+            <div className="absolute right-0 mt-2 bg-white shadow-lg rounded-md py-2 w-48 z-50 border border-gray-200">
               <Link
                 to="/profile"
                 className="block px-4 py-2 text-gray-700 hover:bg-gray-100"
