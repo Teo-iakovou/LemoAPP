@@ -1,0 +1,1 @@
+Graduation Project for CodeLabsAcademy in order to include all the material we learn so far! This project made for a barbershop for the personal use of the Barber where he can add appointments for his customers in a Calendar.
