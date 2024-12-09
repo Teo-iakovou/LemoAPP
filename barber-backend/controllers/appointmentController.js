@@ -1,5 +1,7 @@
-const { Appointment, Customer } = require("../models/appointment");
+const Appointment = require("../models/appointment");
+const Customer = require("../models/customer");
 const mongoose = require("mongoose");
+const jwt = require("jsonwebtoken");
 
 // Create a new appointment
 const createAppointment = async (req, res, next) => {
@@ -194,6 +196,21 @@ const deleteAllCustomers = async (req, res, next) => {
     next(error); // Pass error to the global error handler
   }
 };
+const authenticate = (req, res, next) => {
+  const token = req.header("Authorization");
+  if (!token) {
+    return res.status(401).json({ message: "Access denied" });
+  }
+
+  try {
+    const verified = jwt.verify(token, process.env.JWT_SECRET);
+    req.user = verified; // Add user info to request object
+    next();
+  } catch (error) {
+    res.status(400).json({ message: "Invalid token" });
+  }
+};
+
 module.exports = {
   createAppointment,
   getAppointments,
@@ -201,4 +218,5 @@ module.exports = {
   deleteAppointment,
   getCustomers,
   deleteAllCustomers,
+  authenticate,
 };

@@ -5,7 +5,7 @@ const connectDB = require("./utils/db");
 const appointmentRoutes = require("./routes/appointmentRoutes");
 const customerRoutes = require("./routes/customerRoutes");
 const errorHandler = require("./middlewares/errorHandler");
-
+const authRoutes = require("./routes/authRoutes");
 dotenv.config();
 
 const app = express();
@@ -21,7 +21,7 @@ connectDB();
 // Routes
 app.use("/api/appointments", appointmentRoutes);
 app.use("/api/customers", customerRoutes);
-
+app.use("/api/auth", authRoutes);
 // Error Handling Middleware
 app.use(errorHandler);
 
