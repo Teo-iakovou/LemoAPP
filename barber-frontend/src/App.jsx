@@ -24,7 +24,10 @@ const App = () => {
         <main className="flex-1 overflow-hidden p-6">
           <Routes>
             <Route path="/" element={<Home isDarkMode={isDarkMode} />} />
-            <Route path="/customers" element={<Customers />} />
+            <Route
+              path="/customers"
+              element={<Customers isDarkMode={isDarkMode} />}
+            />
           </Routes>
         </main>
       </div>

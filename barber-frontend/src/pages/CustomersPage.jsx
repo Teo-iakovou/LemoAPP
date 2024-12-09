@@ -1,79 +1,158 @@
-import React, { useEffect, useState } from "react";
-import { fetchCustomers, fetchAppointments } from "../utils/api";
+import React, { useEffect, useState, useRef } from "react";
+import { fetchCustomers } from "../utils/api";
 
-const Customers = () => {
+const CustomersPage = ({ isDarkMode }) => {
   const [customers, setCustomers] = useState([]);
-  const [appointments, setAppointments] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
-  const [filteredAppointments, setFilteredAppointments] = useState([]);
+  const [filteredCustomers, setFilteredCustomers] = useState([]);
+  const searchBarRef = useRef(null);
 
-  // Fetch customers and appointments on page load
   useEffect(() => {
-    const loadData = async () => {
+    const loadCustomers = async () => {
       const customerData = await fetchCustomers();
-      const appointmentData = await fetchAppointments();
-      setCustomers(customerData);
-      setAppointments(appointmentData);
+      setCustomers(customerData.sort((a, b) => a.name.localeCompare(b.name)));
     };
-    loadData();
+    loadCustomers();
   }, []);
 
-  // Filter appointments as the user types
   useEffect(() => {
     if (searchTerm) {
-      setFilteredAppointments(
-        appointments.filter((appointment) =>
-          appointment.customerName
-            .toLowerCase()
-            .includes(searchTerm.toLowerCase())
+      setFilteredCustomers(
+        customers.filter((customer) =>
+          customer.name.toLowerCase().includes(searchTerm.toLowerCase())
         )
       );
     } else {
-      setFilteredAppointments([]);
+      setFilteredCustomers([]);
     }
-  }, [searchTerm, appointments]);
+  }, [searchTerm, customers]);
+
+  const handleSelectCustomer = (customer) => {
+    const targetElement = document.getElementById(
+      `customer-${customer.phoneNumber}`
+    );
+    if (targetElement) {
+      targetElement.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+    setSearchTerm("");
+    setFilteredCustomers([]);
+  };
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (
+        searchBarRef.current &&
+        !searchBarRef.current.contains(event.target)
+      ) {
+        setFilteredCustomers([]);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
+
+  const deleteAllCustomers = async () => {
+    const confirmDelete = window.confirm(
+      "Are you sure you want to delete all customers? This action cannot be undone."
+    );
+    if (!confirmDelete) {
+      return;
+    }
+
+    try {
+      const response = await fetch("http://localhost:5001/api/customers", {
+        method: "DELETE",
+      });
+      if (!response.ok) {
+        throw new Error("Failed to delete customers");
+      }
+      setCustomers([]);
+      setFilteredCustomers([]);
+      alert("All customers have been deleted successfully.");
+    } catch (error) {
+      console.error("Error deleting customers:", error);
+      alert("Failed to delete customers.");
+    }
+  };
 
   return (
-    <div className="p-6">
-      <h1 className="text-2xl font-bold mb-4">Customers</h1>
-      <input
-        type="text"
-        placeholder="Search customers..."
-        value={searchTerm}
-        onChange={(e) => setSearchTerm(e.target.value)}
-        className="mb-4 p-2 border rounded w-full"
-      />
-      {/* Dropdown for filtered appointments */}
-      {filteredAppointments.length > 0 && (
-        <ul className="border rounded max-h-40 overflow-y-auto bg-white shadow-md absolute w-full">
-          {filteredAppointments.map((appointment) => (
-            <li
-              key={appointment._id}
-              className="p-2 hover:bg-gray-100 cursor-pointer"
-            >
-              {appointment.customerName} - {appointment.appointmentDateTime}
-            </li>
-          ))}
-        </ul>
-      )}
-      {/* Display "No customers found" or the customer list */}
+    <div className="p-6 relative">
+      <h1
+        className={`text-2xl font-bold mb-4 ${
+          isDarkMode ? "text-white" : "text-black"
+        }`}
+      >
+        Customers
+      </h1>
+      <div className="relative">
+        <input
+          ref={searchBarRef}
+          type="text"
+          placeholder="Search customers..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className={`mb-4 p-2 border rounded w-full ${
+            isDarkMode
+              ? "bg-gray-800 text-white border-gray-600"
+              : "bg-white text-black"
+          }`}
+        />
+        {filteredCustomers.length > 0 && (
+          <ul
+            className={`absolute border rounded max-h-40 overflow-y-auto shadow-md w-full z-10 ${
+              isDarkMode
+                ? "bg-gray-800 text-white border-gray-600"
+                : "bg-white text-black"
+            }`}
+          >
+            {filteredCustomers.map((customer) => (
+              <li
+                key={customer.phoneNumber}
+                onClick={() => handleSelectCustomer(customer)}
+                className="p-2 hover:bg-gray-700 cursor-pointer"
+              >
+                {customer.name} - {customer.phoneNumber}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
       {customers.length === 0 ? (
-        <p>No customers found.</p>
+        <p className={isDarkMode ? "text-white" : "text-black"}>
+          No customers found.
+        </p>
       ) : (
         <ul className="space-y-2">
           {customers.map((customer) => (
             <li
+              id={`customer-${customer.phoneNumber}`}
               key={customer.phoneNumber}
-              className="flex justify-between items-center border-b pb-2"
+              className={`flex justify-between items-center border-b pb-2 ${
+                isDarkMode
+                  ? "border-gray-600 text-white"
+                  : "border-gray-300 text-black"
+              }`}
             >
               <span className="font-medium">{customer.name}</span>
-              <span className="text-gray-600">{customer.phoneNumber}</span>
+              <span>{customer.phoneNumber}</span>
             </li>
           ))}
         </ul>
       )}
+      <div className="flex justify-end mt-6">
+        <button
+          onClick={deleteAllCustomers}
+          className={`px-4 py-2 rounded hover:bg-red-600 ${
+            isDarkMode ? "bg-red-500 text-white" : "bg-red-500 text-white"
+          }`}
+        >
+          Delete All Customers
+        </button>
+      </div>
     </div>
   );
 };
 
-export default Customers;
+export default CustomersPage;

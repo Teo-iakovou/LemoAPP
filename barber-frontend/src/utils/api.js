@@ -11,7 +11,7 @@ export const createAppointment = async (appointmentData) => {
 
 export const fetchCustomers = async () => {
   try {
-    const response = await fetch("/api/customers");
+    const response = await fetch(`${API_BASE_URL}/customers`);
     if (!response.ok) {
       throw new Error("Failed to fetch customers");
     }
