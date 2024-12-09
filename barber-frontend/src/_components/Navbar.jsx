@@ -1,10 +1,11 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { Link } from "react-router-dom";
 import LemoLogo from "../assets/LemoLogo.JPG";
 
-const Navbar = () => {
+const Navbar = ({ onThemeToggle }) => {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
+  const dropdownRef = useRef(null);
 
   const toggleDropdown = () => {
     setIsDropdownOpen(!isDropdownOpen);
@@ -12,26 +13,46 @@ const Navbar = () => {
 
   const toggleTheme = () => {
     setIsDarkMode(!isDarkMode);
-    // Apply the theme to the document body
-    document.body.className = isDarkMode ? "light-theme" : "dark-theme";
+    onThemeToggle(!isDarkMode); // Notify the parent to toggle the background
   };
 
+  const handleClickOutside = (event) => {
+    if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+      setIsDropdownOpen(false);
+    }
+  };
+
+  useEffect(() => {
+    // Add event listener to detect clicks outside
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      // Cleanup event listener
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
+
   return (
-    <nav className="bg-gray-100 shadow-sm px-6  flex justify-between items-center">
+    <nav
+      className={`px-6 flex justify-between items-center shadow-sm ${
+        isDarkMode ? "bg-gray-800 text-white" : "bg-gray-100 text-gray-700"
+      }`}
+    >
       {/* Left Section: Logo and Links */}
       <div className="flex items-center space-x-8">
         <div className="py-4">
           <img
             src={LemoLogo}
             alt="Lemo Barber Shop Logo"
-            className="w-14 h-14 rounded-full mx-auto object-cover" // Adjusted size and object-cover for better fit
+            className="w-14 h-14 rounded-full mx-auto object-cover"
           />
-        </div>{" "}
+        </div>
         <ul className="flex items-center space-x-6">
           <li>
             <Link
               to="/"
-              className="text-gray-700 hover:text-blue-500 transition"
+              className={`hover:text-blue-500 transition ${
+                isDarkMode ? "text-white" : "text-gray-700"
+              }`}
             >
               Home
             </Link>
@@ -39,7 +60,9 @@ const Navbar = () => {
           <li>
             <Link
               to="/customers"
-              className="text-gray-700 hover:text-blue-500 transition"
+              className={`hover:text-blue-500 transition ${
+                isDarkMode ? "text-white" : "text-gray-700"
+              }`}
             >
               Customers
             </Link>
@@ -52,22 +75,26 @@ const Navbar = () => {
         {/* Theme Toggle */}
         <button
           onClick={toggleTheme}
-          className="p-2 bg-gray-200 rounded-full hover:bg-gray-300"
+          className={`p-2 rounded-full ${
+            isDarkMode
+              ? "bg-gray-700 hover:bg-gray-600"
+              : "bg-gray-200 hover:bg-gray-300"
+          }`}
           aria-label="Toggle Theme"
         >
           {isDarkMode ? (
             <span role="img" aria-label="light mode">
-              🌞
+              🌙
             </span>
           ) : (
             <span role="img" aria-label="dark mode">
-              🌙
+              🌞
             </span>
           )}
         </button>
 
-        {/* {DropDown} */}
-        <div className="relative">
+        {/* Dropdown */}
+        <div className="relative" ref={dropdownRef}>
           <img
             src="https://via.placeholder.com/40"
             alt="Profile Avatar"

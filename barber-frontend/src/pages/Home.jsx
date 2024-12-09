@@ -120,7 +120,7 @@ const Home = () => {
     <div className="min-h-screen bg-white p-6 rounded-xl ">
       <h1 className="text-2xl font-bold mb-4">Appointment Scheduler</h1>
       <CalendarComponent
-        events={filteredAppointments} // Pass only filtered appointments
+        events={filteredAppointments}
         onSelectSlot={handleSelectSlot}
         onSelectEvent={handleSelectEvent}
       />

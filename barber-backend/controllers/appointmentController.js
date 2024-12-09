@@ -1,5 +1,6 @@
-const Appointment = require("../models/appointment");
+const { Appointment, Customer } = require("../models/appointment");
 const mongoose = require("mongoose");
+
 // Create a new appointment
 const createAppointment = async (req, res, next) => {
   try {
@@ -25,11 +26,26 @@ const createAppointment = async (req, res, next) => {
       return res.status(400).json({ message: "Invalid data format" });
     }
 
+    // Validate appointment date
+    const appointmentDate = new Date(appointmentDateTime);
+    if (isNaN(appointmentDate.getTime()) || appointmentDate <= new Date()) {
+      return res
+        .status(400)
+        .json({ message: "Invalid or past appointment date" });
+    }
+
     // Validate barber value
     if (!["Lemo", "Assistant"].includes(barber)) {
       return res
         .status(400)
         .json({ message: "Barber must be either 'Lemo' or 'Assistant'" });
+    }
+
+    // Check if the customer exists or create a new one
+    let customer = await Customer.findOne({ phoneNumber });
+    if (!customer) {
+      customer = new Customer({ name: customerName, phoneNumber });
+      await customer.save();
     }
 
     // Create the initial appointment
@@ -49,7 +65,6 @@ const createAppointment = async (req, res, next) => {
       let startDate = new Date(appointmentDateTime);
 
       for (let i = 1; i <= 5; i++) {
-        // Create new dates based on recurrence type
         let nextDate = new Date(startDate);
         if (recurrence === "daily") {
           nextDate.setDate(startDate.getDate() + i);
@@ -76,9 +91,13 @@ const createAppointment = async (req, res, next) => {
       additionalAppointments
     );
 
-    // Respond with all created appointments
+    // Respond with all created appointments and customer details
     res.status(201).json({
       message: "Appointments created successfully",
+      customer: {
+        name: customer.name,
+        phoneNumber: customer.phoneNumber,
+      },
       initialAppointment: savedAppointment,
       recurringAppointments: savedAdditionalAppointments,
     });
@@ -86,6 +105,8 @@ const createAppointment = async (req, res, next) => {
     next(error); // Pass the error to the error-handling middleware
   }
 };
+
+module.exports = createAppointment;
 
 // Get all appointments
 const getAppointments = async (req, res, next) => {
@@ -153,10 +174,31 @@ const deleteAppointment = async (req, res, next) => {
     next(error);
   }
 };
-
+// Get costumers
+const getCustomers = async (req, res, next) => {
+  try {
+    const customers = await Customer.find().sort({ name: 1 }); // Sort alphabetically
+    res.status(200).json(customers);
+  } catch (error) {
+    next(error);
+  }
+};
+// delete customers
+const deleteAllCustomers = async (req, res, next) => {
+  try {
+    await Customer.deleteMany({}); // Delete all customer records
+    res
+      .status(200)
+      .json({ message: "All customers have been deleted successfully." });
+  } catch (error) {
+    next(error); // Pass error to the global error handler
+  }
+};
 module.exports = {
   createAppointment,
   getAppointments,
   updateAppointment,
   deleteAppointment,
+  getCustomers,
+  deleteAllCustomers,
 };
