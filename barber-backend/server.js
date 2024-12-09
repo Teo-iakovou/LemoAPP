@@ -3,7 +3,9 @@ const cors = require("cors");
 const dotenv = require("dotenv");
 const connectDB = require("./utils/db");
 const appointmentRoutes = require("./routes/appointmentRoutes");
+const customerRoutes = require("./routes/customerRoutes");
 const errorHandler = require("./middlewares/errorHandler");
+
 dotenv.config();
 
 const app = express();
@@ -18,6 +20,7 @@ connectDB();
 
 // Routes
 app.use("/api/appointments", appointmentRoutes);
+app.use("/api/customers", customerRoutes);
 
 // Error Handling Middleware
 app.use(errorHandler);

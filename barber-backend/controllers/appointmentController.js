@@ -1,6 +1,7 @@
-const Appointment = require("../models/appointment");
+const { Appointment, Customer } = require("../models/appointment");
 const mongoose = require("mongoose");
 // Create a new appointment
+
 const createAppointment = async (req, res, next) => {
   try {
     const {
@@ -30,6 +31,13 @@ const createAppointment = async (req, res, next) => {
       return res
         .status(400)
         .json({ message: "Barber must be either 'Lemo' or 'Assistant'" });
+    }
+
+    // Check if the customer exists or create a new one
+    let customer = await Customer.findOne({ phoneNumber });
+    if (!customer) {
+      customer = new Customer({ name: customerName, phoneNumber });
+      await customer.save();
     }
 
     // Create the initial appointment
@@ -86,6 +94,8 @@ const createAppointment = async (req, res, next) => {
     next(error); // Pass the error to the error-handling middleware
   }
 };
+
+module.exports = createAppointment;
 
 // Get all appointments
 const getAppointments = async (req, res, next) => {
@@ -153,10 +163,20 @@ const deleteAppointment = async (req, res, next) => {
     next(error);
   }
 };
+// Get costumers
+const getCustomers = async (req, res, next) => {
+  try {
+    const customers = await Customer.find().sort({ name: 1 }); // Sort alphabetically
+    res.status(200).json(customers);
+  } catch (error) {
+    next(error);
+  }
+};
 
 module.exports = {
   createAppointment,
   getAppointments,
   updateAppointment,
   deleteAppointment,
+  getCustomers,
 };

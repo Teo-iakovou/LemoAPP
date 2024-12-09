@@ -11,7 +11,7 @@ const CalendarComponent = ({
   onSelectEvent,
   disabled,
 }) => {
-  const eventStyleGetter = (event) => {
+  const eventStyleGetter = (event, start, end, isSelected) => {
     const backgroundColor = event.barber === "Lemo" ? "blue" : "orange";
     return {
       style: {
@@ -19,7 +19,9 @@ const CalendarComponent = ({
         color: "white",
         borderRadius: "5px",
         border: "none",
-        padding: "5px",
+        ...(isSelected && {
+          boxShadow: "0 0 5px 2px rgba(0, 0, 0, 0.3)",
+        }),
       },
     };
   };

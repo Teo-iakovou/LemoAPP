@@ -29,5 +29,20 @@ const appointmentSchema = new mongoose.Schema({
     default: "pending",
   },
 });
+const customerSchema = new mongoose.Schema({
+  name: { type: String, required: true },
+  phoneNumber: {
+    type: String,
+    required: true,
+    unique: true,
+    validate: {
+      validator: (v) => v.length >= 6 && v.length <= 15,
+      message: "Phone number must be between 6 and 15 characters",
+    },
+  },
+});
 
-module.exports = mongoose.model("Appointment", appointmentSchema);
+const Appointment = mongoose.model("Appointment", appointmentSchema);
+const Customer = mongoose.model("Customer", customerSchema);
+
+module.exports = { Appointment, Customer };
