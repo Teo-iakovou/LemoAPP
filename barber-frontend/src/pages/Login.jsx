@@ -10,7 +10,7 @@ const Login = ({ setAuth }) => {
   const handleLogin = async (e) => {
     e.preventDefault();
     try {
-      const response = await fetch("http://localhost:5001/api/auth/login", {
+      const response = await fetch("http://localhost:5001/api/auth/signin", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username, password }),
@@ -22,10 +22,10 @@ const Login = ({ setAuth }) => {
       }
 
       localStorage.setItem("token", data.token); // Save token
-      setAuth(true); // Update auth state
+      setAuth(true); // Notify parent component of authentication
       navigate("/"); // Redirect to Home
     } catch (err) {
-      setError(err.message);
+      setError(err.message); // Display error message
     }
   };
 

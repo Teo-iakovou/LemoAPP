@@ -25,6 +25,8 @@ function AppointmentForm({
   const [error, setError] = useState(null);
 
   const submitForm = async (data) => {
+    console.log("Appointment DateTime being sent:", appointmentDateTime);
+
     const appointmentDetails = {
       ...data,
       appointmentDateTime,

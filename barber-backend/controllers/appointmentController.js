@@ -1,7 +1,5 @@
 const Appointment = require("../models/appointment");
 const Customer = require("../models/customer");
-const mongoose = require("mongoose");
-const jwt = require("jsonwebtoken");
 
 // Create a new appointment
 const createAppointment = async (req, res, next) => {
@@ -108,8 +106,6 @@ const createAppointment = async (req, res, next) => {
   }
 };
 
-module.exports = createAppointment;
-
 // Get all appointments
 const getAppointments = async (req, res, next) => {
   try {
@@ -126,27 +122,14 @@ const getAppointments = async (req, res, next) => {
 const updateAppointment = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { barber } = req.body;
-
-    // Validate barber if provided
-    if (barber && !["Lemo", "Assistant"].includes(barber)) {
-      return res
-        .status(400)
-        .json({ message: "Barber must be either 'Lemo' or 'Assistant'" });
-    }
-
     const updatedAppointment = await Appointment.findByIdAndUpdate(
       id,
-      req.body, // Update all provided fields, including barber
-      {
-        new: true, // Return the updated document
-      }
+      req.body,
+      { new: true }
     );
-
     if (!updatedAppointment) {
       return res.status(404).json({ message: "Appointment not found" });
     }
-
     res.json({
       message: "Appointment updated successfully",
       updatedAppointment,
@@ -160,54 +143,35 @@ const updateAppointment = async (req, res, next) => {
 const deleteAppointment = async (req, res, next) => {
   try {
     const { id } = req.params;
-
-    // Validate if the `id` is a valid MongoDB ObjectId
-    if (!id || !mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ message: "Invalid appointment ID" });
-    }
-
     const deletedAppointment = await Appointment.findByIdAndDelete(id);
     if (!deletedAppointment) {
       return res.status(404).json({ message: "Appointment not found" });
     }
-
     res.json({ message: "Appointment deleted successfully" });
   } catch (error) {
     next(error);
   }
 };
-// Get costumers
+
+// Get all customers
 const getCustomers = async (req, res, next) => {
   try {
-    const customers = await Customer.find().sort({ name: 1 }); // Sort alphabetically
+    const customers = await Customer.find().sort({ name: 1 });
     res.status(200).json(customers);
   } catch (error) {
     next(error);
   }
 };
-// delete customers
+
+// Delete all customers
 const deleteAllCustomers = async (req, res, next) => {
   try {
-    await Customer.deleteMany({}); // Delete all customer records
+    await Customer.deleteMany();
     res
       .status(200)
       .json({ message: "All customers have been deleted successfully." });
   } catch (error) {
-    next(error); // Pass error to the global error handler
-  }
-};
-const authenticate = (req, res, next) => {
-  const token = req.header("Authorization");
-  if (!token) {
-    return res.status(401).json({ message: "Access denied" });
-  }
-
-  try {
-    const verified = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = verified; // Add user info to request object
-    next();
-  } catch (error) {
-    res.status(400).json({ message: "Invalid token" });
+    next(error);
   }
 };
 
@@ -218,5 +182,4 @@ module.exports = {
   deleteAppointment,
   getCustomers,
   deleteAllCustomers,
-  authenticate,
 };

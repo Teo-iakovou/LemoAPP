@@ -5,27 +5,8 @@ const User = require("../models/user");
 
 const router = express.Router();
 
-// Signup route (one-time setup for Lemo)
-router.post("/signup", async (req, res) => {
-  try {
-    const { username, password } = req.body;
-    const existingUser = await User.findOne({ username });
-    if (existingUser) {
-      return res.status(400).json({ message: "Username already exists" });
-    }
-
-    const user = new User({ username, password });
-    await user.save();
-    res.status(201).json({ message: "User created successfully" });
-  } catch (error) {
-    res
-      .status(500)
-      .json({ message: "Error creating user", error: error.message });
-  }
-});
-
 // Login route
-router.post("/login", async (req, res) => {
+router.post("/signin", async (req, res) => {
   try {
     const { username, password } = req.body;
 
