@@ -8,7 +8,19 @@ export const createAppointment = async (appointmentData) => {
   });
   return response.json();
 };
+export const loginUser = async (credentials) => {
+  const response = await fetch(`${API_BASE_URL}/auth/signin`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(credentials),
+  });
 
+  if (!response.ok) {
+    throw new Error("Failed to login.");
+  }
+
+  return response.json(); // Returns the JWT token
+};
 export const fetchCustomers = async () => {
   try {
     const response = await fetch(`${API_BASE_URL}/customers`);
