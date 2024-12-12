@@ -13,7 +13,7 @@ const App = () => {
   // Clear token and force login on page load
   useEffect(() => {
     localStorage.removeItem("token"); // Clear the token from localStorage
-    setAuth(false); // Ensure the user is not authenticated
+    setAuth(true); // Ensure the user is not authenticated
   }, []);
 
   return (

@@ -77,6 +77,34 @@ const CustomersPage = ({ isDarkMode }) => {
     }
   };
 
+  const deleteCustomer = async (id) => {
+    const confirmDelete = window.confirm(
+      "Are you sure you want to delete this customer? This action cannot be undone."
+    );
+    if (!confirmDelete) {
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        `http://localhost:5001/api/customers/${id}`,
+        {
+          method: "DELETE",
+        }
+      );
+      if (!response.ok) {
+        throw new Error("Failed to delete customer");
+      }
+      setCustomers((prevCustomers) =>
+        prevCustomers.filter((customer) => customer._id !== id)
+      );
+      alert("Customer deleted successfully.");
+    } catch (error) {
+      console.error("Error deleting customer:", error);
+      alert("Failed to delete customer.");
+    }
+  };
+
   return (
     <div className="p-6 relative">
       <h1
@@ -128,15 +156,25 @@ const CustomersPage = ({ isDarkMode }) => {
           {customers.map((customer) => (
             <li
               id={`customer-${customer.phoneNumber}`}
-              key={customer.phoneNumber}
+              key={customer._id}
               className={`flex justify-between items-center border-b pb-2 ${
                 isDarkMode
                   ? "border-gray-600 text-white"
                   : "border-gray-300 text-black"
               }`}
             >
-              <span className="font-medium">{customer.name}</span>
-              <span>{customer.phoneNumber}</span>
+              <div>
+                <span className="font-medium">{customer.name}</span>
+                <span className="ml-4">{customer.phoneNumber}</span>
+              </div>
+              <button
+                onClick={() => deleteCustomer(customer._id)}
+                className={`px-4 py-2 rounded hover:bg-red-600 ${
+                  isDarkMode ? "bg-red-500 text-white" : "bg-red-500 text-white"
+                }`}
+              >
+                Delete
+              </button>
             </li>
           ))}
         </ul>
