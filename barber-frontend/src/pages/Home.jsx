@@ -4,6 +4,7 @@ import AppointmentForm from "../_components/AppointmentForm";
 
 const Home = () => {
   const [appointments, setAppointments] = useState([]);
+  const [customers, setCustomers] = useState([]); // Add customers state
   const [filteredAppointments, setFilteredAppointments] = useState([]);
   const [selectedDate, setSelectedDate] = useState(null);
   const [selectedAppointment, setSelectedAppointment] = useState(null);
@@ -32,6 +33,21 @@ const Home = () => {
     };
 
     fetchAppointments();
+  }, []);
+
+  // Fetch customers from the backend
+  useEffect(() => {
+    const fetchCustomers = async () => {
+      try {
+        const response = await fetch("http://localhost:5001/api/customers");
+        const data = await response.json();
+        setCustomers(data); // Store customer data
+      } catch (error) {
+        console.error("Error fetching customers:", error);
+      }
+    };
+
+    fetchCustomers();
   }, []);
 
   // Filter out past appointments without causing an infinite loop
@@ -132,6 +148,7 @@ const Home = () => {
           onClose={() => setShowForm(false)}
           onSubmit={handleFormSubmit}
           onDelete={handleDelete}
+          customers={customers} // Pass customers as a prop
         />
       )}
     </div>

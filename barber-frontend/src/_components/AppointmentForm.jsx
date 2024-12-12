@@ -10,8 +10,9 @@ function AppointmentForm({
   onDelete,
   isEditing,
   appointmentData,
+  customers = [], // Default to an empty array if undefined
 }) {
-  const { register, handleSubmit, reset } = useForm({
+  const { register, handleSubmit, reset, setValue } = useForm({
     defaultValues: {
       customerName: appointmentData?.customerName || "",
       phoneNumber: appointmentData?.phoneNumber || "",
@@ -23,6 +24,19 @@ function AppointmentForm({
   );
   const [recurrence, setRecurrence] = useState("none");
   const [error, setError] = useState(null);
+
+  // Handle customer selection and autofill phone number
+  const handleCustomerSelect = (e) => {
+    const selectedName = e.target.value;
+    const selectedCustomer = customers.find(
+      (customer) => customer.name === selectedName
+    );
+
+    if (selectedCustomer) {
+      setValue("customerName", selectedCustomer.name);
+      setValue("phoneNumber", selectedCustomer.phoneNumber);
+    }
+  };
 
   const submitForm = async (data) => {
     console.log("Appointment DateTime being sent:", appointmentDateTime);
@@ -81,12 +95,19 @@ function AppointmentForm({
             </label>
             <input
               {...register("customerName")}
+              list="customerNameList"
+              onChange={handleCustomerSelect}
               type="text"
               id="customerName"
               placeholder="Enter customer name"
               className="mt-1 block w-full p-2 border border-gray-300 rounded"
               required
             />
+            <datalist id="customerNameList">
+              {customers.map((customer) => (
+                <option key={customer.phoneNumber} value={customer.name} />
+              ))}
+            </datalist>
           </div>
           <div className="mb-4">
             <label htmlFor="phoneNumber" className="block text-gray-700">
