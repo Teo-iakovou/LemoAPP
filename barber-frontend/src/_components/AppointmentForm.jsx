@@ -12,6 +12,8 @@ function AppointmentForm({
   appointmentData,
   customers = [], // Default to an empty array if undefined
 }) {
+  const formRef = useRef(null);
+  const flatpickrRef = useRef(null);
   const { register, handleSubmit, reset, setValue } = useForm({
     defaultValues: {
       customerName: appointmentData?.customerName || "",
@@ -27,12 +29,17 @@ function AppointmentForm({
   const [recurrence, setRecurrence] = useState("none");
   const [error, setError] = useState(null);
 
-  const formRef = useRef(null);
-
   // Handle click outside the form to close it
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (formRef.current && !formRef.current.contains(event.target)) {
+      if (
+        formRef.current &&
+        !formRef.current.contains(event.target) &&
+        (!flatpickrRef.current ||
+          !flatpickrRef.current.flatpickr.calendarContainer.contains(
+            event.target
+          ))
+      ) {
         onClose();
       }
     };
@@ -146,16 +153,18 @@ function AppointmentForm({
               Appointment Date and Time:
             </label>
             <Flatpickr
+              ref={flatpickrRef}
               value={appointmentDateTime}
               onChange={(date) => setAppointmentDateTime(date[0])}
               options={{
                 enableTime: true,
+                noCalendar: false,
                 dateFormat: "d/m/Y H:i",
-                minTime: "07:00",
-                maxTime: "23:00",
-                minDate: "today",
+                time_24hr: true, // 24-hour format
                 defaultHour: 7,
                 defaultMinute: 0,
+                minTime: "07:00",
+                maxTime: "23:00",
               }}
               className="mt-1 block w-full p-2 border border-gray-300 rounded"
               placeholder="Select a date and time"
