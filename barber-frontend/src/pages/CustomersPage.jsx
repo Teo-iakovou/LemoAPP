@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef } from "react";
 import { fetchCustomers } from "../utils/api";
+import { FaTrash } from "react-icons/fa";
 
 const CustomersPage = ({ isDarkMode }) => {
   const [customers, setCustomers] = useState([]);
@@ -169,11 +170,9 @@ const CustomersPage = ({ isDarkMode }) => {
               </div>
               <button
                 onClick={() => deleteCustomer(customer._id)}
-                className={`px-4 py-2 rounded hover:bg-red-600 ${
-                  isDarkMode ? "bg-red-500 text-white" : "bg-red-500 text-white"
-                }`}
+                className="text-red-500 hover:text-red-700"
               >
-                Delete
+                <FaTrash size={20} />
               </button>
             </li>
           ))}

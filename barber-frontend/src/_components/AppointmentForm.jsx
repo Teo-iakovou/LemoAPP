@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useForm } from "react-hook-form";
 import Flatpickr from "react-flatpickr";
 import "flatpickr/dist/flatpickr.min.css";
@@ -19,13 +19,30 @@ function AppointmentForm({
       barber: appointmentData?.barber || "Lemo", // Default barber is Lemo
     },
   });
+  const defaultDate = new Date();
+  defaultDate.setHours(7, 0, 0, 0); // Set time to 07:00
   const [appointmentDateTime, setAppointmentDateTime] = useState(
-    appointmentData?.appointmentDateTime || initialDate || null
+    appointmentData?.appointmentDateTime || initialDate || defaultDate
   );
   const [recurrence, setRecurrence] = useState("none");
   const [error, setError] = useState(null);
 
-  // Handle customer selection and autofill phone number
+  const formRef = useRef(null);
+
+  // Handle click outside the form to close it
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (formRef.current && !formRef.current.contains(event.target)) {
+        onClose();
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [onClose]);
+
   const handleCustomerSelect = (e) => {
     const selectedName = e.target.value;
     const selectedCustomer = customers.find(
@@ -39,8 +56,6 @@ function AppointmentForm({
   };
 
   const submitForm = async (data) => {
-    console.log("Appointment DateTime being sent:", appointmentDateTime);
-
     const appointmentDetails = {
       ...data,
       appointmentDateTime,
@@ -68,18 +83,16 @@ function AppointmentForm({
         setError(null);
       } else {
         const errorData = await response.json();
-        console.error("Error from server:", errorData);
         setError(errorData.message || "An error occurred.");
       }
     } catch (error) {
-      console.error("Fetch failed:", error);
       setError("Failed to connect to the server. Please try again.");
     }
   };
 
   return (
     <div className="fixed inset-0 bg-gray-800 bg-opacity-75 flex items-center justify-center">
-      <div className="bg-white p-6 rounded-md w-full max-w-md">
+      <div ref={formRef} className="bg-white p-6 rounded-md w-full max-w-md">
         <h2 className="text-xl font-bold mb-4">
           {isEditing ? "Edit Appointment" : "Schedule an Appointment"}
         </h2>
@@ -89,6 +102,7 @@ function AppointmentForm({
           </div>
         )}
         <form onSubmit={handleSubmit(submitForm)}>
+          {/* Customer Name */}
           <div className="mb-4">
             <label htmlFor="customerName" className="block text-gray-700">
               Customer Name:
@@ -109,6 +123,7 @@ function AppointmentForm({
               ))}
             </datalist>
           </div>
+          {/* Phone Number */}
           <div className="mb-4">
             <label htmlFor="phoneNumber" className="block text-gray-700">
               Phone Number:
@@ -122,6 +137,7 @@ function AppointmentForm({
               required
             />
           </div>
+          {/* Appointment Date and Time */}
           <div className="mb-4">
             <label
               htmlFor="appointmentDateTime"
@@ -137,12 +153,15 @@ function AppointmentForm({
                 dateFormat: "d/m/Y H:i",
                 minTime: "07:00",
                 maxTime: "23:00",
-                minDate: "today", // Restrict past dates
+                minDate: "today",
+                defaultHour: 7,
+                defaultMinute: 0,
               }}
               className="mt-1 block w-full p-2 border border-gray-300 rounded"
               placeholder="Select a date and time"
             />
           </div>
+          {/* Barber Selection */}
           <div className="mb-4">
             <label htmlFor="barber" className="block text-gray-700">
               Select Barber:
@@ -156,6 +175,7 @@ function AppointmentForm({
               <option value="Assistant">Assistant</option>
             </select>
           </div>
+          {/* Recurrence */}
           <div className="mb-4">
             <label htmlFor="recurrence" className="block text-gray-700">
               Repeat Appointment:
@@ -183,7 +203,6 @@ function AppointmentForm({
           <button
             className="mt-4 w-full bg-red-500 text-white py-2 rounded"
             onClick={() => {
-              console.log("Deleting Appointment ID:", appointmentData?._id);
               onDelete(appointmentData?._id);
               onClose();
             }}
@@ -191,7 +210,6 @@ function AppointmentForm({
             Delete Appointment
           </button>
         )}
-
         <button
           className="mt-4 w-full bg-gray-500 text-white py-2 rounded"
           onClick={onClose}

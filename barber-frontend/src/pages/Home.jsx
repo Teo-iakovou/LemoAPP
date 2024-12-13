@@ -64,7 +64,9 @@ const Home = () => {
   }, [appointments]); // Run this effect only when `appointments` changes
 
   const handleSelectSlot = (slotInfo) => {
-    setSelectedDate(slotInfo.start);
+    const selectedStartDate = new Date(slotInfo.start);
+    selectedStartDate.setHours(7, 0, 0, 0); // Set time to 07:00
+    setSelectedDate(selectedStartDate);
     setSelectedAppointment(null);
     setShowForm(true);
   };
@@ -133,8 +135,8 @@ const Home = () => {
   };
 
   return (
-    <div className="min-h-screen bg-white p-6 rounded-xl ">
-      <h1 className="text-2xl font-bold mb-4">Appointment Scheduler</h1>
+    <div className="relative bg-white rounded-3xl mt-[14px] min-h-[calc(100vh-64px)] p-4">
+      <h1 className="text-xl font-bold mb-4">Appointment Scheduler</h1>
       <CalendarComponent
         events={filteredAppointments}
         onSelectSlot={handleSelectSlot}
