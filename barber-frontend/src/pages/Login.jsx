@@ -30,7 +30,7 @@ const Login = ({ setAuth }) => {
   };
 
   return (
-    <div className="flex justify-center items-center h-screen bg-gray-100">
+    <div className="flex justify-center items-center h-screen ">
       <form
         onSubmit={handleLogin}
         className="p-6 bg-white rounded shadow-md w-full max-w-sm"
