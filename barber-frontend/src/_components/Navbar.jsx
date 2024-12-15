@@ -1,12 +1,13 @@
 import React, { useState, useRef, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import LemoLogo from "../assets/LemoLogo.png";
 import LemoBlackLogo from "../assets/LemoLogo.JPG";
 
-const Navbar = ({ onThemeToggle }) => {
+const Navbar = ({ onThemeToggle, isAuth, onLogout }) => {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const dropdownRef = useRef(null);
+  const navigate = useNavigate();
 
   const toggleDropdown = () => {
     setIsDropdownOpen(!isDropdownOpen);
@@ -24,13 +25,21 @@ const Navbar = ({ onThemeToggle }) => {
   };
 
   useEffect(() => {
-    // Add event listener to detect clicks outside
     document.addEventListener("mousedown", handleClickOutside);
     return () => {
-      // Cleanup event listener
       document.removeEventListener("mousedown", handleClickOutside);
     };
   }, []);
+
+  const handleLogout = () => {
+    const confirmLogout = window.confirm("Are you sure you want to log out?");
+    if (confirmLogout) {
+      localStorage.removeItem("token"); // Clear token
+      navigate("/login"); // Redirect to login page
+      onLogout(); // Notify parent
+      console.log("User logged out successfully");
+    }
+  };
 
   return (
     <nav
@@ -41,7 +50,7 @@ const Navbar = ({ onThemeToggle }) => {
       {/* Left Section: Logo and Links */}
       <div className="flex items-center space-x-8">
         <div className="py-4">
-          <Link to={"/calendar"}>
+          <Link to={isAuth ? "/calendar" : "/"}>
             <img
               src={LemoLogo}
               alt="Lemo Barber Shop Logo"
@@ -49,43 +58,44 @@ const Navbar = ({ onThemeToggle }) => {
             />
           </Link>
         </div>
-        <ul className="flex items-center space-x-6">
-          <li>
-            <Link
-              to="/"
-              className={`hover:text-blue-500 transition ${
-                isDarkMode ? "text-white" : "text-white"
-              }`}
-            >
-              Home
-            </Link>
-          </li>
-          <li>
-            <Link
-              to="/calendar"
-              className={`hover:text-blue-500 transition ${
-                isDarkMode ? "text-white" : "text-white"
-              }`}
-            >
-              Calendar
-            </Link>
-          </li>
-          <li>
-            <Link
-              to="/customers"
-              className={`hover:text-blue-500 transition ${
-                isDarkMode ? "text-white" : "text-white"
-              }`}
-            >
-              Customers
-            </Link>
-          </li>
-        </ul>
+        {isAuth && (
+          <ul className="flex items-center space-x-6">
+            <li>
+              <Link
+                to="/"
+                className={`hover:text-blue-500 transition ${
+                  isDarkMode ? "text-white" : "text-white"
+                }`}
+              >
+                Home
+              </Link>
+            </li>
+            <li>
+              <Link
+                to="/calendar"
+                className={`hover:text-blue-500 transition ${
+                  isDarkMode ? "text-white" : "text-white"
+                }`}
+              >
+                Calendar
+              </Link>
+            </li>
+            <li>
+              <Link
+                to="/customers"
+                className={`hover:text-blue-500 transition ${
+                  isDarkMode ? "text-white" : "text-white"
+                }`}
+              >
+                Customers
+              </Link>
+            </li>
+          </ul>
+        )}
       </div>
 
       {/* Right Section: Profile Avatar and Theme Toggle */}
       <div className="flex items-center space-x-6">
-        {/* Theme Toggle */}
         <button
           onClick={toggleTheme}
           className={`p-1 rounded-full ${
@@ -107,24 +117,26 @@ const Navbar = ({ onThemeToggle }) => {
         </button>
 
         {/* Dropdown */}
-        <div className="relative" ref={dropdownRef}>
-          <img
-            src={LemoBlackLogo}
-            alt="LemoLogo"
-            className="w-10 h-10 rounded-full mx-auto cursor-pointer object-cover"
-            onClick={toggleDropdown}
-          />
-          {isDropdownOpen && (
-            <div className="absolute right-0 mt-1 bg-white shadow-lg rounded-3xl py-2 w-48 z-50 border border-gray-200">
-              <button
-                onClick={() => alert("Logging out...")}
-                className="w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-3xl"
-              >
-                Logout
-              </button>
-            </div>
-          )}
-        </div>
+        {isAuth && (
+          <div className="relative" ref={dropdownRef}>
+            <img
+              src={LemoBlackLogo}
+              alt="LemoLogo"
+              className="w-10 h-10 rounded-full mx-auto cursor-pointer object-cover"
+              onClick={toggleDropdown}
+            />
+            {isDropdownOpen && (
+              <div className="absolute right-0 mt-1 bg-white shadow-lg rounded-3xl py-2 w-48 z-50 border border-gray-200">
+                <button
+                  onClick={handleLogout} // Trigger logout
+                  className="w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-3xl"
+                >
+                  Logout
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </nav>
   );

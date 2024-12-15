@@ -11,11 +11,17 @@ const App = () => {
   const [isDarkMode, setIsDarkMode] = useState(false); // Dark mode state
   const [isAuth, setAuth] = useState(false); // Authentication state
 
-  // Clear token and force login on page load
+  // Check authentication on page load
   useEffect(() => {
-    localStorage.removeItem("token"); // Clear the token from localStorage
-    setAuth(true); // Ensure the user is not authenticated
+    const token = localStorage.getItem("token");
+    setAuth(!!token); // Set auth state based on token existence
   }, []);
+
+  // Handle logout function
+  const handleLogout = () => {
+    localStorage.removeItem("token"); // Clear the token
+    setAuth(false); // Set authentication to false
+  };
 
   return (
     <Router>
@@ -26,7 +32,12 @@ const App = () => {
       >
         {/* Navbar Section */}
         <header className="h-16">
-          <Navbar isDarkMode={isDarkMode} onThemeToggle={setIsDarkMode} />
+          <Navbar
+            isDarkMode={isDarkMode}
+            onThemeToggle={setIsDarkMode}
+            isAuth={isAuth} // Pass authentication state
+            onLogout={handleLogout} // Pass logout function
+          />
         </header>
 
         {/* Main Content */}
@@ -44,7 +55,9 @@ const App = () => {
               />
             </Routes>
           ) : (
-            <Login setAuth={setAuth} />
+            <Routes>
+              <Route path="*" element={<Login setAuth={setAuth} />} />
+            </Routes>
           )}
         </main>
       </div>
