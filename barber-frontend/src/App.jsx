@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from "react";
-import "./index.css";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import Home from "./pages/Home";
+import "./index.css";
+import CalendarPage from "./pages/CalendarPage";
 import Navbar from "./_components/Navbar";
 import Customers from "./pages/CustomersPage";
 import Login from "./pages/Login";
@@ -31,16 +32,18 @@ const App = () => {
         {/* Main Content */}
         <main className="flex-1 overflow-hidden p-6">
           {isAuth ? (
-            // Render the platform if authenticated
             <Routes>
               <Route path="/" element={<Home isDarkMode={isDarkMode} />} />
+              <Route
+                path="/calendar"
+                element={<CalendarPage isDarkMode={isDarkMode} />}
+              />
               <Route
                 path="/customers"
                 element={<Customers isDarkMode={isDarkMode} />}
               />
             </Routes>
           ) : (
-            // Show login form if not authenticated
             <Login setAuth={setAuth} />
           )}
         </main>

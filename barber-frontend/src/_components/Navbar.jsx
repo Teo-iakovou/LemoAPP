@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { Link } from "react-router-dom";
-import LemoLogo from "../assets/LemoLogo.JPG";
+import LemoLogo from "../assets/LemoLogo.png";
+import LemoBlackLogo from "../assets/LemoLogo.JPG";
 
 const Navbar = ({ onThemeToggle }) => {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -34,24 +35,26 @@ const Navbar = ({ onThemeToggle }) => {
   return (
     <nav
       className={`px-6 flex justify-between items-center shadow-sm ${
-        isDarkMode ? "bg-gray-800 text-white" : "bg-gray-100 text-gray-700"
+        isDarkMode ? "bg-gray-800 text-white" : "bg-purple-950"
       }`}
     >
       {/* Left Section: Logo and Links */}
       <div className="flex items-center space-x-8">
         <div className="py-4">
-          <img
-            src={LemoLogo}
-            alt="Lemo Barber Shop Logo"
-            className="w-14 h-14 rounded-full mx-auto object-cover"
-          />
+          <Link to={"/calendar"}>
+            <img
+              src={LemoLogo}
+              alt="Lemo Barber Shop Logo"
+              className="w-16 h-16 mx-auto object-cover"
+            />
+          </Link>
         </div>
         <ul className="flex items-center space-x-6">
           <li>
             <Link
               to="/"
               className={`hover:text-blue-500 transition ${
-                isDarkMode ? "text-white" : "text-gray-700"
+                isDarkMode ? "text-white" : "text-white"
               }`}
             >
               Home
@@ -59,9 +62,19 @@ const Navbar = ({ onThemeToggle }) => {
           </li>
           <li>
             <Link
+              to="/calendar"
+              className={`hover:text-blue-500 transition ${
+                isDarkMode ? "text-white" : "text-white"
+              }`}
+            >
+              Calendar
+            </Link>
+          </li>
+          <li>
+            <Link
               to="/customers"
               className={`hover:text-blue-500 transition ${
-                isDarkMode ? "text-white" : "text-gray-700"
+                isDarkMode ? "text-white" : "text-white"
               }`}
             >
               Customers
@@ -75,10 +88,10 @@ const Navbar = ({ onThemeToggle }) => {
         {/* Theme Toggle */}
         <button
           onClick={toggleTheme}
-          className={`p-2 rounded-full ${
+          className={`p-1 rounded-full ${
             isDarkMode
               ? "bg-gray-700 hover:bg-gray-600"
-              : "bg-gray-200 hover:bg-gray-300"
+              : "bg-purple-900 hover:bg-purple-950"
           }`}
           aria-label="Toggle Theme"
         >
@@ -96,28 +109,16 @@ const Navbar = ({ onThemeToggle }) => {
         {/* Dropdown */}
         <div className="relative" ref={dropdownRef}>
           <img
-            src="https://via.placeholder.com/40"
-            alt="Profile Avatar"
-            className="w-10 h-10 rounded-full cursor-pointer"
+            src={LemoBlackLogo}
+            alt="LemoLogo"
+            className="w-10 h-10 rounded-full mx-auto cursor-pointer object-cover"
             onClick={toggleDropdown}
           />
           {isDropdownOpen && (
-            <div className="absolute right-0 mt-2 bg-white shadow-lg rounded-md py-2 w-48 z-50 border border-gray-200">
-              <Link
-                to="/profile"
-                className="block px-4 py-2 text-gray-700 hover:bg-gray-100"
-              >
-                Profile
-              </Link>
-              <Link
-                to="/settings"
-                className="block px-4 py-2 text-gray-700 hover:bg-gray-100"
-              >
-                Settings
-              </Link>
+            <div className="absolute right-0 mt-1 bg-white shadow-lg rounded-3xl py-2 w-48 z-50 border border-gray-200">
               <button
                 onClick={() => alert("Logging out...")}
-                className="w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100"
+                className="w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-3xl"
               >
                 Logout
               </button>
