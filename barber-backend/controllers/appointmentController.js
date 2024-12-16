@@ -153,33 +153,9 @@ const deleteAppointment = async (req, res, next) => {
   }
 };
 
-// Get all customers
-const getCustomers = async (req, res, next) => {
-  try {
-    const customers = await Customer.find().sort({ name: 1 });
-    res.status(200).json(customers);
-  } catch (error) {
-    next(error);
-  }
-};
-
-// Delete all customers
-const deleteAllCustomers = async (req, res, next) => {
-  try {
-    await Customer.deleteMany();
-    res
-      .status(200)
-      .json({ message: "All customers have been deleted successfully." });
-  } catch (error) {
-    next(error);
-  }
-};
-
 module.exports = {
   createAppointment,
   getAppointments,
   updateAppointment,
   deleteAppointment,
-  getCustomers,
-  deleteAllCustomers,
 };

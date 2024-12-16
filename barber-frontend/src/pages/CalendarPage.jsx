@@ -79,27 +79,49 @@ const CalendarPage = () => {
   };
 
   const handleFormSubmit = (result) => {
-    const { initialAppointment, recurringAppointments } = result;
+    const updatedAppointment =
+      result.updatedAppointment || result.initialAppointment;
 
-    // Combine initial and recurring appointments into one array
-    const allAppointments = [
-      initialAppointment,
-      ...(recurringAppointments || []),
-    ];
+    // Update the state: Replace edited appointment or add new one
+    setAppointments((prevAppointments) => {
+      const appointmentExists = prevAppointments.some(
+        (appt) => appt.id === updatedAppointment._id
+      );
 
-    // Map appointments into calendar events
-    const newEvents = allAppointments.map((appointment) => ({
-      id: appointment._id,
-      title: appointment.customerName,
-      start: new Date(appointment.appointmentDateTime),
-      end: new Date(
-        new Date(appointment.appointmentDateTime).getTime() + 30 * 60 * 1000
-      ),
-      barber: appointment.barber,
-    }));
+      if (appointmentExists) {
+        // Update the existing appointment
+        return prevAppointments.map((appt) =>
+          appt.id === updatedAppointment._id
+            ? {
+                id: updatedAppointment._id,
+                title: updatedAppointment.customerName,
+                start: new Date(updatedAppointment.appointmentDateTime),
+                end: new Date(
+                  new Date(updatedAppointment.appointmentDateTime).getTime() +
+                    30 * 60 * 1000
+                ),
+                barber: updatedAppointment.barber,
+              }
+            : appt
+        );
+      } else {
+        // Add new appointment
+        return [
+          ...prevAppointments,
+          {
+            id: updatedAppointment._id,
+            title: updatedAppointment.customerName,
+            start: new Date(updatedAppointment.appointmentDateTime),
+            end: new Date(
+              new Date(updatedAppointment.appointmentDateTime).getTime() +
+                30 * 60 * 1000
+            ),
+            barber: updatedAppointment.barber,
+          },
+        ];
+      }
+    });
 
-    // Update the state to include new appointments
-    setAppointments((prevAppointments) => [...prevAppointments, ...newEvents]);
     setShowForm(false); // Close the form after submission
   };
 

@@ -83,16 +83,26 @@ function AppointmentForm({
         }
       );
 
+      let result = null;
+      try {
+        result = await response.json();
+      } catch (err) {
+        console.error("Failed to parse JSON:", err);
+        setError("Invalid server response. Please try again.");
+        return;
+      }
+
       if (response.ok) {
-        const result = await response.json();
+        console.log("Server Response:", result);
         onSubmit(result);
         reset();
         setError(null);
       } else {
-        const errorData = await response.json();
-        setError(errorData.message || "An error occurred.");
+        console.log("Error Response:", result);
+        setError(result.message || "An error occurred.");
       }
     } catch (error) {
+      console.error("Fetch Error:", error);
       setError("Failed to connect to the server. Please try again.");
     }
   };
