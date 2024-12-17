@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { useForm } from "react-hook-form";
 import Flatpickr from "react-flatpickr";
 import "flatpickr/dist/flatpickr.min.css";
+import PasswordForm from "./PasswordForm";
 
 function AppointmentForm({
   initialDate,
@@ -28,6 +29,9 @@ function AppointmentForm({
   );
   const [recurrence, setRecurrence] = useState("none");
   const [error, setError] = useState(null);
+  const [showPasswordForm, setShowPasswordForm] = useState(false);
+  const [actionType, setActionType] = useState(null); // Tracks "edit" or "delete"
+  const [password, setPassword] = useState("");
 
   // Handle click outside the form to close it
   useEffect(() => {
@@ -51,59 +55,76 @@ function AppointmentForm({
   }, [onClose]);
 
   const handleCustomerSelect = (e) => {
-    const selectedName = e.target.value;
+    const selectedName = e.target.value.trim(); // Remove leading/trailing spaces
+
+    // Find customer
     const selectedCustomer = customers.find(
-      (customer) => customer.name === selectedName
+      (customer) => customer.name.toLowerCase() === selectedName.toLowerCase()
     );
+
+    console.log("Selected Customer:", selectedCustomer);
 
     if (selectedCustomer) {
       setValue("customerName", selectedCustomer.name);
-      setValue("phoneNumber", selectedCustomer.phoneNumber);
+      setValue("phoneNumber", selectedCustomer.phoneNumber || ""); // Set phone number or fallback
+    } else {
+      console.warn("No matching customer found for:", selectedName);
+      setValue("phoneNumber", ""); // Clear phone number if no match
     }
   };
 
   const submitForm = async (data) => {
+    const formattedAppointmentDateTime = appointmentDateTime
+      ? new Date(appointmentDateTime).toISOString()
+      : null;
+
     const appointmentDetails = {
-      ...data,
-      appointmentDateTime,
-      recurrence,
+      customerName: data.customerName,
+      phoneNumber: data.phoneNumber,
+      barber: data.barber,
+      appointmentDateTime: formattedAppointmentDateTime,
+      recurrence: recurrence !== "none" ? recurrence : null,
     };
 
-    try {
-      const response = await fetch(
-        isEditing
-          ? `http://localhost:5001/api/appointments/${appointmentData._id}`
-          : "http://localhost:5001/api/appointments",
-        {
-          method: isEditing ? "PUT" : "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(appointmentDetails),
-        }
-      );
+    console.log("Submitting Appointment Data:", appointmentDetails); // Debug log
 
-      let result = null;
-      try {
-        result = await response.json();
-      } catch (err) {
-        console.error("Failed to parse JSON:", err);
-        setError("Invalid server response. Please try again.");
-        return;
-      }
+    if (isEditing) {
+      setActionType("edit");
+      setShowPasswordForm(true);
+    } else {
+      onSubmit(appointmentDetails);
+      reset();
+    }
+  };
 
-      if (response.ok) {
-        console.log("Server Response:", result);
-        onSubmit(result);
-        reset();
-        setError(null);
-      } else {
-        console.log("Error Response:", result);
-        setError(result.message || "An error occurred.");
-      }
-    } catch (error) {
-      console.error("Fetch Error:", error);
-      setError("Failed to connect to the server. Please try again.");
+  const handleDelete = () => {
+    setActionType("delete");
+    setShowPasswordForm(true);
+  };
+
+  const handlePasswordSubmit = async (enteredPassword) => {
+    setShowPasswordForm(false);
+
+    if (!enteredPassword || enteredPassword.trim() === "") {
+      console.error("Password is required for this action.");
+      return;
+    }
+
+    if (actionType === "edit") {
+      // Ensure all required fields are included
+      const appointmentDetails = {
+        customerName: appointmentData?.customerName || "", // Include customerName
+        phoneNumber: appointmentData?.phoneNumber || "", // Include phoneNumber
+        barber: appointmentData?.barber || "Lemo",
+        appointmentDateTime: appointmentDateTime, // Use current state value
+        recurrence: recurrence !== "none" ? recurrence : null,
+        password: enteredPassword, // Send the entered password
+      };
+
+      console.log("Submitting Payload for Edit:", appointmentDetails); // Debug log
+      onSubmit(appointmentDetails); // Send the updated data
+    } else if (actionType === "delete") {
+      onDelete(appointmentData?._id, enteredPassword);
     }
   };
 
@@ -118,123 +139,123 @@ function AppointmentForm({
             {error}
           </div>
         )}
-        <form onSubmit={handleSubmit(submitForm)}>
-          {/* Customer Name */}
-          <div className="mb-4">
-            <label htmlFor="customerName" className="block text-gray-700">
-              Customer Name:
-            </label>
-            <input
-              {...register("customerName")}
-              list="customerNameList"
-              onChange={handleCustomerSelect}
-              type="text"
-              id="customerName"
-              placeholder="Enter customer name"
-              className="mt-1 block w-full p-2 border border-gray-300 rounded"
-              required
-            />
-            <datalist id="customerNameList">
-              {customers.map((customer) => (
-                <option key={customer.phoneNumber} value={customer.name} />
-              ))}
-            </datalist>
-          </div>
-          {/* Phone Number */}
-          <div className="mb-4">
-            <label htmlFor="phoneNumber" className="block text-gray-700">
-              Phone Number:
-            </label>
-            <input
-              {...register("phoneNumber")}
-              type="text"
-              id="phoneNumber"
-              placeholder="Enter phone number"
-              className="mt-1 block w-full p-2 border border-gray-300 rounded"
-              required
-            />
-          </div>
-          {/* Appointment Date and Time */}
-          <div className="mb-4">
-            <label
-              htmlFor="appointmentDateTime"
-              className="block text-gray-700"
+        {showPasswordForm ? (
+          <PasswordForm
+            onPasswordSubmit={handlePasswordSubmit}
+            onCancel={() => setShowPasswordForm(false)}
+          />
+        ) : (
+          <>
+            <form onSubmit={handleSubmit(submitForm)}>
+              {/* Customer Name */}
+              <div className="mb-4">
+                <label htmlFor="customerName" className="block text-gray-700">
+                  Customer Name:
+                </label>
+                <input
+                  {...register("customerName")}
+                  list="customerNameList"
+                  onChange={handleCustomerSelect}
+                  type="text"
+                  id="customerName"
+                  placeholder="Enter customer name"
+                  className="mt-1 block w-full p-2 border border-gray-300 rounded"
+                  required
+                />
+                <datalist id="customerNameList">
+                  {customers.map((customer) => (
+                    <option key={customer.phoneNumber} value={customer.name} />
+                  ))}
+                </datalist>
+              </div>
+              {/* Phone Number */}
+              <div className="mb-4">
+                <label htmlFor="phoneNumber" className="block text-gray-700">
+                  Phone Number:
+                </label>
+                <input
+                  {...register("phoneNumber")}
+                  type="text"
+                  id="phoneNumber"
+                  placeholder="Enter phone number"
+                  className="mt-1 block w-full p-2 border border-gray-300 rounded"
+                  required
+                />
+              </div>
+              {/* Appointment Date and Time */}
+              <div className="mb-4">
+                <label
+                  htmlFor="appointmentDateTime"
+                  className="block text-gray-700"
+                >
+                  Appointment Date and Time:
+                </label>
+                <Flatpickr
+                  ref={flatpickrRef}
+                  value={appointmentDateTime}
+                  onChange={(date) => setAppointmentDateTime(date[0])}
+                  options={{
+                    enableTime: true,
+                    dateFormat: "d/m/Y H:i",
+                    time_24hr: true,
+                  }}
+                  className="mt-1 block w-full p-2 border border-gray-300 rounded"
+                />
+              </div>
+              {/* Barber Selection */}
+              <div className="mb-4">
+                <label htmlFor="barber" className="block text-gray-700">
+                  Select Barber:
+                </label>
+                <select
+                  {...register("barber")}
+                  id="barber"
+                  className="mt-1 block w-full p-2 border border-gray-300 rounded"
+                >
+                  <option value="Lemo">Lemo</option>
+                  <option value="Assistant">Assistant</option>
+                </select>
+              </div>
+              {/* Recurrence */}
+              <div className="mb-4">
+                <label htmlFor="recurrence" className="block text-gray-700">
+                  Repeat Appointment:
+                </label>
+                <select
+                  id="recurrence"
+                  value={recurrence}
+                  onChange={(e) => setRecurrence(e.target.value)}
+                  className="mt-1 block w-full p-2 border border-gray-300 rounded"
+                >
+                  <option value="none">None</option>
+                  <option value="daily">Daily</option>
+                  <option value="weekly">Weekly</option>
+                  <option value="monthly">Monthly</option>
+                </select>
+              </div>
+              <button
+                type="submit"
+                className="w-full bg-green-500 text-white py-2 rounded"
+              >
+                {isEditing ? "Update Appointment" : "Add Appointment"}
+              </button>
+            </form>
+            {isEditing && (
+              <button
+                className="mt-4 w-full bg-red-500 text-white py-2 rounded"
+                onClick={handleDelete}
+              >
+                Delete Appointment
+              </button>
+            )}
+            <button
+              className="mt-4 w-full bg-gray-500 text-white py-2 rounded"
+              onClick={onClose}
             >
-              Appointment Date and Time:
-            </label>
-            <Flatpickr
-              ref={flatpickrRef}
-              value={appointmentDateTime}
-              onChange={(date) => setAppointmentDateTime(date[0])}
-              options={{
-                enableTime: true,
-                noCalendar: false,
-                dateFormat: "d/m/Y H:i",
-                time_24hr: true, // 24-hour format
-                defaultHour: 7,
-                defaultMinute: 0,
-                minTime: "07:00",
-                maxTime: "23:00",
-              }}
-              className="mt-1 block w-full p-2 border border-gray-300 rounded"
-              placeholder="Select a date and time"
-            />
-          </div>
-          {/* Barber Selection */}
-          <div className="mb-4">
-            <label htmlFor="barber" className="block text-gray-700">
-              Select Barber:
-            </label>
-            <select
-              {...register("barber")}
-              id="barber"
-              className="mt-1 block w-full p-2 border border-gray-300 rounded"
-            >
-              <option value="Lemo">Lemo</option>
-              <option value="Assistant">Assistant</option>
-            </select>
-          </div>
-          {/* Recurrence */}
-          <div className="mb-4">
-            <label htmlFor="recurrence" className="block text-gray-700">
-              Repeat Appointment:
-            </label>
-            <select
-              id="recurrence"
-              value={recurrence}
-              onChange={(e) => setRecurrence(e.target.value)}
-              className="mt-1 block w-full p-2 border border-gray-300 rounded"
-            >
-              <option value="none">None</option>
-              <option value="daily">Daily</option>
-              <option value="weekly">Weekly</option>
-              <option value="monthly">Monthly</option>
-            </select>
-          </div>
-          <button
-            type="submit"
-            className="w-full bg-green-500 text-white py-2 rounded"
-          >
-            {isEditing ? "Update Appointment" : "Add Appointment"}
-          </button>
-        </form>
-        {isEditing && (
-          <button
-            className="mt-4 w-full bg-red-500 text-white py-2 rounded"
-            onClick={() => {
-              onDelete(appointmentData?._id);
-              onClose();
-            }}
-          >
-            Delete Appointment
-          </button>
+              Cancel
+            </button>
+          </>
         )}
-        <button
-          className="mt-4 w-full bg-gray-500 text-white py-2 rounded"
-          onClick={onClose}
-        >
-          Cancel
-        </button>
       </div>
     </div>
   );

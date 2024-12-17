@@ -5,12 +5,13 @@ const {
   updateAppointment,
   deleteAppointment,
 } = require("../controllers/appointmentController");
+const validatePassword = require("../middlewares/validatePassword");
 
 const router = express.Router();
 
 router.post("/", createAppointment);
 router.get("/", getAppointments);
-router.put("/:id", updateAppointment);
-router.delete("/:id", deleteAppointment);
+router.put("/:id", validatePassword, updateAppointment);
+router.delete("/:id", validatePassword, deleteAppointment);
 
 module.exports = router;
