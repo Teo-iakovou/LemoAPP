@@ -68,7 +68,10 @@ const CalendarPage = () => {
 
   const handleSelectSlot = (slotInfo) => {
     const selectedStartDate = new Date(slotInfo.start);
-    selectedStartDate.setHours(7, 0, 0, 0); // Set time to 07:00
+    if (selectedStartDate.getHours() === 0) {
+      selectedStartDate.setHours(7, 0, 0, 0); // Default to 7:00 AM
+    }
+    console.log("Clicked Hour:", selectedStartDate);
     setSelectedDate(selectedStartDate);
     setSelectedAppointment(null);
     setShowForm(true);

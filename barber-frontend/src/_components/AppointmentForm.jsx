@@ -25,7 +25,7 @@ function AppointmentForm({
   const defaultDate = new Date();
   defaultDate.setHours(7, 0, 0, 0); // Set time to 07:00
   const [appointmentDateTime, setAppointmentDateTime] = useState(
-    appointmentData?.appointmentDateTime || initialDate || defaultDate
+    appointmentData?.appointmentDateTime || initialDate || new Date()
   );
   const [recurrence, setRecurrence] = useState("none");
   const [error, setError] = useState(null);
