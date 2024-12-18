@@ -4,6 +4,7 @@ const Customer = require("../models/customer");
 // Create a new appointment
 const createAppointment = async (req, res, next) => {
   try {
+    console.log("Received Payload on Server:", req.body);
     const {
       customerName,
       phoneNumber,
@@ -122,17 +123,23 @@ const getAppointments = async (req, res, next) => {
 const updateAppointment = async (req, res, next) => {
   try {
     const { id } = req.params;
+
     const updatedAppointment = await Appointment.findByIdAndUpdate(
       id,
       req.body,
       { new: true }
     );
+
     if (!updatedAppointment) {
-      return res.status(404).json({ message: "Appointment not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Appointment not found" });
     }
-    res.json({
+
+    return res.status(200).json({
+      success: true,
       message: "Appointment updated successfully",
-      updatedAppointment,
+      updatedAppointment, // Ensure this key is returned
     });
   } catch (error) {
     next(error);
@@ -143,11 +150,19 @@ const updateAppointment = async (req, res, next) => {
 const deleteAppointment = async (req, res, next) => {
   try {
     const { id } = req.params;
+
     const deletedAppointment = await Appointment.findByIdAndDelete(id);
+
     if (!deletedAppointment) {
-      return res.status(404).json({ message: "Appointment not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Appointment not found" });
     }
-    res.json({ message: "Appointment deleted successfully" });
+
+    return res.status(200).json({
+      success: true,
+      message: "Appointment deleted successfully",
+    });
   } catch (error) {
     next(error);
   }

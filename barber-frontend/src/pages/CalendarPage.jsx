@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from "react";
+import { toast, ToastContainer } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 import CalendarComponent from "../_components/CalendarComponent";
 import AppointmentForm from "../_components/AppointmentForm";
-
+import { createAppointment } from "../utils/api";
 const CalendarPage = () => {
   const [appointments, setAppointments] = useState([]);
   const [customers, setCustomers] = useState([]); // Add customers state
@@ -41,6 +43,7 @@ const CalendarPage = () => {
       try {
         const response = await fetch("http://localhost:5001/api/customers");
         const data = await response.json();
+
         setCustomers(data); // Store customer data
       } catch (error) {
         console.error("Error fetching customers:", error);
@@ -65,7 +68,10 @@ const CalendarPage = () => {
 
   const handleSelectSlot = (slotInfo) => {
     const selectedStartDate = new Date(slotInfo.start);
-    selectedStartDate.setHours(7, 0, 0, 0); // Set time to 07:00
+    if (selectedStartDate.getHours() === 0) {
+      selectedStartDate.setHours(7, 0, 0, 0); // Default to 7:00 AM
+    }
+    console.log("Clicked Hour:", selectedStartDate);
     setSelectedDate(selectedStartDate);
     setSelectedAppointment(null);
     setShowForm(true);
@@ -73,69 +79,94 @@ const CalendarPage = () => {
 
   const handleSelectEvent = (event) => {
     const appointment = appointments.find((appt) => appt.id === event.id);
+
     console.log("Selected Appointment for Edit/Delete:", appointment);
-    setSelectedAppointment({ ...appointment, _id: event.id });
+
+    // Ensure `phoneNumber` exists when editing
+    setSelectedAppointment({
+      _id: appointment.id,
+      customerName: appointment.title, // Title corresponds to customerName
+      phoneNumber:
+        customers.find((customer) => customer.name === appointment.title)
+          ?.phoneNumber || "", // Get phoneNumber
+      barber: appointment.barber || "Lemo",
+      appointmentDateTime: appointment.start,
+    });
+
     setShowForm(true);
   };
 
-  const handleFormSubmit = (result) => {
-    const updatedAppointment =
-      result.updatedAppointment || result.initialAppointment;
+  const handleFormSubmit = async (appointmentData) => {
+    try {
+      const response = await createAppointment(appointmentData);
 
-    // Update the state: Replace edited appointment or add new one
-    setAppointments((prevAppointments) => {
-      const appointmentExists = prevAppointments.some(
-        (appt) => appt.id === updatedAppointment._id
-      );
-
-      if (appointmentExists) {
-        // Update the existing appointment
-        return prevAppointments.map((appt) =>
-          appt.id === updatedAppointment._id
-            ? {
-                id: updatedAppointment._id,
-                title: updatedAppointment.customerName,
-                start: new Date(updatedAppointment.appointmentDateTime),
-                end: new Date(
-                  new Date(updatedAppointment.appointmentDateTime).getTime() +
-                    30 * 60 * 1000
-                ),
-                barber: updatedAppointment.barber,
-              }
-            : appt
-        );
-      } else {
-        // Add new appointment
-        return [
-          ...prevAppointments,
+      if (response?.initialAppointment) {
+        // Map the initial appointment
+        const newAppointments = [
           {
-            id: updatedAppointment._id,
-            title: updatedAppointment.customerName,
-            start: new Date(updatedAppointment.appointmentDateTime),
+            id: response.initialAppointment._id,
+            title: response.initialAppointment.customerName,
+            start: new Date(response.initialAppointment.appointmentDateTime),
             end: new Date(
-              new Date(updatedAppointment.appointmentDateTime).getTime() +
+              new Date(
+                response.initialAppointment.appointmentDateTime
+              ).getTime() +
                 30 * 60 * 1000
             ),
-            barber: updatedAppointment.barber,
+            barber: response.initialAppointment.barber,
           },
         ];
-      }
-    });
 
-    setShowForm(false); // Close the form after submission
+        // Add recurring appointments (if any)
+        if (
+          response.recurringAppointments &&
+          response.recurringAppointments.length > 0
+        ) {
+          const recurringEvents = response.recurringAppointments.map(
+            (appt) => ({
+              id: appt._id,
+              title: appt.customerName,
+              start: new Date(appt.appointmentDateTime),
+              end: new Date(
+                new Date(appt.appointmentDateTime).getTime() + 30 * 60 * 1000
+              ),
+              barber: appt.barber,
+            })
+          );
+
+          newAppointments.push(...recurringEvents); // Add to the initial list
+        }
+
+        // Update the state dynamically
+        setAppointments((prevAppointments) => [
+          ...prevAppointments,
+          ...newAppointments,
+        ]);
+        toast.success("Appointment(s) added successfully!");
+      } else {
+        console.error("Invalid response structure:", response);
+        toast.error("Failed to add the appointment.");
+      }
+    } catch (error) {
+      console.error("Error submitting appointment data:", error);
+      toast.error("An error occurred while adding the appointment.");
+    } finally {
+      setShowForm(false);
+    }
   };
 
-  const handleDelete = async (appointmentId) => {
+  const handleDelete = async (appointmentId, password) => {
     console.log("Appointment ID being deleted:", appointmentId);
-    if (!appointmentId) {
-      console.error("No valid appointment ID provided for deletion.");
-      return;
-    }
+
     try {
       const response = await fetch(
         `http://localhost:5001/api/appointments/${appointmentId}`,
         {
           method: "DELETE",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ password }),
         }
       );
 
@@ -143,16 +174,18 @@ const CalendarPage = () => {
         setAppointments((prevAppointments) =>
           prevAppointments.filter((appt) => appt.id !== appointmentId)
         );
+        setShowForm(false);
+        setSelectedAppointment(null);
 
-        if (selectedAppointment && selectedAppointment.id === appointmentId) {
-          setShowForm(false);
-          setSelectedAppointment(null);
-        }
+        // Show success notification
+        toast.success("Appointment deleted successfully!");
       } else {
-        console.error("Failed to delete the appointment.");
+        const errorData = await response.json();
+        toast.error("Failed to delete the appointment: " + errorData.message);
       }
     } catch (error) {
       console.error("Error deleting appointment:", error);
+      toast.error("An error occurred while deleting the appointment.");
     }
   };
 
@@ -175,6 +208,7 @@ const CalendarPage = () => {
           customers={customers} // Pass customers as a prop
         />
       )}
+      <ToastContainer position="top-right" autoClose={3000} hideProgressBar />
     </div>
   );
 };
