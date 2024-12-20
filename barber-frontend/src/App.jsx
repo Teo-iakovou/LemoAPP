@@ -4,6 +4,7 @@ import Home from "./pages/Home";
 import "./index.css";
 import CalendarPage from "./pages/CalendarPage";
 import Navbar from "./_components/Navbar";
+import Profile from "./pages/Profile";
 import Customers from "./pages/CustomersPage";
 import Login from "./pages/Login";
 
@@ -53,6 +54,7 @@ const App = () => {
                 path="/customers"
                 element={<Customers isDarkMode={isDarkMode} />}
               />
+              <Route path="/profile" element={<Profile />} />
             </Routes>
           ) : (
             <Routes>
