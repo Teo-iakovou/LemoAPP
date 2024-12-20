@@ -1,36 +1,27 @@
 const express = require("express");
-const bcrypt = require("bcrypt");
-const jwt = require("jsonwebtoken");
-const User = require("../models/user");
+const {
+  signup,
+  login,
+  updateProfile,
+  forgotPassword,
+  resetPassword,
+} = require("../controllers/authController");
 
 const router = express.Router();
 
-// Login route
-router.post("/signin", async (req, res) => {
-  try {
-    const { username, password } = req.body;
+// User signup
+router.post("/signup", signup);
 
-    // Check if user exists
-    const user = await User.findOne({ username });
-    if (!user) {
-      return res.status(400).json({ message: "Invalid credentials" });
-    }
+// User login
+router.post("/signin", login);
 
-    // Verify password
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) {
-      return res.status(400).json({ message: "Invalid credentials" });
-    }
+// Update user profile
+router.put("/update-profile", updateProfile);
 
-    // Generate JWT
-    const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, {
-      expiresIn: "1h",
-    });
+// Forgot password
+router.post("/forgot-password", forgotPassword);
 
-    res.status(200).json({ token });
-  } catch (error) {
-    res.status(500).json({ message: "Error logging in", error: error.message });
-  }
-});
+// Reset password
+router.post("/reset-password", resetPassword);
 
 module.exports = router;
