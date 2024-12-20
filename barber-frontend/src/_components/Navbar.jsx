@@ -35,6 +35,7 @@ const Navbar = ({ onThemeToggle, isAuth, onLogout }) => {
     const confirmLogout = window.confirm("Are you sure you want to log out?");
     if (confirmLogout) {
       localStorage.removeItem("token"); // Clear token
+      setIsDropdownOpen(false); // Close the dropdown
       navigate("/login"); // Redirect to login page
       onLogout(); // Notify parent
       console.log("User logged out successfully");
@@ -117,7 +118,7 @@ const Navbar = ({ onThemeToggle, isAuth, onLogout }) => {
         </button>
 
         {/* Dropdown */}
-        {isAuth && (
+        {isAuth ? (
           <div className="relative" ref={dropdownRef}>
             <img
               src={LemoBlackLogo}
@@ -127,6 +128,13 @@ const Navbar = ({ onThemeToggle, isAuth, onLogout }) => {
             />
             {isDropdownOpen && (
               <div className="absolute right-0 mt-1 bg-white shadow-lg rounded-3xl py-2 w-48 z-50 border border-gray-200">
+                <Link
+                  to="/profile"
+                  className="block px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-3xl"
+                  onClick={() => setIsDropdownOpen(false)} // Close the dropdown when clicked
+                >
+                  Profile
+                </Link>
                 <button
                   onClick={handleLogout} // Trigger logout
                   className="w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-3xl"
@@ -136,6 +144,8 @@ const Navbar = ({ onThemeToggle, isAuth, onLogout }) => {
               </div>
             )}
           </div>
+        ) : (
+          <div className="flex gap-4"></div>
         )}
       </div>
     </nav>
