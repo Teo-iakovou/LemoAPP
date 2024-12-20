@@ -1,6 +1,6 @@
 const Appointment = require("../models/appointment");
 const Customer = require("../models/customer");
-
+const { sendSMS } = require("../utils/smsService");
 // Create a new appointment
 const createAppointment = async (req, res, next) => {
   try {
@@ -59,6 +59,17 @@ const createAppointment = async (req, res, next) => {
 
     // Save the initial appointment
     const savedAppointment = await newAppointment.save();
+
+    // Send SMS confirmation for the initial appointment
+    try {
+      const message = `Dear ${customerName}, your appointment with ${barber} is confirmed for ${new Date(
+        appointmentDateTime
+      ).toLocaleString()}. Thank you for choosing Lemo Barber Shop!`;
+      await sendSMS(phoneNumber, message);
+      console.log("Confirmation SMS sent successfully");
+    } catch (smsError) {
+      console.error("Failed to send confirmation SMS:", smsError.message);
+    }
 
     // Generate additional appointments if recurrence is provided
     const additionalAppointments = [];

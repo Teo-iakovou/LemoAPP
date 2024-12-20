@@ -1,11 +1,9 @@
 const User = require("../models/user");
-const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 
 const signup = async (req, res, next) => {
   try {
     const { username, password } = req.body;
-    console.log("Signup request body:", req.body);
 
     const existingUser = await User.findOne({ username });
     if (existingUser) {
@@ -15,7 +13,6 @@ const signup = async (req, res, next) => {
     // Directly pass the plain-text password, as it will be hashed in the pre("save") hook
     const user = new User({ username, password });
     await user.save();
-    console.log("User saved:", user);
 
     res.status(201).json({ message: "User created successfully" });
   } catch (error) {
@@ -26,10 +23,8 @@ const signup = async (req, res, next) => {
 const login = async (req, res, next) => {
   try {
     const { username, password } = req.body;
-    console.log("Login request body:", req.body);
 
     const user = await User.findOne({ username });
-    console.log("Found user for login:", user);
 
     if (!user) {
       console.log("User not found");
@@ -37,7 +32,6 @@ const login = async (req, res, next) => {
     }
 
     const isPasswordMatch = await user.comparePassword(password); // Use instance method
-    console.log("Password match result:", isPasswordMatch);
 
     if (!isPasswordMatch) {
       return res.status(400).json({ message: "Invalid credentials" });
@@ -46,7 +40,6 @@ const login = async (req, res, next) => {
     const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, {
       expiresIn: "1h",
     });
-    console.log("Generated token:", token);
 
     res.status(200).json({ token });
   } catch (error) {
@@ -58,10 +51,8 @@ const login = async (req, res, next) => {
 const updateProfile = async (req, res, next) => {
   try {
     const { username, currentPassword, newUsername, newPassword } = req.body;
-    console.log("Update request body:", req.body);
 
     const user = await User.findOne({ username });
-    console.log("Found user for update:", user);
 
     // Verify current password
     if (!user || !(await user.comparePassword(currentPassword))) {
