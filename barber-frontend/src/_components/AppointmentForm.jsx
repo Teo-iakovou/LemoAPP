@@ -10,6 +10,7 @@ function AppointmentForm({
   onSubmit,
   onDelete,
   isEditing,
+  repeatOption,
   appointmentData,
   customers = [], // Default to an empty array if undefined
 }) {
@@ -28,10 +29,10 @@ function AppointmentForm({
     appointmentData?.appointmentDateTime || initialDate || new Date()
   );
   const [recurrence, setRecurrence] = useState("none");
+  const [weeksOption, setWeeksOption] = useState("1");
   const [error, setError] = useState(null);
   const [showPasswordForm, setShowPasswordForm] = useState(false);
   const [actionType, setActionType] = useState(null); // Tracks "edit" or "delete"
-  const [password, setPassword] = useState("");
 
   // Handle click outside the form to close it
   useEffect(() => {
@@ -84,6 +85,8 @@ function AppointmentForm({
       barber: data.barber,
       appointmentDateTime: formattedAppointmentDateTime,
       recurrence: recurrence !== "none" ? recurrence : null,
+      repeatWeeks: recurrence === "weekly" ? parseInt(weeksOption) : null, // Pass weeksOption for weekly recurrence
+      repeatMonths: recurrence === "monthly" ? parseInt(monthsOption) : null, // Optional for monthly recurrence
     };
 
     console.log("Submitting Appointment Data:", appointmentDetails); // Debug log
@@ -213,7 +216,7 @@ function AppointmentForm({
                   className="mt-1 block w-full p-2 border border-gray-300 rounded"
                 >
                   <option value="Lemo">Lemo</option>
-                  <option value="Assistant">Assistant</option>
+                  <option value="Assistant">Forou</option>
                 </select>
               </div>
               {/* Recurrence */}
@@ -228,10 +231,42 @@ function AppointmentForm({
                   className="mt-1 block w-full p-2 border border-gray-300 rounded"
                 >
                   <option value="none">None</option>
-                  <option value="daily">Daily</option>
                   <option value="weekly">Weekly</option>
                   <option value="monthly">Monthly</option>
                 </select>
+                {repeatOption === "Weekly" && (
+                  <>
+                    <label>Repeat for How Many Weeks:</label>
+                    <select
+                      value={weeksOption}
+                      onChange={(e) => setWeeksOption(e.target.value)}
+                    >
+                      <option value="1">1 Week</option>
+                      <option value="2">2 Weeks</option>
+                      <option value="3">3 Weeks</option>
+                      <option value="4">4 Weeks</option>
+                      <option value="5">5 Weeks</option>
+                    </select>
+                  </>
+                )}
+                {recurrence === "weekly" && (
+                  <div className="mt-4">
+                    <label className="block text-gray-700">
+                      Repeat for How Many Weeks:
+                    </label>
+                    <select
+                      value={weeksOption}
+                      onChange={(e) => setWeeksOption(e.target.value)}
+                      className="mt-1 block w-full p-2 border border-gray-300 rounded"
+                    >
+                      <option value="1">1 Week</option>
+                      <option value="2">2 Weeks</option>
+                      <option value="3">3 Weeks</option>
+                      <option value="4">4 Weeks</option>
+                      <option value="5">5 Weeks</option>
+                    </select>
+                  </div>
+                )}
               </div>
               <button
                 type="submit"

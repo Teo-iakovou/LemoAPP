@@ -10,7 +10,7 @@ const sendSMS = async (to, message) => {
       {
         to,
         message,
-        sender_id: "Lemo", // Optional: Custom sender name
+        sender_id: "Lemo",
       },
       {
         headers: {
