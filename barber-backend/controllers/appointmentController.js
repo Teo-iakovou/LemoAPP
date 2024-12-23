@@ -1,7 +1,8 @@
 const Appointment = require("../models/appointment");
 const Customer = require("../models/customer");
 const { sendSMS } = require("../utils/smsService");
-// Create a new appointment
+
+// Create an appointment
 const createAppointment = async (req, res, next) => {
   try {
     console.log("Received Payload on Server:", req.body);
@@ -11,6 +12,8 @@ const createAppointment = async (req, res, next) => {
       appointmentDateTime,
       barber,
       recurrence,
+      repeatWeeks, // Added for weekly recurrence
+      repeatMonths, // Optional for monthly recurrence
     } = req.body;
 
     // Validate required fields
@@ -62,9 +65,18 @@ const createAppointment = async (req, res, next) => {
 
     // Send SMS confirmation for the initial appointment
     try {
-      const message = `Dear ${customerName}, your appointment with ${barber} is confirmed for ${new Date(
-        appointmentDateTime
-      ).toLocaleString()}. Thank you for choosing Lemo Barber Shop!`;
+      const formattedDate = new Date(appointmentDateTime).toLocaleString(
+        "en-GB",
+        {
+          day: "2-digit",
+          month: "2-digit",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        }
+      );
+
+      const message = `Dear ${customerName}, your appointment with ${barber} is confirmed for ${formattedDate}. Thank you for choosing Lemo Barber Shop!`;
       await sendSMS(phoneNumber, message);
       console.log("Confirmation SMS sent successfully");
     } catch (smsError) {
@@ -73,35 +85,39 @@ const createAppointment = async (req, res, next) => {
 
     // Generate additional appointments if recurrence is provided
     const additionalAppointments = [];
-    if (recurrence && ["daily", "weekly", "monthly"].includes(recurrence)) {
-      let startDate = new Date(appointmentDateTime);
+    if (recurrence === "weekly" && repeatWeeks) {
+      // Generate weekly appointments
+      let currentDate = new Date(appointmentDateTime); // Start from the initial date
+      for (let i = 1; i <= repeatWeeks; i++) {
+        currentDate.setDate(currentDate.getDate() + 7); // Increment by 7 days
 
-      for (let i = 1; i <= 5; i++) {
-        let nextDate = new Date(startDate);
-        if (recurrence === "daily") {
-          nextDate.setDate(startDate.getDate() + i);
-        } else if (recurrence === "weekly") {
-          nextDate.setDate(startDate.getDate() + i * 7);
-        } else if (recurrence === "monthly") {
-          nextDate.setMonth(startDate.getMonth() + i);
-        }
+        // Create and save additional appointment
+        const additionalAppointment = new Appointment({
+          customerName,
+          phoneNumber,
+          appointmentDateTime: new Date(currentDate), // Use updated currentDate
+          barber,
+        });
+        const savedAdditionalAppointment = await additionalAppointment.save();
+        additionalAppointments.push(savedAdditionalAppointment);
+      }
+    } else if (recurrence === "monthly" && repeatMonths) {
+      // Generate monthly appointments
+      let currentDate = new Date(appointmentDateTime); // Start from the initial date
+      for (let i = 1; i <= repeatMonths; i++) {
+        currentDate.setMonth(currentDate.getMonth() + 1); // Increment by 1 month
 
-        // Create additional appointments
-        additionalAppointments.push(
-          new Appointment({
-            customerName,
-            phoneNumber,
-            appointmentDateTime: nextDate,
-            barber,
-          }).save()
-        );
+        // Create and save additional appointment
+        const additionalAppointment = new Appointment({
+          customerName,
+          phoneNumber,
+          appointmentDateTime: new Date(currentDate), // Use updated currentDate
+          barber,
+        });
+        const savedAdditionalAppointment = await additionalAppointment.save();
+        additionalAppointments.push(savedAdditionalAppointment);
       }
     }
-
-    // Save all additional appointments
-    const savedAdditionalAppointments = await Promise.all(
-      additionalAppointments
-    );
 
     // Respond with all created appointments and customer details
     res.status(201).json({
@@ -111,7 +127,7 @@ const createAppointment = async (req, res, next) => {
         phoneNumber: customer.phoneNumber,
       },
       initialAppointment: savedAppointment,
-      recurringAppointments: savedAdditionalAppointments,
+      recurringAppointments: additionalAppointments,
     });
   } catch (error) {
     next(error); // Pass the error to the error-handling middleware
