@@ -1,12 +1,14 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, lazy, Suspense } from "react";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
-import Home from "./pages/Home";
-import "./index.css";
-import CalendarPage from "./pages/CalendarPage";
 import Navbar from "./_components/Navbar";
-import Profile from "./pages/Profile";
-import Customers from "./pages/CustomersPage";
-import Login from "./pages/Login";
+import "./index.css";
+
+// Lazy load pages
+const Home = lazy(() => import("./pages/Home"));
+const CalendarPage = lazy(() => import("./pages/CalendarPage"));
+const Profile = lazy(() => import("./pages/Profile"));
+const Customers = lazy(() => import("./pages/CustomersPage"));
+const Login = lazy(() => import("./pages/Login"));
 
 const App = () => {
   const [isDarkMode, setIsDarkMode] = useState(false); // Dark mode state
@@ -43,24 +45,26 @@ const App = () => {
 
         {/* Main Content */}
         <main className="flex-1 overflow-hidden p-6">
-          {isAuth ? (
-            <Routes>
-              <Route path="/" element={<Home isDarkMode={isDarkMode} />} />
-              <Route
-                path="/calendar"
-                element={<CalendarPage isDarkMode={isDarkMode} />}
-              />
-              <Route
-                path="/customers"
-                element={<Customers isDarkMode={isDarkMode} />}
-              />
-              <Route path="/profile" element={<Profile />} />
-            </Routes>
-          ) : (
-            <Routes>
-              <Route path="*" element={<Login setAuth={setAuth} />} />
-            </Routes>
-          )}
+          <Suspense fallback={<div>Loading...</div>}>
+            {isAuth ? (
+              <Routes>
+                <Route path="/" element={<Home isDarkMode={isDarkMode} />} />
+                <Route
+                  path="/calendar"
+                  element={<CalendarPage isDarkMode={isDarkMode} />}
+                />
+                <Route
+                  path="/customers"
+                  element={<Customers isDarkMode={isDarkMode} />}
+                />
+                <Route path="/profile" element={<Profile />} />
+              </Routes>
+            ) : (
+              <Routes>
+                <Route path="*" element={<Login setAuth={setAuth} />} />
+              </Routes>
+            )}
+          </Suspense>
         </main>
       </div>
     </Router>
