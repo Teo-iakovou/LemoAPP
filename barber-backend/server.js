@@ -13,16 +13,20 @@ connectDB();
 const app = express();
 const PORT = process.env.PORT || 5001;
 const corsOptions = {
-  origin: ["https://lemoapp-production.up.railway.app"], // Use your frontend's URL
-  methods: ["GET", "POST", "PUT", "DELETE"],
+  origin: [
+    "https://lemoapp-production.up.railway.app", // Production frontend
+    "https://lemoapp.netlify.app", // Netlify frontend
+    "http://localhost:5173", // Local development
+  ],
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
   credentials: true, // Allow cookies and other credentials
 };
 
 app.use(cors(corsOptions));
-
+app.options("*", cors(corsOptions));
 app.use(express.json());
-app.use(errorHandler);
+
 app.use("/api/appointments", appointmentRoutes);
 app.use("/api/customers", customerRoutes);
 app.use("/api/auth", authRoutes);
@@ -30,5 +34,5 @@ app.use("/api/auth", authRoutes);
 app.get("/api", (req, res) => {
   res.status(200).json({ message: "API is working" });
 });
-
+app.use(errorHandler);
 app.listen(PORT, () => console.log(`Server is running on port ${PORT}`));
