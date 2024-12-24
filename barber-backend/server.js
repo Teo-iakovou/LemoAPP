@@ -54,6 +54,10 @@ app.use(
     },
   })
 );
+app.get("/", (req, res) => {
+  res.send("Welcome to the LemoApp Backend!");
+});
+
 app.use("/api/appointments", appointmentRoutes);
 app.use("/api/customers", customerRoutes);
 app.use("/api/auth", authRoutes);
