@@ -12,8 +12,15 @@ connectDB();
 
 const app = express();
 const PORT = process.env.PORT || 5001;
+const corsOptions = {
+  origin: ["https://https://lemoapp-production.up.railway.app/api"], // Replace with your Netlify URL
+  methods: ["GET", "POST", "PUT", "DELETE"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+  credentials: true, // Allow cookies and other credentials
+};
 
-app.use(cors());
+app.use(cors(corsOptions));
+
 app.use(express.json());
 
 app.use("/api/appointments", appointmentRoutes);
