@@ -22,11 +22,13 @@ const corsOptions = {
 app.use(cors(corsOptions));
 
 app.use(express.json());
-
+app.use(errorHandler);
 app.use("/api/appointments", appointmentRoutes);
 app.use("/api/customers", customerRoutes);
 app.use("/api/auth", authRoutes);
-
-app.use(errorHandler);
+// Add this route for GET /api
+app.get("/api", (req, res) => {
+  res.status(200).json({ message: "API is working" });
+});
 
 app.listen(PORT, () => console.log(`Server is running on port ${PORT}`));
