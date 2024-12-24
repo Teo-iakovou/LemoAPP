@@ -13,24 +13,6 @@ connectDB();
 const app = express();
 const PORT = process.env.PORT || 5001;
 // Add Helmet middleware
-app.use(
-  helmet({
-    contentSecurityPolicy: {
-      useDefaults: true,
-      directives: {
-        "default-src": ["'self'", "https://lemoapp-production.up.railway.app"], // Allow resources from the same origin
-        "style-src": ["'self'", "'unsafe-inline'"], // Allow inline styles
-        "img-src": ["'self'", "data:"], // Allow images from the same origin and base64
-        "script-src": ["'self'", "'unsafe-inline'", "'unsafe-eval'"], // Allow scripts from the same origin and inline scripts if needed
-        "connect-src": [
-          "'self'",
-          "https://lemoapp.netlify.app",
-          "https://lemoapp-production.up.railway.app",
-        ], // Allow API calls
-      },
-    },
-  })
-);
 
 const corsOptions = {
   origin: [
@@ -46,7 +28,32 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.options("*", cors(corsOptions));
 app.use(express.json());
-
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      useDefaults: true,
+      directives: {
+        "default-src": ["'self'", "https://lemoapp-production.up.railway.app"],
+        "style-src": ["'self'", "'unsafe-inline'"], // Allow inline styles
+        "img-src": ["'self'", "data:", "https://*"], // Allow base64 and external images
+        "script-src": [
+          "'self'",
+          "'unsafe-inline'",
+          "'unsafe-eval'",
+          "https://*",
+        ], // Allow third-party scripts if needed
+        "connect-src": [
+          "'self'",
+          "https://lemoapp.netlify.app",
+          "https://lemoapp-production.up.railway.app",
+        ],
+        "frame-src": ["'self'"], // Allow iframes from the same origin
+        "font-src": ["'self'", "https://*"], // Allow fonts from external sources
+        "worker-src": ["'self'", "blob:"], // Allow web workers
+      },
+    },
+  })
+);
 app.use("/api/appointments", appointmentRoutes);
 app.use("/api/customers", customerRoutes);
 app.use("/api/auth", authRoutes);
