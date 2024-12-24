@@ -18,13 +18,20 @@ app.use(
     contentSecurityPolicy: {
       useDefaults: true,
       directives: {
-        "default-src": ["'self'"], // Allow resources from the same origin
+        "default-src": ["'self'", "https://lemoapp-production.up.railway.app"], // Allow resources from the same origin
         "style-src": ["'self'", "'unsafe-inline'"], // Allow inline styles
-        "img-src": ["'self'", "data:"], // Allow images from same origin and base64
+        "img-src": ["'self'", "data:"], // Allow images from the same origin and base64
+        "script-src": ["'self'", "'unsafe-inline'", "'unsafe-eval'"], // Allow scripts from the same origin and inline scripts if needed
+        "connect-src": [
+          "'self'",
+          "https://lemoapp.netlify.app",
+          "https://lemoapp-production.up.railway.app",
+        ], // Allow API calls
       },
     },
   })
 );
+
 const corsOptions = {
   origin: [
     "https://lemoapp-production.up.railway.app", // Production frontend
