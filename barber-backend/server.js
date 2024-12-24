@@ -6,12 +6,25 @@ const appointmentRoutes = require("./routes/appointmentRoutes");
 const customerRoutes = require("./routes/customerRoutes");
 const authRoutes = require("./routes/authRoutes");
 const errorHandler = require("./middlewares/errorHandler");
-
+const helmet = require("helmet");
 dotenv.config();
 connectDB();
 
 const app = express();
 const PORT = process.env.PORT || 5001;
+// Add Helmet middleware
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      useDefaults: true,
+      directives: {
+        "default-src": ["'self'"], // Allow resources from the same origin
+        "style-src": ["'self'", "'unsafe-inline'"], // Allow inline styles
+        "img-src": ["'self'", "data:"], // Allow images from same origin and base64
+      },
+    },
+  })
+);
 const corsOptions = {
   origin: [
     "https://lemoapp-production.up.railway.app", // Production frontend
