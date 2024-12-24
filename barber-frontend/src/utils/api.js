@@ -1,7 +1,5 @@
 const API_BASE_URL =
-  process.env.NODE_ENV === "production"
-    ? "https://lemoapp-production.up.railway.app/api" // Replace with your production backend URL
-    : "http://localhost:5001/api"; // Use localhost during development
+  process.env.REACT_APP_API_BASE_URL || "http://localhost:5001/api"; // Use the environment variable or default to localhost
 
 export const createAppointment = async (appointmentData) => {
   const response = await fetch(`${API_BASE_URL}/appointments`, {
