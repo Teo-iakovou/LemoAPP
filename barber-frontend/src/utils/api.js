@@ -1,4 +1,5 @@
-const API_BASE_URL = "https://lemoapp-production.up.railway.app/api";
+const API_BASE_URL =
+  process.env.REACT_APP_API_BASE_URL || "http://localhost:5001/api";
 
 export const createAppointment = async (appointmentData) => {
   const response = await fetch(`${API_BASE_URL}/appointments`, {
@@ -6,8 +7,14 @@ export const createAppointment = async (appointmentData) => {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(appointmentData),
   });
+
+  if (!response.ok) {
+    throw new Error("Failed to create appointment.");
+  }
+
   return response.json();
 };
+
 export const loginUser = async (credentials) => {
   const response = await fetch(`${API_BASE_URL}/auth/signin`, {
     method: "POST",
@@ -21,11 +28,12 @@ export const loginUser = async (credentials) => {
 
   return response.json(); // Returns the JWT token
 };
+
 export const fetchCustomers = async () => {
   try {
     const response = await fetch(`${API_BASE_URL}/customers`);
     if (!response.ok) {
-      throw new Error("Failed to fetch customers");
+      throw new Error("Failed to fetch customers.");
     }
     return await response.json();
   } catch (error) {
@@ -36,5 +44,8 @@ export const fetchCustomers = async () => {
 
 export const fetchAppointments = async () => {
   const response = await fetch(`${API_BASE_URL}/appointments`);
+  if (!response.ok) {
+    throw new Error("Failed to fetch appointments.");
+  }
   return response.json();
 };
