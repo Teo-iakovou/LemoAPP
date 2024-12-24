@@ -4,6 +4,11 @@ import "react-toastify/dist/ReactToastify.css";
 import CalendarComponent from "../_components/CalendarComponent";
 import AppointmentForm from "../_components/AppointmentForm";
 import { createAppointment } from "../utils/api";
+
+// Base API URL
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || "http://localhost:5001/api";
+
 const CalendarPage = () => {
   const [appointments, setAppointments] = useState([]);
   const [customers, setCustomers] = useState([]); // Add customers state
@@ -16,7 +21,7 @@ const CalendarPage = () => {
   useEffect(() => {
     const fetchAppointments = async () => {
       try {
-        const response = await fetch("http://localhost:5001/api/appointments");
+        const response = await fetch(`${API_BASE_URL}/appointments`);
         const data = await response.json();
 
         const events = data.map((appointment) => ({
@@ -41,7 +46,7 @@ const CalendarPage = () => {
   useEffect(() => {
     const fetchCustomers = async () => {
       try {
-        const response = await fetch("http://localhost:5001/api/customers");
+        const response = await fetch(`${API_BASE_URL}/customers`);
         const data = await response.json();
 
         setCustomers(data); // Store customer data
@@ -160,7 +165,7 @@ const CalendarPage = () => {
 
     try {
       const response = await fetch(
-        `http://localhost:5001/api/appointments/${appointmentId}`,
+        `${API_BASE_URL}/appointments/${appointmentId}`,
         {
           method: "DELETE",
           headers: {

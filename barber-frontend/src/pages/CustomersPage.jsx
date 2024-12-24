@@ -2,6 +2,10 @@ import React, { useEffect, useState, useRef } from "react";
 import { fetchCustomers } from "../utils/api";
 import { FaTrash, FaEdit } from "react-icons/fa";
 
+// Base API URL
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || "http://localhost:5001/api";
+
 const CustomersPage = ({ isDarkMode }) => {
   const [customers, setCustomers] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
@@ -63,12 +67,9 @@ const CustomersPage = ({ isDarkMode }) => {
     if (!confirmDelete) return;
 
     try {
-      const response = await fetch(
-        `http://localhost:5001/api/customers/${id}`,
-        {
-          method: "DELETE",
-        }
-      );
+      const response = await fetch(`${API_BASE_URL}/customers/${id}`, {
+        method: "DELETE",
+      });
       if (!response.ok) {
         throw new Error("Failed to delete customer");
       }
@@ -92,16 +93,13 @@ const CustomersPage = ({ isDarkMode }) => {
 
   const handleEditSubmit = async (id) => {
     try {
-      const response = await fetch(
-        `http://localhost:5001/api/customers/${id}`,
-        {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(editData),
-        }
-      );
+      const response = await fetch(`${API_BASE_URL}/customers/${id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(editData),
+      });
       if (!response.ok) {
         throw new Error("Failed to update customer");
       }

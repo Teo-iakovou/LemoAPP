@@ -2,6 +2,10 @@ import React, { useState } from "react";
 import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 
+// Base API URL
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || "http://localhost:5001/api";
+
 const Profile = () => {
   const [currentUsername, setCurrentUsername] = useState("");
   const [currentPassword, setCurrentPassword] = useState("");
@@ -12,21 +16,18 @@ const Profile = () => {
     e.preventDefault();
 
     try {
-      const response = await fetch(
-        "http://localhost:5001/api/auth/update-profile",
-        {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            username: currentUsername,
-            currentPassword,
-            newUsername,
-            newPassword,
-          }),
-        }
-      );
+      const response = await fetch(`${API_BASE_URL}/auth/update-profile`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          username: currentUsername,
+          currentPassword,
+          newUsername,
+          newPassword,
+        }),
+      });
 
       const data = await response.json();
 
