@@ -118,16 +118,16 @@ const CustomersPage = ({ isDarkMode }) => {
   };
 
   return (
-    <div className="p-6 relative">
+    <div className="p-6 relative ">
       <h1
         className={`text-2xl font-bold mb-4 ${
-          isDarkMode ? "text-white" : "text-black"
+          isDarkMode ? "text-white" : "text-white"
         }`}
       >
         ΠΕΛΑΤΕΣ
       </h1>
       {customers.length === 0 ? (
-        <p className={isDarkMode ? "text-white" : "text-black"}>
+        <p className={isDarkMode ? "text-white" : "text-white"}>
           ΔΕΝ ΒΡΕΘΗΚΑΝ ΠΕΛΑΤΕΣ.
         </p>
       ) : (
@@ -138,7 +138,7 @@ const CustomersPage = ({ isDarkMode }) => {
               className={`flex justify-between items-center border-b pb-2 ${
                 isDarkMode
                   ? "border-gray-600 text-white"
-                  : "border-gray-300 text-black"
+                  : "border-gray-300 text-white"
               }`}
             >
               {editMode === customer._id ? (

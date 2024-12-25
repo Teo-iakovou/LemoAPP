@@ -11,7 +11,7 @@ function PasswordForm({ onPasswordSubmit, onCancel }) {
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <label className="block text-gray-700">
-        Enter Password:
+        ΚΑΤΑΧΩΡΗΣΕ ΚΩΔΙΚΟ:
         <input
           type="password"
           value={password}
@@ -25,14 +25,14 @@ function PasswordForm({ onPasswordSubmit, onCancel }) {
         type="submit"
         className="w-full bg-green-500 text-white py-2 rounded"
       >
-        Submit
+        ΥΠΟΒΟΛΗ
       </button>
       <button
         type="button"
         className="w-full bg-gray-500 text-white py-2 rounded"
         onClick={onCancel}
       >
-        Cancel
+        ΑΚΥΡΩΣΗ
       </button>
     </form>
   );

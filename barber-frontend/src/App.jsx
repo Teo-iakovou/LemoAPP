@@ -2,7 +2,7 @@ import React, { useState, useEffect, lazy, Suspense } from "react";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import Navbar from "./_components/Navbar";
 import "./index.css";
-
+import UpdatePasswordForm from "./pages/UpdatePasswordForm";
 // Lazy load pages
 const Home = lazy(() => import("./pages/Home"));
 const CalendarPage = lazy(() => import("./pages/CalendarPage"));
@@ -30,7 +30,7 @@ const App = () => {
     <Router>
       <div
         className={`h-screen flex flex-col ${
-          isDarkMode ? "bg-gray-900 text-black" : "bg-gray-100 text-gray-900"
+          isDarkMode ? "bg-gray-900 text-black" : "bg-gray-900 text-gray-900"
         } transition-colors duration-300`}
       >
         {/* Navbar Section */}
@@ -56,6 +56,10 @@ const App = () => {
                 <Route
                   path="/customers"
                   element={<Customers isDarkMode={isDarkMode} />}
+                />
+                <Route
+                  path="/update-password"
+                  element={<UpdatePasswordForm />}
                 />
                 <Route path="/profile" element={<Profile />} />
               </Routes>

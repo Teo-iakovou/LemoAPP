@@ -7,23 +7,22 @@ const Home = () => {
 
   return (
     <div
-      className=" rounded-full flex flex-col items-center justify-center h-screen text-center bg-cover bg-center"
+      className="flex flex-col rounded-3xl items-center justify-center min-h-screen min-w-full text-center bg-cover bg-center"
       style={{
         backgroundImage: `url(${barbershopBg})`,
         backgroundSize: "cover",
         backgroundPosition: "center",
+        backgroundRepeat: "no-repeat",
       }}
     >
-      <h1 className="text-4xl font-bold text-white mb-4">
-        ΚΑΛΩΣΟΡΙΣΑΤΕ ΣΤΟ LEMOBARBERSHOP
-      </h1>
-      <p className="text-lg text-white  mb-6">
-        Διαχειριστείτε και προγραμματίστε τα ραντεβούμε ευκολία χρησιμοποιώντας
+      <h1 className="text-4xl font-bold text-white mb-4">LEMOBARBERSHOP</h1>
+      <p className="text-lg text-white mb-6 font-bold">
+        Διαχειριστείτε και προγραμματίστε τα ραντεβού με ευκολία χρησιμοποιώντας
         την εφαρμογή
       </p>
       <button
         onClick={() => navigate("/calendar")}
-        className="bg-blue-500 text-white px-6 py-3 rounded-lg hover:bg-blue-600 transition"
+        className="bg-purple-600 text-white px-6 py-3 font-bold rounded-lg hover:bg-purple-950 transition"
       >
         ΚΛΕΙΣΕ ΡΑΝΤΕΒΟΥ
       </button>
