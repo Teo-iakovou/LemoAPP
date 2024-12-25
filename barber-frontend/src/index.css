@@ -1,3 +1,13 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+.rbc-toolbar button {
+  font-size: 0.85rem; /* Smaller font for mobile */
+  padding: 0.3rem 0.6rem; /* Adjust padding */
+  white-space: nowrap; /* Prevent text wrapping */
+  overflow: hidden; /* Hide overflowing text */
+  text-overflow: ellipsis; /* Add ellipsis for long text */
+}
+.rbc-toolbar label {
+  font-size: 0.85rem; /* Smaller font for labels */
+}

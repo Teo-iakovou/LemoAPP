@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { FaHome, FaCalendarAlt, FaUsers } from "react-icons/fa"; // Import icons
 import LemoLogo from "../assets/LemoLogo.png";
 import LemoBlackLogo from "../assets/LemoLogo.JPG";
 
@@ -44,53 +45,51 @@ const Navbar = ({ onThemeToggle, isAuth, onLogout }) => {
 
   return (
     <nav
-      className={`px-6 flex justify-between items-center shadow-sm ${
+      className={`px-6  flex justify-between items-center shadow-sm h-14 ${
         isDarkMode ? "bg-gray-800 text-white" : "bg-purple-950"
       }`}
     >
       {/* Left Section: Logo */}
       <div className="flex items-center space-x-8">
-        <div className="py-4">
+        <div className="py-2">
           <Link to={isAuth ? "/calendar" : "/"}>
             <img
               src={LemoLogo}
               alt="Lemo Barber Shop Logo"
-              className="w-16 h-16 mx-auto object-cover"
+              className="w-16 h-16 mx-5 object-cover"
             />
           </Link>
         </div>
         {isAuth && (
-          <ul className="flex items-center  space-x-6">
-            {/* Home Link - Hidden on Mobile */}
+          <ul className="flex items-center space-x-6">
+            {/* Home Icon */}
             <li className="hidden sm:block">
-              <Link
-                to="/"
-                className={`hover:text-blue-500 transition ${
-                  isDarkMode ? "text-white" : "text-white"
-                }`}
-              >
-                ΑΡΧΙΚΗ
+              <Link to="/" className="hover:text-blue-500 transition">
+                <FaHome
+                  className={`text-xl ${
+                    isDarkMode ? "text-white" : "text-white"
+                  }`}
+                />
               </Link>
             </li>
-            {/* Calendar and Customers Links */}
+            {/* Calendar Icon */}
             <li className="flex-1 text-center">
-              <Link
-                to="/calendar"
-                className={`hover:text-blue-500 transition ${
-                  isDarkMode ? "text-white" : "text-white"
-                }`}
-              >
-                ΗΜΕΡΟΛΟΓΙΟ
+              <Link to="/calendar" className="hover:text-blue-500 transition">
+                <FaCalendarAlt
+                  className={`text-xl ${
+                    isDarkMode ? "text-white" : "text-white"
+                  }`}
+                />
               </Link>
             </li>
+            {/* Customers Icon */}
             <li className="flex-1 text-center">
-              <Link
-                to="/customers"
-                className={`hover:text-blue-500 transition ${
-                  isDarkMode ? "text-white" : "text-white"
-                }`}
-              >
-                ΠΕΛΑΤΕΣ
+              <Link to="/customers" className="hover:text-blue-500 transition">
+                <FaUsers
+                  className={`text-xl ${
+                    isDarkMode ? "text-white" : "text-white"
+                  }`}
+                />
               </Link>
             </li>
           </ul>

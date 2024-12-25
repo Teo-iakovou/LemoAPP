@@ -209,13 +209,17 @@ const CalendarPage = () => {
   };
 
   return (
-    <div className="relative bg-white rounded-3xl mt-[14px] min-h-[calc(100vh-64px)] p-4">
-      <h1 className="text-xl font-bold mb-4">ΠΡΟΓΡΑΜΜΑ ΡΑΝΤΕΒΟΥ</h1>
-      <CalendarComponent
-        events={filteredAppointments}
-        onSelectSlot={handleSelectSlot}
-        onSelectEvent={handleSelectEvent}
-      />
+    <div className="relative bg-white rounded-3xl mt-[-18px] min-h-[calc(100vh-64px)] p-4">
+      <h1 className="text-xl font-bold mb-4 text-center sm:text-left">
+        ΠΡΟΓΡΑΜΜΑ ΡΑΝΤΕΒΟΥ
+      </h1>
+      <div className="overflow-x-auto">
+        <CalendarComponent
+          events={filteredAppointments}
+          onSelectSlot={handleSelectSlot}
+          onSelectEvent={handleSelectEvent}
+        />
+      </div>
       {showForm && (
         <AppointmentForm
           initialDate={selectedDate}
