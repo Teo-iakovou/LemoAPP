@@ -106,7 +106,16 @@ const CalendarPage = () => {
       const response = await createAppointment(appointmentData);
 
       if (response?.initialAppointment) {
-        // Map the initial appointment
+        // Define the reference date for changing the duration
+        const referenceDate = new Date(2025, 0, 13); // January 13th, 2025
+        const appointmentDate = new Date(
+          response.initialAppointment.appointmentDateTime
+        );
+
+        // Determine the duration dynamically
+        const duration = appointmentDate >= referenceDate ? 40 : 30;
+
+        // Map the initial appointment with dynamic duration
         const newAppointments = [
           {
             id: response.initialAppointment._id,
@@ -116,7 +125,7 @@ const CalendarPage = () => {
               new Date(
                 response.initialAppointment.appointmentDateTime
               ).getTime() +
-                30 * 60 * 1000
+                duration * 60 * 1000 // Dynamic duration
             ),
             barber: response.initialAppointment.barber,
           },
@@ -127,17 +136,22 @@ const CalendarPage = () => {
           response.recurringAppointments &&
           response.recurringAppointments.length > 0
         ) {
-          const recurringEvents = response.recurringAppointments.map(
-            (appt) => ({
+          const recurringEvents = response.recurringAppointments.map((appt) => {
+            const recurringAppointmentDate = new Date(appt.appointmentDateTime);
+            const recurringDuration =
+              recurringAppointmentDate >= referenceDate ? 40 : 30;
+
+            return {
               id: appt._id,
               title: appt.customerName,
               start: new Date(appt.appointmentDateTime),
               end: new Date(
-                new Date(appt.appointmentDateTime).getTime() + 30 * 60 * 1000
+                new Date(appt.appointmentDateTime).getTime() +
+                  recurringDuration * 60 * 1000 // Dynamic duration for recurring
               ),
               barber: appt.barber,
-            })
-          );
+            };
+          });
 
           newAppointments.push(...recurringEvents); // Add to the initial list
         }
@@ -196,7 +210,7 @@ const CalendarPage = () => {
 
   return (
     <div className="relative bg-white rounded-3xl mt-[14px] min-h-[calc(100vh-64px)] p-4">
-      <h1 className="text-xl font-bold mb-4">Appointment Scheduler</h1>
+      <h1 className="text-xl font-bold mb-4">ΠΡΟΓΡΑΜΜΑ ΡΑΝΤΕΒΟΥ</h1>
       <CalendarComponent
         events={filteredAppointments}
         onSelectSlot={handleSelectSlot}

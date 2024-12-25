@@ -135,7 +135,7 @@ function AppointmentForm({
     <div className="fixed inset-0 bg-gray-800 bg-opacity-75 flex items-center justify-center">
       <div ref={formRef} className="bg-white p-6 rounded-md w-full max-w-md">
         <h2 className="text-xl font-bold mb-4">
-          {isEditing ? "Edit Appointment" : "Schedule an Appointment"}
+          {isEditing ? "ΕΠΕΞΕΡΓΑΣΙΑ ΡΑΝΤΕΒΟΥ" : "ΚΛΕΙΣΤΕ ΕΝΑ ΡΑΝΤΕΒΟΥ"}
         </h2>
         {error && (
           <div className="mb-4 p-2 bg-red-100 text-red-700 rounded">
@@ -153,7 +153,7 @@ function AppointmentForm({
               {/* Customer Name */}
               <div className="mb-4">
                 <label htmlFor="customerName" className="block text-gray-700">
-                  Customer Name:
+                  ΟΝΟΜΑ ΠΕΛΑΤΗ:
                 </label>
                 <input
                   {...register("customerName")}
@@ -161,7 +161,7 @@ function AppointmentForm({
                   onChange={handleCustomerSelect}
                   type="text"
                   id="customerName"
-                  placeholder="Enter customer name"
+                  placeholder="Όνομα πελάτη"
                   className="mt-1 block w-full p-2 border border-gray-300 rounded"
                   required
                 />
@@ -174,13 +174,13 @@ function AppointmentForm({
               {/* Phone Number */}
               <div className="mb-4">
                 <label htmlFor="phoneNumber" className="block text-gray-700">
-                  Phone Number:
+                  ΤΗΛΕΦΩΝΟ:
                 </label>
                 <input
                   {...register("phoneNumber")}
                   type="text"
                   id="phoneNumber"
-                  placeholder="Enter phone number"
+                  placeholder="Τηλέφωνο πελάτη"
                   className="mt-1 block w-full p-2 border border-gray-300 rounded"
                   required
                 />
@@ -191,7 +191,7 @@ function AppointmentForm({
                   htmlFor="appointmentDateTime"
                   className="block text-gray-700"
                 >
-                  Appointment Date and Time:
+                  ΗΜΕΡΑ ΚΑΙ ΩΡΑ ΡΑΝΤΕΒΟΥ:
                 </label>
                 <Flatpickr
                   ref={flatpickrRef}
@@ -208,21 +208,21 @@ function AppointmentForm({
               {/* Barber Selection */}
               <div className="mb-4">
                 <label htmlFor="barber" className="block text-gray-700">
-                  Select Barber:
+                  ΕΠΙΛΟΓΗ:
                 </label>
                 <select
                   {...register("barber")}
                   id="barber"
                   className="mt-1 block w-full p-2 border border-gray-300 rounded"
                 >
-                  <option value="Lemo">Lemo</option>
-                  <option value="Assistant">Forou</option>
+                  <option value="Lemo">ΛΕΜΟ</option>
+                  <option value="Assistant">ΦΟΡΟΥ</option>
                 </select>
               </div>
               {/* Recurrence */}
               <div className="mb-4">
                 <label htmlFor="recurrence" className="block text-gray-700">
-                  Repeat Appointment:
+                  ΕΠΑΝΑΛΗΨΗ ΡΑΝΤΕΒΟΥ:
                 </label>
                 <select
                   id="recurrence"
@@ -230,40 +230,40 @@ function AppointmentForm({
                   onChange={(e) => setRecurrence(e.target.value)}
                   className="mt-1 block w-full p-2 border border-gray-300 rounded"
                 >
-                  <option value="none">None</option>
-                  <option value="weekly">Weekly</option>
-                  <option value="monthly">Monthly</option>
+                  <option value="none">ΚΑΝΕΝΑ</option>
+                  <option value="weekly">ΕΒΔΟΜΑΔΙΑΙΟ</option>
+                  <option value="monthly">ΜΗΝΙΑΙΟ</option>
                 </select>
                 {repeatOption === "Weekly" && (
                   <>
-                    <label>Repeat for How Many Weeks:</label>
+                    <label>ΕΠΑΝΑΛΗΨΗ ΓΙΑ ΠΟΣΕΣ ΕΒΔΟΜΑΔΕΣ:</label>
                     <select
                       value={weeksOption}
                       onChange={(e) => setWeeksOption(e.target.value)}
                     >
-                      <option value="1">1 Week</option>
-                      <option value="2">2 Weeks</option>
-                      <option value="3">3 Weeks</option>
-                      <option value="4">4 Weeks</option>
-                      <option value="5">5 Weeks</option>
+                      <option value="1">1 ΕΒΔΟΜΑΔΑ</option>
+                      <option value="2">2 ΕΒΔΟΜΑΔΕΣ</option>
+                      <option value="3">3 ΕΒΔΟΜΑΔΕΣ</option>
+                      <option value="4">4 ΕΒΔΟΜΑΔΕΣ</option>
+                      <option value="5">5 ΕΒΔΟΜΑΔΕΣ</option>
                     </select>
                   </>
                 )}
                 {recurrence === "weekly" && (
                   <div className="mt-4">
                     <label className="block text-gray-700">
-                      Repeat for How Many Weeks:
+                      ΕΠΑΝΑΛΗΨΗ ΓΙΑ ΠΟΣΕΣ ΕΒΔΟΜΑΔΕΣ:
                     </label>
                     <select
                       value={weeksOption}
                       onChange={(e) => setWeeksOption(e.target.value)}
                       className="mt-1 block w-full p-2 border border-gray-300 rounded"
                     >
-                      <option value="1">1 Week</option>
-                      <option value="2">2 Weeks</option>
-                      <option value="3">3 Weeks</option>
-                      <option value="4">4 Weeks</option>
-                      <option value="5">5 Weeks</option>
+                      <option value="1">1 ΕΒΔΟΜΑΔΑ</option>
+                      <option value="2">2 ΕΒΔΟΜΑΔΕΣ</option>
+                      <option value="3">3 ΕΒΔΟΜΑΔΕΣ</option>
+                      <option value="4">4 ΕΒΔΟΜΑΔΕΣ</option>
+                      <option value="5">5 ΕΒΔΟΜΑΔΕΣ</option>
                     </select>
                   </div>
                 )}
@@ -272,7 +272,7 @@ function AppointmentForm({
                 type="submit"
                 className="w-full bg-green-500 text-white py-2 rounded"
               >
-                {isEditing ? "Update Appointment" : "Add Appointment"}
+                {isEditing ? "ΕΝΗΜΕΡΩΣΗ ΡΑΝΤΕΒΟΥ" : "ΠΡΟΣΘΗΚΗ ΡΑΝΤΕΒΟΥ"}
               </button>
             </form>
             {isEditing && (
@@ -280,14 +280,14 @@ function AppointmentForm({
                 className="mt-4 w-full bg-red-500 text-white py-2 rounded"
                 onClick={handleDelete}
               >
-                Delete Appointment
+                ΔΙΑΓΡΑΦΗ ΡΑΝΤΕΒΟΥ
               </button>
             )}
             <button
               className="mt-4 w-full bg-gray-500 text-white py-2 rounded"
               onClick={onClose}
             >
-              Cancel
+              ΑΚΥΡΩΣΗ
             </button>
           </>
         )}

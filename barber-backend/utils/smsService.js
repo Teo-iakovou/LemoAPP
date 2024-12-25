@@ -1,7 +1,7 @@
 const axios = require("axios");
 
 const sendSMS = async (to, message) => {
-  const API_KEY = process.env.SMS_TO_API_KEY; // Load the API key
+  const API_KEY = process.env.SMS_TO_API_KEY.trim(); // Load the API key
   const SMS_URL = "https://api.sms.to/sms/send";
 
   try {

@@ -48,7 +48,7 @@ const Navbar = ({ onThemeToggle, isAuth, onLogout }) => {
         isDarkMode ? "bg-gray-800 text-white" : "bg-purple-950"
       }`}
     >
-      {/* Left Section: Logo and Links */}
+      {/* Left Section: Logo */}
       <div className="flex items-center space-x-8">
         <div className="py-4">
           <Link to={isAuth ? "/calendar" : "/"}>
@@ -60,35 +60,37 @@ const Navbar = ({ onThemeToggle, isAuth, onLogout }) => {
           </Link>
         </div>
         {isAuth && (
-          <ul className="flex items-center space-x-6">
-            <li>
+          <ul className="flex items-center  space-x-6">
+            {/* Home Link - Hidden on Mobile */}
+            <li className="hidden sm:block">
               <Link
                 to="/"
                 className={`hover:text-blue-500 transition ${
                   isDarkMode ? "text-white" : "text-white"
                 }`}
               >
-                Home
+                ΑΡΧΙΚΗ
               </Link>
             </li>
-            <li>
+            {/* Calendar and Customers Links */}
+            <li className="flex-1 text-center">
               <Link
                 to="/calendar"
                 className={`hover:text-blue-500 transition ${
                   isDarkMode ? "text-white" : "text-white"
                 }`}
               >
-                Calendar
+                ΗΜΕΡΟΛΟΓΙΟ
               </Link>
             </li>
-            <li>
+            <li className="flex-1 text-center">
               <Link
                 to="/customers"
                 className={`hover:text-blue-500 transition ${
                   isDarkMode ? "text-white" : "text-white"
                 }`}
               >
-                Customers
+                ΠΕΛΑΤΕΣ
               </Link>
             </li>
           </ul>
@@ -133,13 +135,13 @@ const Navbar = ({ onThemeToggle, isAuth, onLogout }) => {
                   className="block px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-3xl"
                   onClick={() => setIsDropdownOpen(false)} // Close the dropdown when clicked
                 >
-                  Profile
+                  ΠΡΟΦΙΛ
                 </Link>
                 <button
                   onClick={handleLogout} // Trigger logout
                   className="w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-3xl"
                 >
-                  Logout
+                  ΕΞΟΔΟΣ
                 </button>
               </div>
             )}

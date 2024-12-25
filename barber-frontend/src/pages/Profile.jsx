@@ -52,10 +52,10 @@ const Profile = () => {
   return (
     <div className="max-w-lg mx-auto p-6 mt-[14px] bg-white shadow-md rounded-3xl ">
       <ToastContainer />
-      <h2 className="text-xl font-bold mb-4">Update Profile</h2>
+      <h2 className="text-xl font-bold mb-4">ΕΝΗΜΕΡΩΣΗ ΠΡΟΦΙΛ</h2>
       <form onSubmit={handleUpdate}>
         <div className="mb-4">
-          <label className="block text-gray-700">Current Username</label>
+          <label className="block text-gray-700">ΤΡΕΧΟΝ ΟΝΟΜΑ ΧΡΗΣΤΗ</label>
           <input
             type="text"
             className="w-full p-2 border rounded"
@@ -65,7 +65,7 @@ const Profile = () => {
           />
         </div>
         <div className="mb-4">
-          <label className="block text-gray-700">Current Password</label>
+          <label className="block text-gray-700">ΤΡΕΧΟΝ ΚΩΔΙΚΟΣ</label>
           <input
             type="password"
             className="w-full p-2 border rounded"
@@ -75,7 +75,7 @@ const Profile = () => {
           />
         </div>
         <div className="mb-4">
-          <label className="block text-gray-700">New Username</label>
+          <label className="block text-gray-700">ΝΕΟ ΟΝΟΜΑ ΧΡΗΣΤΗ</label>
           <input
             type="text"
             className="w-full p-2 border rounded"
@@ -84,7 +84,7 @@ const Profile = () => {
           />
         </div>
         <div className="mb-4">
-          <label className="block text-gray-700">New Password</label>
+          <label className="block text-gray-700">ΝΕΟΣ ΚΩΔΙΚΟΣ</label>
           <input
             type="password"
             className="w-full p-2 border rounded"
@@ -96,7 +96,7 @@ const Profile = () => {
           type="submit"
           className="w-full bg-blue-500 text-white py-2 px-4 rounded hover:bg-blue-600"
         >
-          Update Profile
+          ΕΝΗΜΕΡΩΣΗ ΠΡΟΦΙΛ
         </button>
       </form>
     </div>

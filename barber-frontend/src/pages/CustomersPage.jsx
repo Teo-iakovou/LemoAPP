@@ -124,11 +124,11 @@ const CustomersPage = ({ isDarkMode }) => {
           isDarkMode ? "text-white" : "text-black"
         }`}
       >
-        Customers
+        ΠΕΛΑΤΕΣ
       </h1>
       {customers.length === 0 ? (
         <p className={isDarkMode ? "text-white" : "text-black"}>
-          No customers found.
+          ΔΕΝ ΒΡΕΘΗΚΑΝ ΠΕΛΑΤΕΣ.
         </p>
       ) : (
         <ul className="space-y-2">

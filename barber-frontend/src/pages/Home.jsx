@@ -10,10 +10,12 @@ const Home = ({ isDarkMode }) => {
         isDarkMode ? " text-white" : " text-gray-900"
       }`}
     >
-      <h1 className="text-4xl font-bold mb-4">Welcome to Lemo App</h1>
+      <h1 className="text-4xl font-bold mb-4">
+        ΚΑΛΩΣΟΡΙΣΑΤΕ ΣΤΟ LEMOBARBERSHOP
+      </h1>
       <p className="text-lg mb-6">
-        Manage and schedule barber appointments with ease using the Lemo App. A
-        simple, intuitive platform for barbers.
+        Διαχειριστείτε και προγραμματίστε τα ραντεβούμε ευκολία χρησιμοποιώντας
+        την εφαρμογή
       </p>
       <button
         onClick={() => navigate("/calendar")}
@@ -23,7 +25,7 @@ const Home = ({ isDarkMode }) => {
             : "bg-blue-500 hover:bg-blue-600 transition"
         }`}
       >
-        Book an Appointment
+        ΚΛΕΙΣΕ ΡΑΝΤΕΒΟΥ
       </button>
     </div>
   );
