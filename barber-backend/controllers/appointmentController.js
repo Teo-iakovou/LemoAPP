@@ -3,6 +3,8 @@ const Customer = require("../models/customer");
 const { sendSMS } = require("../utils/smsService");
 
 // Create an appointment
+const moment = require("moment-timezone");
+
 const createAppointment = async (req, res, next) => {
   try {
     console.log("Received Payload on Server:", req.body);
@@ -12,8 +14,8 @@ const createAppointment = async (req, res, next) => {
       appointmentDateTime,
       barber,
       recurrence,
-      repeatWeeks, // Added for weekly recurrence
-      repeatMonths, // Optional for monthly recurrence
+      repeatWeeks,
+      repeatMonths,
     } = req.body;
 
     // Validate required fields
@@ -31,18 +33,18 @@ const createAppointment = async (req, res, next) => {
     }
 
     // Validate appointment date
-    const appointmentDate = new Date(appointmentDateTime);
-    if (isNaN(appointmentDate.getTime()) || appointmentDate <= new Date()) {
+    const appointmentDate = moment(appointmentDateTime).tz("Europe/Athens");
+    if (!appointmentDate.isValid() || appointmentDate.isBefore(moment())) {
       return res
         .status(400)
         .json({ message: "Invalid or past appointment date" });
     }
 
     // Validate barber value
-    if (!["Lemo", "Assistant"].includes(barber)) {
+    if (!["Lemo", "Forou"].includes(barber)) {
       return res
         .status(400)
-        .json({ message: "Barber must be either 'Lemo' or 'Assistant'" });
+        .json({ message: "Barber must be either 'Lemo' or 'Forou'" });
     }
 
     // Check if the customer exists or create a new one
@@ -56,7 +58,7 @@ const createAppointment = async (req, res, next) => {
     const newAppointment = new Appointment({
       customerName,
       phoneNumber,
-      appointmentDateTime,
+      appointmentDateTime: appointmentDate.utc().toDate(), // Save in UTC
       barber,
     });
 
@@ -65,18 +67,9 @@ const createAppointment = async (req, res, next) => {
 
     // Send SMS confirmation for the initial appointment
     try {
-      const formattedDate = new Date(appointmentDateTime).toLocaleString(
-        "en-GB",
-        {
-          day: "2-digit",
-          month: "2-digit",
-          year: "numeric",
-          hour: "2-digit",
-          minute: "2-digit",
-        }
-      );
+      const localTime = appointmentDate.format("DD/MM/YYYY HH:mm"); // Format in local time
 
-      const message = `Dear ${customerName}, your appointment with ${barber} is confirmed for ${formattedDate}. Thank you for choosing Lemo Barber Shop!`;
+      const message = `ΑΓΑΠΗΤΕ ${customerName}, ΤΟ ΡΑΝΤΕΒΟΥ ΣΑΣ ΜΕ ΤΟΝ ${barber} ΕΧΕΙ ΕΠΙΒΕΒΑΙΩΘΕΙ ΓΙΑ ΤΙΣ ${localTime}. ΕΥΧΑΡΙΣΤΟΥΜΕ ΠΟΥ ΕΠΙΛΕΞΑΤΕ LEMO BARBER SHOP!`;
       await sendSMS(phoneNumber, message);
       console.log("Confirmation SMS sent successfully");
     } catch (smsError) {
@@ -87,15 +80,15 @@ const createAppointment = async (req, res, next) => {
     const additionalAppointments = [];
     if (recurrence === "weekly" && repeatWeeks) {
       // Generate weekly appointments
-      let currentDate = new Date(appointmentDateTime); // Start from the initial date
+      let currentDate = moment(appointmentDateTime).tz("Europe/Athens");
       for (let i = 1; i <= repeatWeeks; i++) {
-        currentDate.setDate(currentDate.getDate() + 7); // Increment by 7 days
+        currentDate.add(1, "week");
 
         // Create and save additional appointment
         const additionalAppointment = new Appointment({
           customerName,
           phoneNumber,
-          appointmentDateTime: new Date(currentDate), // Use updated currentDate
+          appointmentDateTime: currentDate.utc().toDate(),
           barber,
         });
         const savedAdditionalAppointment = await additionalAppointment.save();
@@ -103,15 +96,15 @@ const createAppointment = async (req, res, next) => {
       }
     } else if (recurrence === "monthly" && repeatMonths) {
       // Generate monthly appointments
-      let currentDate = new Date(appointmentDateTime); // Start from the initial date
+      let currentDate = moment(appointmentDateTime).tz("Europe/Athens");
       for (let i = 1; i <= repeatMonths; i++) {
-        currentDate.setMonth(currentDate.getMonth() + 1); // Increment by 1 month
+        currentDate.add(1, "month");
 
         // Create and save additional appointment
         const additionalAppointment = new Appointment({
           customerName,
           phoneNumber,
-          appointmentDateTime: new Date(currentDate), // Use updated currentDate
+          appointmentDateTime: currentDate.utc().toDate(),
           barber,
         });
         const savedAdditionalAppointment = await additionalAppointment.save();
