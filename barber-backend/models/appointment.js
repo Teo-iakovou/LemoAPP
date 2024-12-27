@@ -20,7 +20,7 @@ const appointmentSchema = new mongoose.Schema({
   },
   barber: {
     type: String,
-    enum: ["Lemo", "Assistant"], // Replace with a reference to a `Barber` model if needed
+    enum: ["Lemo", "Forou"], // Replace with a reference to a `Barber` model if needed
     required: true,
   },
   appointmentStatus: {

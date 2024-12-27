@@ -175,7 +175,7 @@ const CalendarPage = () => {
   };
 
   const handleDelete = async (appointmentId, password) => {
-    console.log("Appointment ID being deleted:", appointmentId);
+    console.log("Deleting appointment with ID:", appointmentId);
 
     try {
       const response = await fetch(
@@ -185,7 +185,7 @@ const CalendarPage = () => {
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ password }),
+          body: JSON.stringify({ currentPassword: password }), // Send the password
         }
       );
 
@@ -193,10 +193,6 @@ const CalendarPage = () => {
         setAppointments((prevAppointments) =>
           prevAppointments.filter((appt) => appt.id !== appointmentId)
         );
-        setShowForm(false);
-        setSelectedAppointment(null);
-
-        // Show success notification
         toast.success("Appointment deleted successfully!");
       } else {
         const errorData = await response.json();

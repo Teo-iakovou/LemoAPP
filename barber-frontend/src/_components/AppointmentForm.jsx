@@ -216,7 +216,7 @@ function AppointmentForm({
                   className="mt-1 block w-full p-2 border border-gray-300 rounded"
                 >
                   <option value="Lemo">ΛΕΜΟ</option>
-                  <option value="Assistant">ΦΟΡΟΥ</option>
+                  <option value="Forou">ΦΟΡΟΥ</option>
                 </select>
               </div>
               {/* Recurrence */}

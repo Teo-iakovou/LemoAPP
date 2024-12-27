@@ -12,6 +12,6 @@ const router = express.Router();
 router.post("/", createAppointment);
 router.get("/", getAppointments);
 router.put("/:id", validatePassword, updateAppointment);
-router.delete("/:id", validatePassword, deleteAppointment);
+router.delete("/:id", validatePassword, deleteAppointment); // Use password validation here
 
 module.exports = router;

@@ -179,8 +179,9 @@ const updateAppointment = async (req, res, next) => {
 // Delete an appointment
 const deleteAppointment = async (req, res, next) => {
   try {
-    const { id } = req.params;
+    const { id } = req.params; // Appointment ID from the route
 
+    // Attempt to find and delete the appointment
     const deletedAppointment = await Appointment.findByIdAndDelete(id);
 
     if (!deletedAppointment) {
@@ -194,7 +195,7 @@ const deleteAppointment = async (req, res, next) => {
       message: "Appointment deleted successfully",
     });
   } catch (error) {
-    next(error);
+    next(error); // Pass any errors to the error-handling middleware
   }
 };
 
