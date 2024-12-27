@@ -37,7 +37,8 @@ const Navbar = ({ isAuth, onLogout }) => {
   };
 
   return (
-    <nav className="fixed top-0 left-0 w-full z-10 bg-transparent flex justify-between items-center px-6 py-4">
+    <nav className="fixed top-0 left-0 w-full z-10 bg-purple-950 flex justify-between items-center px-6 py-[-2] shadow-md">
+      {" "}
       {/* Left Section: Logo */}
       <div className="flex items-center">
         <Link to={isAuth ? "/calendar" : "/"}>
@@ -70,7 +71,6 @@ const Navbar = ({ isAuth, onLogout }) => {
           </ul>
         )}
       </div>
-
       {/* Right Section: Profile Avatar */}
       <div className="flex items-center space-x-6">
         {isAuth ? (

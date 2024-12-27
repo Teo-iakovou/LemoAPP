@@ -1,13 +1,13 @@
 const Appointment = require("../models/appointment");
 const Customer = require("../models/customer");
 const { sendSMS } = require("../utils/smsService");
-
-// Create an appointment
 const moment = require("moment-timezone");
+// Create an appointment
 
 const createAppointment = async (req, res, next) => {
   try {
     console.log("Received Payload on Server:", req.body);
+
     const {
       customerName,
       phoneNumber,
@@ -33,12 +33,24 @@ const createAppointment = async (req, res, next) => {
     }
 
     // Validate appointment date
-    const appointmentDate = moment(appointmentDateTime).tz("Europe/Athens");
-    if (!appointmentDate.isValid() || appointmentDate.isBefore(moment())) {
+    const appointmentDate = moment(appointmentDateTime).utc(); // Assume input is in UTC
+    if (
+      !appointmentDate.isValid() ||
+      appointmentDate.isBefore(moment().utc())
+    ) {
       return res
         .status(400)
         .json({ message: "Invalid or past appointment date" });
     }
+
+    console.log(
+      "Parsed Appointment Date (UTC):",
+      appointmentDate.toISOString()
+    );
+
+    // Convert to Europe/Athens for local display purposes
+    const athensTime = appointmentDate.clone().tz("Europe/Athens");
+    console.log("Appointment Date (Athens Time):", athensTime.format());
 
     // Validate barber value
     if (!["Lemo", "Forou"].includes(barber)) {
@@ -58,7 +70,7 @@ const createAppointment = async (req, res, next) => {
     const newAppointment = new Appointment({
       customerName,
       phoneNumber,
-      appointmentDateTime: appointmentDate.utc().toDate(), // Save in UTC
+      appointmentDateTime: appointmentDate.toDate(), // Save in UTC
       barber,
     });
 
@@ -67,9 +79,9 @@ const createAppointment = async (req, res, next) => {
 
     // Send SMS confirmation for the initial appointment
     try {
-      const localTime = appointmentDate.format("DD/MM/YYYY HH:mm"); // Format in local time
+      const formattedLocalTime = athensTime.format("DD/MM/YYYY HH:mm"); // Local time format
+      const message = `ΑΓΑΠΗΤΕ ${customerName}, ΤΟ ΡΑΝΤΕΒΟΥ ΣΑΣ ΜΕ ΤΟΝ ${barber} ΕΧΕΙ ΕΠΙΒΕΒΑΙΩΘΕΙ ΓΙΑ ΤΙΣ ${formattedLocalTime}. ΕΥΧΑΡΙΣΤΟΥΜΕ ΠΟΥ ΕΠΙΛΕΞΑΤΕ LEMO BARBER SHOP!`;
 
-      const message = `ΑΓΑΠΗΤΕ ${customerName}, ΤΟ ΡΑΝΤΕΒΟΥ ΣΑΣ ΜΕ ΤΟΝ ${barber} ΕΧΕΙ ΕΠΙΒΕΒΑΙΩΘΕΙ ΓΙΑ ΤΙΣ ${localTime}. ΕΥΧΑΡΙΣΤΟΥΜΕ ΠΟΥ ΕΠΙΛΕΞΑΤΕ LEMO BARBER SHOP!`;
       await sendSMS(phoneNumber, message);
       console.log("Confirmation SMS sent successfully");
     } catch (smsError) {
@@ -79,8 +91,7 @@ const createAppointment = async (req, res, next) => {
     // Generate additional appointments if recurrence is provided
     const additionalAppointments = [];
     if (recurrence === "weekly" && repeatWeeks) {
-      // Generate weekly appointments
-      let currentDate = moment(appointmentDateTime).tz("Europe/Athens");
+      let currentDate = appointmentDate.clone(); // Start from the initial date
       for (let i = 1; i <= repeatWeeks; i++) {
         currentDate.add(1, "week");
 
@@ -88,15 +99,14 @@ const createAppointment = async (req, res, next) => {
         const additionalAppointment = new Appointment({
           customerName,
           phoneNumber,
-          appointmentDateTime: currentDate.utc().toDate(),
+          appointmentDateTime: currentDate.toDate(),
           barber,
         });
         const savedAdditionalAppointment = await additionalAppointment.save();
         additionalAppointments.push(savedAdditionalAppointment);
       }
     } else if (recurrence === "monthly" && repeatMonths) {
-      // Generate monthly appointments
-      let currentDate = moment(appointmentDateTime).tz("Europe/Athens");
+      let currentDate = appointmentDate.clone(); // Start from the initial date
       for (let i = 1; i <= repeatMonths; i++) {
         currentDate.add(1, "month");
 
@@ -104,7 +114,7 @@ const createAppointment = async (req, res, next) => {
         const additionalAppointment = new Appointment({
           customerName,
           phoneNumber,
-          appointmentDateTime: currentDate.utc().toDate(),
+          appointmentDateTime: currentDate.toDate(),
           barber,
         });
         const savedAdditionalAppointment = await additionalAppointment.save();

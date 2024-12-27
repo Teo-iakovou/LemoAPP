@@ -14,13 +14,13 @@ const appointmentSchema = new mongoose.Schema({
     type: Date,
     required: true,
     validate: {
-      validator: (v) => v > new Date(),
+      validator: (v) => v > new Date(Date.now() + 60 * 1000), // Ensure at least 1 minute in the future
       message: "Appointment date must be in the future",
     },
   },
   barber: {
     type: String,
-    enum: ["Lemo", "Assistant"],
+    enum: ["Lemo", "Assistant"], // Replace with a reference to a `Barber` model if needed
     required: true,
   },
   appointmentStatus: {
@@ -29,5 +29,16 @@ const appointmentSchema = new mongoose.Schema({
     default: "pending",
   },
 });
+
+// Pre-save middleware to ensure dates are stored in UTC
+appointmentSchema.pre("save", function (next) {
+  if (this.appointmentDateTime) {
+    this.appointmentDateTime = new Date(this.appointmentDateTime).toISOString();
+  }
+  next();
+});
+
+// Add an index to optimize status-based queries
+appointmentSchema.index({ appointmentStatus: 1 });
 
 module.exports = mongoose.model("Appointment", appointmentSchema);
