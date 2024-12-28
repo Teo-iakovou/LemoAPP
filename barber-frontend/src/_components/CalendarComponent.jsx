@@ -1,11 +1,12 @@
 import React from "react";
-import { Calendar, momentLocalizer } from "react-big-calendar";
+import { Calendar, momentLocalizer, Views } from "react-big-calendar";
 import moment from "moment";
 import "moment/locale/el"; // Import Greek locale
 import "react-big-calendar/lib/css/react-big-calendar.css";
 
 moment.locale("el"); // Set moment to use Greek locale
 const localizer = momentLocalizer(moment);
+
 const greekMonths = [
   "Ιανουάριος",
   "Φεβρουάριος",
@@ -20,6 +21,17 @@ const greekMonths = [
   "Νοέμβριος",
   "Δεκέμβριος",
 ];
+
+const greekDays = [
+  "Κυριακή",
+  "Δευτέρα",
+  "Τρίτη",
+  "Τετάρτη",
+  "Πέμπτη",
+  "Παρασκευή",
+  "Σάββατο",
+];
+
 const CalendarComponent = ({
   events,
   onSelectSlot,
@@ -57,27 +69,31 @@ const CalendarComponent = ({
           disabled ? "pointer-events-none opacity-50" : ""
         }`}
         min={new Date(1970, 1, 1, 7, 0, 0)} // Start at 7:00 AM
+        defaultView={Views.WEEK} // Set default view to Week (Εβδομάδα)
         formats={{
           timeGutterFormat: "HH:mm", // Format the left time gutter in 24-hour format
           eventTimeRangeFormat: ({ start, end }) =>
             `${moment(start).format("HH:mm")} - ${moment(end).format("HH:mm")}`,
           agendaTimeRangeFormat: ({ start, end }) =>
             `${moment(start).format("HH:mm")} - ${moment(end).format("HH:mm")}`,
-          dayFormat: (date) => moment(date).format("dddd"), // Format for days
+          dayFormat: (date) =>
+            `${greekDays[new Date(date).getDay()]} ${moment(date).format(
+              "DD/MM"
+            )}`, // Greek day names with date
           weekdayFormat: (date) =>
-            [
-              "Κυριακή",
-              "Δευτέρα",
-              "Τρίτη",
-              "Τετάρτη",
-              "Πέμπτη",
-              "Παρασκευή",
-              "Σάββατο",
-            ][new Date(date).getDay()], // Custom Greek day names
+            `${greekDays[new Date(date).getDay()]} ${moment(date).format(
+              "DD/MM"
+            )}`, // Greek day names for Week view
           monthHeaderFormat: (date) =>
             `${greekMonths[new Date(date).getMonth()]} ${new Date(
               date
-            ).getFullYear()}`, // Custom Greek month names
+            ).getFullYear()}`, // Greek month names
+          dayHeaderFormat: (date) =>
+            `${greekDays[new Date(date).getDay()]} ${moment(date).format(
+              "DD/MM"
+            )}`, // Day view header
+          weekHeaderFormat: ({ start, end }) =>
+            `${moment(start).format("DD/MM")} - ${moment(end).format("DD/MM")}`, // Week header format
         }}
         messages={{
           today: "Σήμερα",
@@ -91,7 +107,6 @@ const CalendarComponent = ({
           time: "Ώρα",
           event: "Γεγονός",
           allDay: "Ολοήμερο",
-
           noEventsInRange: "Δεν υπάρχουν γεγονότα σε αυτή την περιοχή.",
           showMore: (count) => `+ Δείτε περισσότερα (${count})`,
         }}

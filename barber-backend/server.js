@@ -2,8 +2,11 @@ const express = require("express");
 const cors = require("cors");
 const dotenv = require("dotenv");
 const connectDB = require("./utils/db");
+const cron = require("node-cron");
 const adminRoutes = require("./routes/adminRoutes");
 const appointmentRoutes = require("./routes/appointmentRoutes");
+const { sendReminders } = require("./controllers/reminderScheduler");
+
 const customerRoutes = require("./routes/customerRoutes");
 const reminderSchedulerRoute = require("./routes/reminderSchedulerRoute");
 const authRoutes = require("./routes/authRoutes");
@@ -67,6 +70,16 @@ app.use("/api/auth", authRoutes);
 // Add this route for GET /api
 app.get("/api", (req, res) => {
   res.status(200).json({ message: "API is working" });
+});
+// Schedule reminders every hour
+cron.schedule("0 * * * *", async () => {
+  console.log("Running hourly reminder scheduler...");
+  try {
+    await sendReminders();
+    console.log("Reminders sent successfully.");
+  } catch (error) {
+    console.error("Error while sending reminders:", error.message);
+  }
 });
 app.use(errorHandler);
 app.listen(PORT, () => console.log(`Server is running on port ${PORT}`));

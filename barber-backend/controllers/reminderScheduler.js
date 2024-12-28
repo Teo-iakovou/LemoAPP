@@ -4,21 +4,22 @@ const moment = require("moment-timezone");
 
 const sendReminders = async () => {
   try {
-    // Get all appointments for the next day
+    // Current time in UTC
     const now = moment().utc();
-    const tomorrow = now.clone().add(1, "day").startOf("day");
-    const dayAfterTomorrow = tomorrow.clone().add(1, "day");
+    const startOfWindow = now.clone();
+    const endOfWindow = now.clone().add(1, "hour"); // Define a window of 1 hour
 
+    // Find appointments scheduled exactly 24 hours from now
     const appointments = await Appointment.find({
       appointmentDateTime: {
-        $gte: tomorrow.toDate(),
-        $lt: dayAfterTomorrow.toDate(),
+        $gte: startOfWindow.add(23, "hours").toDate(), // 24 hours from now (start of window)
+        $lt: endOfWindow.add(1, "hour").toDate(), // 24 hours + 1 hour (end of window)
       },
     });
 
     console.log("Appointments scheduled for reminders:", appointments);
 
-    // Send SMS reminders
+    // Send SMS reminders for each appointment
     for (const appointment of appointments) {
       const appointmentDateTime = moment(appointment.appointmentDateTime)
         .tz("Europe/Athens")
