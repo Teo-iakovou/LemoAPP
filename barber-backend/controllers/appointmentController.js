@@ -80,7 +80,7 @@ const createAppointment = async (req, res, next) => {
     // Send SMS confirmation for the initial appointment
     try {
       const formattedLocalTime = athensTime.format("DD/MM/YYYY HH:mm"); // Local time format
-      const message = `ΑΓΑΠΗΤΕ ${customerName}, ΤΟ ΡΑΝΤΕΒΟΥ ΣΑΣ ΜΕ ΤΟΝ ${barber} ΕΧΕΙ ΕΠΙΒΕΒΑΙΩΘΕΙ ΓΙΑ ΤΙΣ ${formattedLocalTime}. ΕΥΧΑΡΙΣΤΟΥΜΕ ΠΟΥ ΕΠΙΛΕΞΑΤΕ LEMO BARBER SHOP!`;
+      const message = `Επιβεβαιώνουμε το ραντεβού σας στο LEMO BARBER SHOP με τον ${barber} για τις ${formattedLocalTime}!`;
 
       await sendSMS(phoneNumber, message);
       console.log("Confirmation SMS sent successfully");
@@ -181,19 +181,37 @@ const deleteAppointment = async (req, res, next) => {
   try {
     const { id } = req.params; // Appointment ID from the route
 
-    // Attempt to find and delete the appointment
-    const deletedAppointment = await Appointment.findByIdAndDelete(id);
+    // Find the appointment before deleting it to retrieve customer details
+    const appointmentToDelete = await Appointment.findById(id);
 
-    if (!deletedAppointment) {
+    if (!appointmentToDelete) {
       return res
         .status(404)
         .json({ success: false, message: "Appointment not found" });
     }
 
-    return res.status(200).json({
-      success: true,
-      message: "Appointment deleted successfully",
-    });
+    // Delete the appointment
+    const deletedAppointment = await Appointment.findByIdAndDelete(id);
+
+    if (deletedAppointment) {
+      // Send SMS confirmation for deleted appointment
+      try {
+        const formattedDateTime = moment(deletedAppointment.appointmentDateTime)
+          .tz("Europe/Athens")
+          .format("DD/MM/YYYY HH:mm");
+        const message = `Θα θέλαμε να σας ενημερώσουμε ότι το ραντεβού σας για ${formattedDateTime} ακυρώνεται. Αν θέλετε να κανονίσουμε μια νέα συνάντηση, μη διστάσετε να επικοινωνήσετε μαζί μας. Ευχαριστούμε πολύ!`;
+
+        await sendSMS(deletedAppointment.phoneNumber, message);
+        console.log("Deletion SMS sent successfully");
+      } catch (smsError) {
+        console.error("Failed to send deletion SMS:", smsError.message);
+      }
+
+      return res.status(200).json({
+        success: true,
+        message: "Appointment deleted successfully and SMS sent",
+      });
+    }
   } catch (error) {
     next(error); // Pass any errors to the error-handling middleware
   }

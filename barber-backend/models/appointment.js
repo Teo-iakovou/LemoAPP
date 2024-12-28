@@ -28,6 +28,7 @@ const appointmentSchema = new mongoose.Schema({
     enum: ["confirmed", "pending", "canceled"],
     default: "pending",
   },
+  reminderSent: { type: Boolean, default: false },
 });
 
 // Pre-save middleware to ensure dates are stored in UTC

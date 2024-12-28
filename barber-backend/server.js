@@ -5,6 +5,7 @@ const connectDB = require("./utils/db");
 const adminRoutes = require("./routes/adminRoutes");
 const appointmentRoutes = require("./routes/appointmentRoutes");
 const customerRoutes = require("./routes/customerRoutes");
+const reminderSchedulerRoute = require("./routes/reminderSchedulerRoute");
 const authRoutes = require("./routes/authRoutes");
 const errorHandler = require("./middlewares/errorHandler");
 const helmet = require("helmet");
@@ -61,6 +62,7 @@ app.get("/", (req, res) => {
 app.use("/api/admin", adminRoutes);
 app.use("/api/appointments", appointmentRoutes);
 app.use("/api/customers", customerRoutes);
+app.use("/api/reminders", reminderSchedulerRoute);
 app.use("/api/auth", authRoutes);
 // Add this route for GET /api
 app.get("/api", (req, res) => {
