@@ -94,7 +94,7 @@ const CalendarPage = () => {
       phoneNumber:
         customers.find((customer) => customer.name === appointment.title)
           ?.phoneNumber || "", // Get phoneNumber
-      barber: appointment.barber || "Lemo",
+      barber: appointment.barber || "ΛΕΜΟ",
       appointmentDateTime: appointment.start,
     });
 

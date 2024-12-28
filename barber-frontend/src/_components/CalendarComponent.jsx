@@ -39,7 +39,7 @@ const CalendarComponent = ({
   disabled,
 }) => {
   const eventStyleGetter = (event, start, end, isSelected) => {
-    const backgroundColor = event.barber === "Lemo" ? "blue" : "orange";
+    const backgroundColor = event.barber === "ΛΕΜΟ" ? "blue" : "orange";
     return {
       style: {
         backgroundColor,

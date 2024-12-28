@@ -6,14 +6,23 @@ const sendReminders = async () => {
   try {
     // Current time in UTC
     const now = moment().utc();
-    const startOfWindow = now.clone();
-    const endOfWindow = now.clone().add(1, "hour"); // Define a window of 1 hour
 
-    // Find appointments scheduled exactly 24 hours from now
+    // Define the 24-hour window for reminders
+    const startOfWindow = now.clone().add(24, "hours").startOf("minute"); // Start of the window: 24 hours from now
+    const endOfWindow = startOfWindow.clone().add(1, "hour"); // End of the window: 24 hours + 1 hour
+
+    console.log(
+      "Querying appointments for reminders between:",
+      startOfWindow.toDate(),
+      "and",
+      endOfWindow.toDate()
+    );
+
+    // Find appointments scheduled within the window
     const appointments = await Appointment.find({
       appointmentDateTime: {
-        $gte: startOfWindow.add(23, "hours").toDate(), // 24 hours from now (start of window)
-        $lt: endOfWindow.add(1, "hour").toDate(), // 24 hours + 1 hour (end of window)
+        $gte: startOfWindow.toDate(),
+        $lt: endOfWindow.toDate(),
       },
     });
 
@@ -24,7 +33,7 @@ const sendReminders = async () => {
       const appointmentDateTime = moment(appointment.appointmentDateTime)
         .tz("Europe/Athens")
         .format("DD/MM/YYYY HH:mm");
-      const message = `Υπενθύμιση για το ραντεβού σας αύριο στις ${appointmentDateTime} στο Lemo Barber Shop. Αν χρειαστεί αλλαγή, παρακαλούμε ενημερώστε μας έγκαιρα. Ευχαριστούμε και σας περιμένουμε!`;
+      const message = `Υπενθύμιση για το ραντεβού σας αύριο στις ${appointmentDateTime} στο Lemo Barber Shop.`;
 
       try {
         await sendSMS(appointment.phoneNumber, message);

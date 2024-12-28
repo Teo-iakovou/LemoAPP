@@ -20,7 +20,7 @@ function AppointmentForm({
     defaultValues: {
       customerName: appointmentData?.customerName || "",
       phoneNumber: appointmentData?.phoneNumber || "",
-      barber: appointmentData?.barber || "Lemo", // Default barber is Lemo
+      barber: appointmentData?.barber || "ΛΕΜΟ", // Default barber is Lemo
     },
   });
   const defaultDate = new Date();
@@ -215,8 +215,8 @@ function AppointmentForm({
                   id="barber"
                   className="mt-1 block w-full p-2 border border-gray-300 rounded"
                 >
-                  <option value="Lemo">ΛΕΜΟ</option>
-                  <option value="Forou">ΦΟΡΟΥ</option>
+                  <option value="ΛΕΜΟ">ΛΕΜΟ</option>
+                  <option value="ΦΟΡΟΥ">ΦΟΡΟΥ</option>
                 </select>
               </div>
               {/* Recurrence */}

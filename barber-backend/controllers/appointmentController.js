@@ -53,10 +53,10 @@ const createAppointment = async (req, res, next) => {
     console.log("Appointment Date (Athens Time):", athensTime.format());
 
     // Validate barber value
-    if (!["Lemo", "Forou"].includes(barber)) {
+    if (!["ΛΕΜΟ", "ΦΟΡΟΥ"].includes(barber)) {
       return res
         .status(400)
-        .json({ message: "Barber must be either 'Lemo' or 'Forou'" });
+        .json({ message: "Barber must be either 'ΛΕΜΟ' or 'ΦΟΡΟΥ'" });
     }
 
     // Check if the customer exists or create a new one
@@ -199,7 +199,7 @@ const deleteAppointment = async (req, res, next) => {
         const formattedDateTime = moment(deletedAppointment.appointmentDateTime)
           .tz("Europe/Athens")
           .format("DD/MM/YYYY HH:mm");
-        const message = `Θα θέλαμε να σας ενημερώσουμε ότι το ραντεβού σας για ${formattedDateTime} ακυρώνεται. Αν θέλετε να κανονίσουμε μια νέα συνάντηση, μη διστάσετε να επικοινωνήσετε μαζί μας. Ευχαριστούμε πολύ!`;
+        const message = `Θα θέλαμε να σας ενημερώσουμε ότι το ραντεβού σας για ${formattedDateTime} ακυρώνεται.`;
 
         await sendSMS(deletedAppointment.phoneNumber, message);
         console.log("Deletion SMS sent successfully");
