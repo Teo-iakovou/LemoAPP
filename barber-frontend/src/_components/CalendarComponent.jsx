@@ -32,12 +32,16 @@ const greekDays = [
   "Σάββατο",
 ];
 
+const referenceDate = moment("2025-01-13"); // Reference date: January 13th, 2025
+
 const CalendarComponent = ({
   events,
   onSelectSlot,
   onSelectEvent,
   disabled,
 }) => {
+  const isAfterReferenceDate = moment().isSameOrAfter(referenceDate); // Check if current date is on or after reference date
+
   const eventStyleGetter = (event, start, end, isSelected) => {
     const backgroundColor = event.barber === "ΛΕΜΟ" ? "blue" : "orange";
     return {
@@ -68,14 +72,17 @@ const CalendarComponent = ({
         className={`relative z-0 ${
           disabled ? "pointer-events-none opacity-50" : ""
         }`}
-        min={new Date(1970, 1, 1, 7, 0, 0)} // Start at 7:00 AM
+        min={new Date(1970, 1, 1, 7, 0, 0)} // Start time: 7:00 AM
+        max={new Date(1970, 1, 1, 21, 0, 0)} // End time: 9:00 PM
+        step={isAfterReferenceDate ? 40 : 30} // Time interval: 40 minutes after January 13th
+        timeslots={1} // Display one slot per step
         defaultView={Views.WEEK} // Set default view to Week (Εβδομάδα)
         formats={{
-          timeGutterFormat: "HH:mm", // Format the left time gutter in 24-hour format
+          timeGutterFormat: "h:mm", // 12-hour format
           eventTimeRangeFormat: ({ start, end }) =>
-            `${moment(start).format("HH:mm")} - ${moment(end).format("HH:mm")}`,
+            `${moment(start).format("h:mm")} - ${moment(end).format("h:mm")}`,
           agendaTimeRangeFormat: ({ start, end }) =>
-            `${moment(start).format("HH:mm")} - ${moment(end).format("HH:mm")}`,
+            `${moment(start).format("h:mm")} - ${moment(end).format("h:mm")}`,
           dayFormat: (date) =>
             `${greekDays[new Date(date).getDay()]} ${moment(date).format(
               "DD/MM"

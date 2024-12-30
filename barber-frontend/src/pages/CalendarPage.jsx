@@ -17,6 +17,8 @@ const CalendarPage = () => {
   const [selectedAppointment, setSelectedAppointment] = useState(null);
   const [showForm, setShowForm] = useState(false);
 
+  const referenceDate = new Date(2025, 0, 13); // January 13, 2025
+
   // Fetch appointments from the backend
   useEffect(() => {
     const fetchAppointments = async () => {
@@ -24,15 +26,18 @@ const CalendarPage = () => {
         const response = await fetch(`${API_BASE_URL}/appointments`);
         const data = await response.json();
 
-        const events = data.map((appointment) => ({
-          id: appointment._id,
-          title: appointment.customerName,
-          start: new Date(appointment.appointmentDateTime),
-          end: new Date(
-            new Date(appointment.appointmentDateTime).getTime() + 30 * 60 * 1000
-          ),
-          barber: appointment.barber,
-        }));
+        const events = data.map((appointment) => {
+          const appointmentDate = new Date(appointment.appointmentDateTime);
+          const duration = appointmentDate >= referenceDate ? 40 : 30; // Dynamic duration
+
+          return {
+            id: appointment._id,
+            title: appointment.customerName,
+            start: appointmentDate,
+            end: new Date(appointmentDate.getTime() + duration * 60 * 1000), // Calculate dynamic end time
+            barber: appointment.barber,
+          };
+        });
         setAppointments(events);
       } catch (error) {
         console.error("Error fetching appointments:", error);
@@ -48,7 +53,6 @@ const CalendarPage = () => {
       try {
         const response = await fetch(`${API_BASE_URL}/customers`);
         const data = await response.json();
-
         setCustomers(data); // Store customer data
       } catch (error) {
         console.error("Error fetching customers:", error);
@@ -58,18 +62,17 @@ const CalendarPage = () => {
     fetchCustomers();
   }, []);
 
-  // Filter out past appointments without causing an infinite loop
+  // Filter out past appointments
   useEffect(() => {
     const today = new Date();
-    today.setHours(0, 0, 0, 0); // Set to the start of the current day
+    today.setHours(0, 0, 0, 0); // Start of the current day
 
-    // Filter appointments to show only today or future
     const upcomingAppointments = appointments.filter(
       (appointment) => new Date(appointment.start) >= today
     );
 
     setFilteredAppointments(upcomingAppointments);
-  }, [appointments]); // Run this effect only when `appointments` changes
+  }, [appointments]);
 
   const handleSelectSlot = (slotInfo) => {
     const selectedStartDate = new Date(slotInfo.start);
@@ -87,13 +90,12 @@ const CalendarPage = () => {
 
     console.log("Selected Appointment for Edit/Delete:", appointment);
 
-    // Ensure `phoneNumber` exists when editing
     setSelectedAppointment({
       _id: appointment.id,
-      customerName: appointment.title, // Title corresponds to customerName
+      customerName: appointment.title,
       phoneNumber:
         customers.find((customer) => customer.name === appointment.title)
-          ?.phoneNumber || "", // Get phoneNumber
+          ?.phoneNumber || "",
       barber: appointment.barber || "ΛΕΜΟ",
       appointmentDateTime: appointment.start,
     });
@@ -106,61 +108,41 @@ const CalendarPage = () => {
       const response = await createAppointment(appointmentData);
 
       if (response?.initialAppointment) {
-        // Define the reference date for changing the duration
-        const referenceDate = new Date(2025, 0, 13); // January 13th, 2025
         const appointmentDate = new Date(
           response.initialAppointment.appointmentDateTime
         );
-
-        // Determine the duration dynamically
         const duration = appointmentDate >= referenceDate ? 40 : 30;
 
-        // Map the initial appointment with dynamic duration
         const newAppointments = [
           {
             id: response.initialAppointment._id,
             title: response.initialAppointment.customerName,
-            start: new Date(response.initialAppointment.appointmentDateTime),
-            end: new Date(
-              new Date(
-                response.initialAppointment.appointmentDateTime
-              ).getTime() +
-                duration * 60 * 1000 // Dynamic duration
-            ),
+            start: appointmentDate,
+            end: new Date(appointmentDate.getTime() + duration * 60 * 1000),
             barber: response.initialAppointment.barber,
           },
         ];
 
-        // Add recurring appointments (if any)
-        if (
-          response.recurringAppointments &&
-          response.recurringAppointments.length > 0
-        ) {
+        if (response.recurringAppointments?.length > 0) {
           const recurringEvents = response.recurringAppointments.map((appt) => {
-            const recurringAppointmentDate = new Date(appt.appointmentDateTime);
-            const recurringDuration =
-              recurringAppointmentDate >= referenceDate ? 40 : 30;
+            const recurringDate = new Date(appt.appointmentDateTime);
+            const recurringDuration = recurringDate >= referenceDate ? 40 : 30;
 
             return {
               id: appt._id,
               title: appt.customerName,
-              start: new Date(appt.appointmentDateTime),
+              start: recurringDate,
               end: new Date(
-                new Date(appt.appointmentDateTime).getTime() +
-                  recurringDuration * 60 * 1000 // Dynamic duration for recurring
+                recurringDate.getTime() + recurringDuration * 60 * 1000
               ),
               barber: appt.barber,
             };
           });
 
-          newAppointments.push(...recurringEvents); // Add to the initial list
+          newAppointments.push(...recurringEvents);
         }
 
-        // Update the state dynamically
-        setAppointments((prevAppointments) => [
-          ...prevAppointments,
-          ...newAppointments,
-        ]);
+        setAppointments((prev) => [...prev, ...newAppointments]);
         toast.success("Appointment(s) added successfully!");
       } else {
         console.error("Invalid response structure:", response);
@@ -185,13 +167,13 @@ const CalendarPage = () => {
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ currentPassword: password }), // Send the password
+          body: JSON.stringify({ currentPassword: password }),
         }
       );
 
       if (response.ok) {
-        setAppointments((prevAppointments) =>
-          prevAppointments.filter((appt) => appt.id !== appointmentId)
+        setAppointments((prev) =>
+          prev.filter((appt) => appt.id !== appointmentId)
         );
         toast.success("Appointment deleted successfully!");
       } else {
@@ -224,7 +206,7 @@ const CalendarPage = () => {
           onClose={() => setShowForm(false)}
           onSubmit={handleFormSubmit}
           onDelete={handleDelete}
-          customers={customers} // Pass customers as a prop
+          customers={customers}
         />
       )}
       <ToastContainer position="top-right" autoClose={3000} hideProgressBar />

@@ -18,6 +18,15 @@ const appointmentSchema = new mongoose.Schema({
       message: "Appointment date must be in the future",
     },
   },
+  duration: {
+    type: Number,
+    required: true,
+    default: 30, // Default to 30 minutes
+  },
+  endTime: {
+    type: Date,
+    required: true,
+  },
   barber: {
     type: String,
     enum: ["ΛΕΜΟ", "ΦΟΡΟΥ"], // Replace with a reference to a `Barber` model if needed
@@ -31,11 +40,19 @@ const appointmentSchema = new mongoose.Schema({
   reminderSent: { type: Boolean, default: false },
 });
 
-// Pre-save middleware to ensure dates are stored in UTC
+// Pre-save middleware to set duration and calculate endTime
 appointmentSchema.pre("save", function (next) {
-  if (this.appointmentDateTime) {
-    this.appointmentDateTime = new Date(this.appointmentDateTime).toISOString();
-  }
+  const referenceDate = new Date(2025, 0, 13); // January 13, 2025
+  const appointmentDate = new Date(this.appointmentDateTime);
+
+  // Determine duration dynamically
+  this.duration = appointmentDate >= referenceDate ? 40 : 30;
+
+  // Calculate end time based on duration
+  this.endTime = new Date(
+    appointmentDate.getTime() + this.duration * 60 * 1000
+  );
+
   next();
 });
 

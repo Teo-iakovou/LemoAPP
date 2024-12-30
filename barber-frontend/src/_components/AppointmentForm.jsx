@@ -78,11 +78,15 @@ function AppointmentForm({
     const formattedAppointmentDateTime = appointmentDateTime
       ? new Date(appointmentDateTime).toISOString()
       : null;
+    const appointmentDate = new Date(appointmentDateTime);
+    const referenceDate = new Date(2025, 0, 13); // January 13, 2025
+    const duration = appointmentDate >= referenceDate ? 40 : 30; // Set duration dynamically
 
     const appointmentDetails = {
       customerName: data.customerName,
       phoneNumber: data.phoneNumber,
       barber: data.barber,
+      duration,
       appointmentDateTime: formattedAppointmentDateTime,
       recurrence: recurrence !== "none" ? recurrence : null,
       repeatWeeks: recurrence === "weekly" ? parseInt(weeksOption) : null, // Pass weeksOption for weekly recurrence
