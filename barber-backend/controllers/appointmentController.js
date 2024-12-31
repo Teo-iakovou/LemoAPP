@@ -59,11 +59,10 @@ const createAppointment = async (req, res, next) => {
         .json({ message: "Barber must be either 'ΛΕΜΟ' or 'ΦΟΡΟΥ'" });
     }
 
-    // Determine duration based on reference date
-    const referenceDate = moment("2025-01-13").utc(); // January 13, 2025
-    const duration = appointmentDate.isSameOrAfter(referenceDate) ? 40 : 30;
+    // Set fixed duration of 40 minutes
+    const duration = 40;
 
-    // Calculate endTime
+    // Calculate endTime based on fixed duration
     const endTime = appointmentDate.clone().add(duration, "minutes").toDate();
 
     // Check if the customer exists or create a new one
@@ -104,13 +103,10 @@ const createAppointment = async (req, res, next) => {
       for (let i = 1; i <= repeatWeeks; i++) {
         currentDate.add(1, "week");
 
-        // Calculate dynamic duration and endTime for recurring appointments
-        const recurringDuration = currentDate.isSameOrAfter(referenceDate)
-          ? 40
-          : 30;
+        // Calculate endTime for recurring appointments
         const recurringEndTime = currentDate
           .clone()
-          .add(recurringDuration, "minutes")
+          .add(duration, "minutes")
           .toDate();
 
         // Create and save additional appointment
@@ -119,7 +115,7 @@ const createAppointment = async (req, res, next) => {
           phoneNumber,
           appointmentDateTime: currentDate.toDate(),
           barber,
-          duration: recurringDuration,
+          duration,
           endTime: recurringEndTime,
         });
         const savedAdditionalAppointment = await additionalAppointment.save();
@@ -130,13 +126,10 @@ const createAppointment = async (req, res, next) => {
       for (let i = 1; i <= repeatMonths; i++) {
         currentDate.add(1, "month");
 
-        // Calculate dynamic duration and endTime for recurring appointments
-        const recurringDuration = currentDate.isSameOrAfter(referenceDate)
-          ? 40
-          : 30;
+        // Calculate endTime for recurring appointments
         const recurringEndTime = currentDate
           .clone()
-          .add(recurringDuration, "minutes")
+          .add(duration, "minutes")
           .toDate();
 
         // Create and save additional appointment
@@ -145,7 +138,7 @@ const createAppointment = async (req, res, next) => {
           phoneNumber,
           appointmentDateTime: currentDate.toDate(),
           barber,
-          duration: recurringDuration,
+          duration,
           endTime: recurringEndTime,
         });
         const savedAdditionalAppointment = await additionalAppointment.save();

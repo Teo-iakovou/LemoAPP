@@ -21,7 +21,7 @@ const appointmentSchema = new mongoose.Schema({
   duration: {
     type: Number,
     required: true,
-    default: 30, // Default to 30 minutes
+    default: 40, // Default to 40 minutes
   },
   endTime: {
     type: Date,
@@ -40,13 +40,12 @@ const appointmentSchema = new mongoose.Schema({
   reminderSent: { type: Boolean, default: false },
 });
 
-// Pre-save middleware to set duration and calculate endTime
+// Pre-save middleware to calculate endTime based on a fixed 40-minute duration
 appointmentSchema.pre("save", function (next) {
-  const referenceDate = new Date(2025, 0, 13); // January 13, 2025
   const appointmentDate = new Date(this.appointmentDateTime);
 
-  // Determine duration dynamically
-  this.duration = appointmentDate >= referenceDate ? 40 : 30;
+  // Set fixed duration
+  this.duration = 40;
 
   // Calculate end time based on duration
   this.endTime = new Date(
