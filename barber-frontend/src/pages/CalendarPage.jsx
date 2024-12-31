@@ -17,8 +17,6 @@ const CalendarPage = () => {
   const [selectedAppointment, setSelectedAppointment] = useState(null);
   const [showForm, setShowForm] = useState(false);
 
-  const referenceDate = new Date(2025, 0, 13); // January 13, 2025
-
   // Fetch appointments from the backend
   useEffect(() => {
     const fetchAppointments = async () => {
@@ -28,7 +26,7 @@ const CalendarPage = () => {
 
         const events = data.map((appointment) => {
           const appointmentDate = new Date(appointment.appointmentDateTime);
-          const duration = appointmentDate >= referenceDate ? 40 : 30; // Dynamic duration
+          const duration = 40; // Dynamic duration
 
           return {
             id: appointment._id,
@@ -111,7 +109,7 @@ const CalendarPage = () => {
         const appointmentDate = new Date(
           response.initialAppointment.appointmentDateTime
         );
-        const duration = appointmentDate >= referenceDate ? 40 : 30;
+        const duration = 40;
 
         const newAppointments = [
           {
@@ -126,7 +124,7 @@ const CalendarPage = () => {
         if (response.recurringAppointments?.length > 0) {
           const recurringEvents = response.recurringAppointments.map((appt) => {
             const recurringDate = new Date(appt.appointmentDateTime);
-            const recurringDuration = recurringDate >= referenceDate ? 40 : 30;
+            const recurringDuration = 40;
 
             return {
               id: appt._id,

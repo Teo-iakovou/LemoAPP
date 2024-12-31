@@ -78,9 +78,7 @@ function AppointmentForm({
     const formattedAppointmentDateTime = appointmentDateTime
       ? new Date(appointmentDateTime).toISOString()
       : null;
-    const appointmentDate = new Date(appointmentDateTime);
-    const referenceDate = new Date(2025, 0, 13); // January 13, 2025
-    const duration = appointmentDate >= referenceDate ? 40 : 30; // Set duration dynamically
+    const duration = 40; // Set duration dynamically
 
     const appointmentDetails = {
       customerName: data.customerName,
