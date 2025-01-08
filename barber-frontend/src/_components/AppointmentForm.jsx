@@ -30,6 +30,7 @@ function AppointmentForm({
   );
   const [recurrence, setRecurrence] = useState("none");
   const [weeksOption, setWeeksOption] = useState("1");
+  const [monthsOption, setMonthsOption] = useState("1");
   const [error, setError] = useState(null);
   const [showPasswordForm, setShowPasswordForm] = useState(false);
   const [actionType, setActionType] = useState(null); // Tracks "edit" or "delete"
@@ -269,6 +270,25 @@ function AppointmentForm({
                       <option value="3">3 ΕΒΔΟΜΑΔΕΣ</option>
                       <option value="4">4 ΕΒΔΟΜΑΔΕΣ</option>
                       <option value="5">5 ΕΒΔΟΜΑΔΕΣ</option>
+                    </select>
+                  </div>
+                )}
+                {recurrence === "monthly" && (
+                  <div className="mt-4">
+                    <label className="block text-gray-700">
+                      ΕΠΑΝΑΛΗΨΗ ΓΙΑ ΠΟΣΟΥΣ ΜΗΝΕΣ:
+                    </label>
+                    <select
+                      value={monthsOption}
+                      onChange={(e) => setMonthsOption(e.target.value)}
+                      className="mt-1 block w-full p-2 border border-gray-300 rounded"
+                    >
+                      <option value="1">1 ΜΗΝΑΣ</option>
+                      <option value="2">2 ΜΗΝΕΣ</option>
+                      <option value="3">3 ΜΗΝΕΣ</option>
+                      <option value="4">4 ΜΗΝΕΣ</option>
+                      <option value="5">5 ΜΗΝΕΣ</option>
+                      <option value="6">6 ΜΗΝΕΣ</option>
                     </select>
                   </div>
                 )}

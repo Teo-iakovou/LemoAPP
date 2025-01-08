@@ -121,42 +121,33 @@ const CalendarPage = () => {
       }
 
       if (response?.updatedAppointment || response?.initialAppointment) {
-        const appointment =
-          response.updatedAppointment || response.initialAppointment;
+        const createdAppointments = [
+          response.updatedAppointment || response.initialAppointment,
+          ...(response.recurringAppointments || []), // Include recurring appointments if any
+        ];
 
-        const appointmentDate = new Date(appointment.appointmentDateTime);
-        const duration = 40;
+        const newEvents = createdAppointments.map((appointment) => {
+          const appointmentDate = new Date(appointment.appointmentDateTime);
+          const duration = 40;
 
-        const updatedOrNewAppointment = {
-          id: appointment._id, // Match with `id` in state
-          title: appointment.customerName,
-          start: appointmentDate,
-          end: new Date(appointmentDate.getTime() + duration * 60 * 1000),
-          barber: appointment.barber,
-        };
-
-        setAppointments((prevAppointments) => {
-          // Find the index of the existing appointment
-          const existingIndex = prevAppointments.findIndex(
-            (appt) => appt.id === updatedOrNewAppointment.id
-          );
-
-          if (existingIndex !== -1) {
-            // Replace the existing appointment
-            const updatedAppointments = [...prevAppointments];
-            updatedAppointments[existingIndex] = updatedOrNewAppointment;
-            console.log("Updated Appointments:", updatedAppointments);
-            return updatedAppointments;
-          } else {
-            // Add the new appointment if not found
-            return [...prevAppointments, updatedOrNewAppointment];
-          }
+          return {
+            id: appointment._id, // Match with `id` in state
+            title: appointment.customerName,
+            start: appointmentDate,
+            end: new Date(appointmentDate.getTime() + duration * 60 * 1000),
+            barber: appointment.barber,
+          };
         });
+
+        setAppointments((prevAppointments) => [
+          ...prevAppointments,
+          ...newEvents,
+        ]);
 
         toast.success(
           response.updatedAppointment
             ? "Appointment updated successfully!"
-            : "Appointment created successfully!"
+            : "Appointments created successfully!"
         );
       } else {
         toast.error("Failed to add/update the appointment.");
