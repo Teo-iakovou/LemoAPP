@@ -4,7 +4,7 @@ import "react-toastify/dist/ReactToastify.css";
 import CalendarComponent from "../_components/CalendarComponent";
 import AppointmentForm from "../_components/AppointmentForm";
 import { createAppointment } from "../utils/api";
-
+import { updateAppointment } from "../utils/api";
 // Base API URL
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:5001/api";
@@ -60,7 +60,6 @@ const CalendarPage = () => {
     fetchCustomers();
   }, []);
 
-  // Filter out past appointments
   useEffect(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0); // Start of the current day
@@ -68,7 +67,7 @@ const CalendarPage = () => {
     const upcomingAppointments = appointments.filter(
       (appointment) => new Date(appointment.start) >= today
     );
-
+    console.log("Filtered Appointments for Calendar:", upcomingAppointments); // Debug filtered appointments
     setFilteredAppointments(upcomingAppointments);
   }, [appointments]);
 
@@ -103,52 +102,68 @@ const CalendarPage = () => {
 
   const handleFormSubmit = async (appointmentData) => {
     try {
-      const response = await createAppointment(appointmentData);
+      let response;
 
-      if (response?.initialAppointment) {
-        const appointmentDate = new Date(
-          response.initialAppointment.appointmentDateTime
+      if (appointmentData._id) {
+        // Update existing appointment
+        const updatedAppointmentData = {
+          ...appointmentData,
+          currentPassword: "apoel", // Add password for authentication
+        };
+
+        response = await updateAppointment(
+          appointmentData._id,
+          updatedAppointmentData
         );
+      } else {
+        // Create new appointment
+        response = await createAppointment(appointmentData);
+      }
+
+      if (response?.updatedAppointment || response?.initialAppointment) {
+        const appointment =
+          response.updatedAppointment || response.initialAppointment;
+
+        const appointmentDate = new Date(appointment.appointmentDateTime);
         const duration = 40;
 
-        const newAppointments = [
-          {
-            id: response.initialAppointment._id,
-            title: response.initialAppointment.customerName,
-            start: appointmentDate,
-            end: new Date(appointmentDate.getTime() + duration * 60 * 1000),
-            barber: response.initialAppointment.barber,
-          },
-        ];
+        const updatedOrNewAppointment = {
+          id: appointment._id, // Match with `id` in state
+          title: appointment.customerName,
+          start: appointmentDate,
+          end: new Date(appointmentDate.getTime() + duration * 60 * 1000),
+          barber: appointment.barber,
+        };
 
-        if (response.recurringAppointments?.length > 0) {
-          const recurringEvents = response.recurringAppointments.map((appt) => {
-            const recurringDate = new Date(appt.appointmentDateTime);
-            const recurringDuration = 40;
+        setAppointments((prevAppointments) => {
+          // Find the index of the existing appointment
+          const existingIndex = prevAppointments.findIndex(
+            (appt) => appt.id === updatedOrNewAppointment.id
+          );
 
-            return {
-              id: appt._id,
-              title: appt.customerName,
-              start: recurringDate,
-              end: new Date(
-                recurringDate.getTime() + recurringDuration * 60 * 1000
-              ),
-              barber: appt.barber,
-            };
-          });
+          if (existingIndex !== -1) {
+            // Replace the existing appointment
+            const updatedAppointments = [...prevAppointments];
+            updatedAppointments[existingIndex] = updatedOrNewAppointment;
+            console.log("Updated Appointments:", updatedAppointments);
+            return updatedAppointments;
+          } else {
+            // Add the new appointment if not found
+            return [...prevAppointments, updatedOrNewAppointment];
+          }
+        });
 
-          newAppointments.push(...recurringEvents);
-        }
-
-        setAppointments((prev) => [...prev, ...newAppointments]);
-        toast.success("Appointment(s) added successfully!");
+        toast.success(
+          response.updatedAppointment
+            ? "Appointment updated successfully!"
+            : "Appointment created successfully!"
+        );
       } else {
-        console.error("Invalid response structure:", response);
-        toast.error("Failed to add the appointment.");
+        toast.error("Failed to add/update the appointment.");
       }
     } catch (error) {
       console.error("Error submitting appointment data:", error);
-      toast.error("An error occurred while adding the appointment.");
+      toast.error("An error occurred while processing the appointment.");
     } finally {
       setShowForm(false);
     }
@@ -170,8 +185,8 @@ const CalendarPage = () => {
       );
 
       if (response.ok) {
-        setAppointments((prev) =>
-          prev.filter((appt) => appt.id !== appointmentId)
+        setAppointments((prevAppointments) =>
+          prevAppointments.filter((appt) => appt.id !== appointmentId)
         );
         toast.success("Appointment deleted successfully!");
       } else {

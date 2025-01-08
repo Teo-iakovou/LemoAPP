@@ -14,7 +14,9 @@ const appointmentSchema = new mongoose.Schema({
     type: Date,
     required: true,
     validate: {
-      validator: (v) => v > new Date(Date.now() + 60 * 1000), // Ensure at least 1 minute in the future
+      validator: function (v) {
+        return v > new Date(); // Ensure appointment is in the future
+      },
       message: "Appointment date must be in the future",
     },
   },
@@ -29,7 +31,7 @@ const appointmentSchema = new mongoose.Schema({
   },
   barber: {
     type: String,
-    enum: ["ΛΕΜΟ", "ΦΟΡΟΥ"], // Replace with a reference to a `Barber` model if needed
+    enum: ["ΛΕΜΟ", "ΦΟΡΟΥ"],
     required: true,
   },
   appointmentStatus: {
@@ -55,7 +57,29 @@ appointmentSchema.pre("save", function (next) {
   next();
 });
 
+// Pre-update middleware to handle `findByIdAndUpdate` and similar methods
+appointmentSchema.pre("findOneAndUpdate", function (next) {
+  const update = this.getUpdate();
+
+  if (update.appointmentDateTime) {
+    const appointmentStart = new Date(update.appointmentDateTime);
+
+    // Ensure `appointmentDateTime` is valid and in the future
+    if (isNaN(appointmentStart) || appointmentStart <= new Date()) {
+      return next(new Error("Invalid or past appointmentDateTime"));
+    }
+
+    // Recalculate `endTime` based on the updated `appointmentDateTime`
+    update.endTime = new Date(
+      appointmentStart.getTime() + (update.duration || 40) * 60 * 1000
+    );
+  }
+
+  next();
+});
+
 // Add an index to optimize status-based queries
 appointmentSchema.index({ appointmentStatus: 1 });
+appointmentSchema.index({ appointmentDateTime: 1 });
 
 module.exports = mongoose.model("Appointment", appointmentSchema);

@@ -48,3 +48,33 @@ export const fetchAppointments = async () => {
   }
   return response.json();
 };
+export const updateAppointment = async (appointmentId, updatedData) => {
+  const API_BASE_URL =
+    import.meta.env.VITE_API_BASE_URL || "http://localhost:5001/api";
+
+  try {
+    const response = await fetch(
+      `${API_BASE_URL}/appointments/${appointmentId}`,
+      {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(updatedData),
+      }
+    );
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error("Error Response from API:", errorData);
+      throw new Error(errorData.message || "Failed to update the appointment.");
+    }
+
+    const updatedAppointment = await response.json();
+    console.log("API Response:", updatedAppointment); // Debug API response
+    return updatedAppointment;
+  } catch (error) {
+    console.error("Error updating appointment:", error.message);
+    throw error;
+  }
+};

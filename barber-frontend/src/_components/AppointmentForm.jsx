@@ -74,31 +74,32 @@ function AppointmentForm({
     }
   };
 
-  const submitForm = async (data) => {
+  const submitForm = (data) => {
     const formattedAppointmentDateTime = appointmentDateTime
       ? new Date(appointmentDateTime).toISOString()
       : null;
-    const duration = 40; // Set duration dynamically
 
     const appointmentDetails = {
+      ...appointmentData, // Preserve existing data (e.g., `_id`) for editing
       customerName: data.customerName,
       phoneNumber: data.phoneNumber,
       barber: data.barber,
-      duration,
-      appointmentDateTime: formattedAppointmentDateTime,
+      duration: 40, // Fixed duration
+      appointmentDateTime: formattedAppointmentDateTime, // Ensure new date-time is sent
       recurrence: recurrence !== "none" ? recurrence : null,
-      repeatWeeks: recurrence === "weekly" ? parseInt(weeksOption) : null, // Pass weeksOption for weekly recurrence
-      repeatMonths: recurrence === "monthly" ? parseInt(monthsOption) : null, // Optional for monthly recurrence
+      repeatWeeks: recurrence === "weekly" ? parseInt(weeksOption) : null,
+      repeatMonths: recurrence === "monthly" ? parseInt(monthsOption) : null,
     };
 
-    console.log("Submitting Appointment Data:", appointmentDetails); // Debug log
+    console.log("Submitting Appointment Data:", appointmentDetails);
 
     if (isEditing) {
-      setActionType("edit");
-      setShowPasswordForm(true);
+      setActionType("edit"); // Set action type to "edit"
+      setShowPasswordForm(true); // Show the password confirmation form
     } else {
+      // For new appointments, submit immediately
       onSubmit(appointmentDetails);
-      reset();
+      reset(); // Clear the form fields
     }
   };
 
@@ -108,7 +109,7 @@ function AppointmentForm({
   };
 
   const handlePasswordSubmit = async (enteredPassword) => {
-    setShowPasswordForm(false);
+    setShowPasswordForm(false); // Hide the password form after submission
 
     if (!enteredPassword || enteredPassword.trim() === "") {
       console.error("Password is required for this action.");
@@ -116,19 +117,21 @@ function AppointmentForm({
     }
 
     if (actionType === "edit") {
-      // Ensure all required fields are included
+      // Ensure all required fields are included for the update
       const appointmentDetails = {
-        customerName: appointmentData?.customerName || "", // Include customerName
-        phoneNumber: appointmentData?.phoneNumber || "", // Include phoneNumber
-        barber: appointmentData?.barber || "Lemo",
-        appointmentDateTime: appointmentDateTime, // Use current state value
+        ...appointmentData, // Preserve existing data
+        appointmentDateTime, // Use the current state value
         recurrence: recurrence !== "none" ? recurrence : null,
-        password: enteredPassword, // Send the entered password
+        password: enteredPassword, // Add the entered password
       };
 
-      console.log("Submitting Payload for Edit:", appointmentDetails); // Debug log
-      onSubmit(appointmentDetails); // Send the updated data
+      console.log(
+        "Submitting Payload for Edit with Password:",
+        appointmentDetails
+      );
+      onSubmit(appointmentDetails); // Send the updated data after password confirmation
     } else if (actionType === "delete") {
+      // Pass the appointment ID and password for deletion
       onDelete(appointmentData?._id, enteredPassword);
     }
   };

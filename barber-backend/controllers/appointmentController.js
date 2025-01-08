@@ -177,25 +177,63 @@ const getAppointments = async (req, res, next) => {
 const updateAppointment = async (req, res, next) => {
   try {
     const { id } = req.params;
+    const {
+      appointmentDateTime,
+      duration = 40,
+      phoneNumber,
+      barber,
+      ...updateData
+    } = req.body;
+
+    // Validate if the appointmentDateTime is in the future
+    if (appointmentDateTime) {
+      const appointmentStart = new Date(appointmentDateTime);
+      if (appointmentStart <= new Date()) {
+        return res
+          .status(400)
+          .json({ message: "Appointment date must be in the future" });
+      }
+
+      // Recalculate endTime
+      updateData.endTime = new Date(
+        appointmentStart.getTime() + duration * 60 * 1000
+      );
+      updateData.appointmentDateTime = appointmentStart; // Ensure it's updated in the database
+    }
 
     const updatedAppointment = await Appointment.findByIdAndUpdate(
       id,
-      req.body,
-      { new: true }
+      updateData,
+      {
+        new: true, // Return the updated document
+        runValidators: true, // Ensure validations are run
+      }
     );
 
     if (!updatedAppointment) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Appointment not found" });
+      return res.status(404).json({ message: "Appointment not found" });
     }
 
-    return res.status(200).json({
+    // Send SMS notification for the updated appointment
+    try {
+      const formattedDateTime = moment(updatedAppointment.appointmentDateTime)
+        .tz("Europe/Athens")
+        .format("DD/MM/YYYY HH:mm");
+      const message = `Το ραντεβού σας στο LEMO BARBER SHOP με τον ${barber} έχει αλλάξει στις ${formattedDateTime}.`;
+
+      await sendSMS(phoneNumber || updatedAppointment.phoneNumber, message);
+      console.log("Update SMS sent successfully");
+    } catch (smsError) {
+      console.error("Failed to send update SMS:", smsError.message);
+    }
+
+    res.status(200).json({
       success: true,
-      message: "Appointment updated successfully",
-      updatedAppointment, // Ensure this key is returned
+      message: "Appointment updated successfully and SMS sent",
+      updatedAppointment,
     });
   } catch (error) {
+    console.error("Error updating appointment:", error);
     next(error);
   }
 };
