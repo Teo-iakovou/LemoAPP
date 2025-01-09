@@ -4,11 +4,14 @@ const sendSMS = async (to, message) => {
   const API_KEY = process.env.SMS_TO_API_KEY.trim(); // Load the API key
   const SMS_URL = "https://api.sms.to/sms/send";
 
+  // Automatically add the +357 prefix if it's not already there
+  const formattedNumber = to.startsWith("+357") ? to : `+357${to.trim()}`;
+
   try {
     const response = await axios.post(
       SMS_URL,
       {
-        to,
+        to: formattedNumber, // Use the formatted number
         message,
         sender_id: "LemoBarber",
       },
