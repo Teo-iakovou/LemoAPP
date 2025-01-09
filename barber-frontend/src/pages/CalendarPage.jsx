@@ -139,10 +139,16 @@ const CalendarPage = () => {
           };
         });
 
-        setAppointments((prevAppointments) => [
-          ...prevAppointments,
-          ...newEvents,
-        ]);
+        setAppointments((prevAppointments) => {
+          // Remove old events for updated appointments
+          const updatedIds = createdAppointments.map((appt) => appt._id);
+          const filteredAppointments = prevAppointments.filter(
+            (appt) => !updatedIds.includes(appt.id)
+          );
+
+          // Add new/updated events to the filtered list
+          return [...filteredAppointments, ...newEvents];
+        });
 
         toast.success(
           response.updatedAppointment
