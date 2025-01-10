@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { FaHome, FaCalendarAlt, FaUsers } from "react-icons/fa"; // Import icons
+import { FaChartBar, FaHome, FaCalendarAlt, FaUsers } from "react-icons/fa"; // Import icons
 import LemoLogo from "../assets/LemoLogo.png";
 import LemoBlackLogo from "../assets/LemoLogo.JPG";
 
@@ -49,23 +49,31 @@ const Navbar = ({ isAuth, onLogout }) => {
           />
         </Link>
         {isAuth && (
-          <ul className="flex items-center space-x-6">
+          <ul className="flex items-center space-x-6 hover:text-blue-500 transition">
             {/* Home Icon */}
             <li>
               <Link to="/" className="hover:text-blue-500 transition">
-                <FaHome className="text-xl text-white" />
+                <FaHome className="text-xl text-white hover:text-blue-500 transition" />
               </Link>
             </li>
             {/* Calendar Icon */}
             <li>
-              <Link to="/calendar" className="hover:text-blue-500 transition">
-                <FaCalendarAlt className="text-xl text-white" />
+              <Link to="/calendar">
+                <FaCalendarAlt className="text-xl text-white hover:text-blue-500 transition " />
               </Link>
             </li>
             {/* Customers Icon */}
             <li>
               <Link to="/customers" className="hover:text-blue-500 transition">
-                <FaUsers className="text-xl text-white" />
+                <FaUsers className="text-xl text-white hover:text-blue-500 transition" />
+              </Link>
+            </li>
+            <li>
+              <Link
+                to="/CustomerCounts"
+                className="text-white hover:text-blue-500 transition"
+              >
+                <FaChartBar className="text-xl text-white hover:text-blue-500 transition" />
               </Link>
             </li>
           </ul>

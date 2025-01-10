@@ -6,7 +6,7 @@ const cron = require("node-cron");
 const adminRoutes = require("./routes/adminRoutes");
 const appointmentRoutes = require("./routes/appointmentRoutes");
 const { sendReminders } = require("./controllers/reminderScheduler");
-
+const CustomerCountsRoutes = require("./routes/customersCountsRoutes");
 const customerRoutes = require("./routes/customerRoutes");
 const reminderSchedulerRoute = require("./routes/reminderSchedulerRoute");
 const authRoutes = require("./routes/authRoutes");
@@ -64,6 +64,7 @@ app.get("/", (req, res) => {
 });
 app.use("/api/admin", adminRoutes);
 app.use("/api/appointments", appointmentRoutes);
+app.use("/api", CustomerCountsRoutes);
 app.use("/api/customers", customerRoutes);
 app.use("/api/reminders", reminderSchedulerRoute);
 app.use("/api/auth", authRoutes);

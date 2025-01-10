@@ -9,7 +9,7 @@ const CalendarPage = lazy(() => import("./pages/CalendarPage"));
 const Profile = lazy(() => import("./pages/Profile"));
 const Customers = lazy(() => import("./pages/CustomersPage"));
 const Login = lazy(() => import("./pages/Login"));
-
+const CustomerCounts = lazy(() => import("./pages/CustomerCounts"));
 const App = () => {
   const [isDarkMode, setIsDarkMode] = useState(false); // Dark mode state
   const [isAuth, setAuth] = useState(false); // Authentication state
@@ -57,6 +57,12 @@ const App = () => {
                   path="/customers"
                   element={<Customers isDarkMode={isDarkMode} />}
                 />
+
+                <Route
+                  path="/CustomerCounts"
+                  element={<CustomerCounts />}
+                ></Route>
+
                 <Route
                   path="/update-password"
                   element={<UpdatePasswordForm />}

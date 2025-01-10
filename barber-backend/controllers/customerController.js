@@ -1,5 +1,44 @@
 const Customer = require("../models/customer");
+const Appointment = require("../models/appointment");
+const moment = require("moment");
+const getCustomerCounts = async (req, res, next) => {
+  try {
+    const { month, year } = req.query;
 
+    const startOfMonth = moment()
+      .year(year || moment().year())
+      .month(month || moment().month())
+      .startOf("month");
+    const endOfMonth = startOfMonth.clone().endOf("month");
+
+    const lemoCount = await Appointment.countDocuments({
+      barber: "ΛΕΜΟ",
+      appointmentDateTime: {
+        $gte: startOfMonth.toDate(),
+        $lte: endOfMonth.toDate(),
+      },
+    });
+
+    const forouCount = await Appointment.countDocuments({
+      barber: "ΦΟΡΟΥ",
+      appointmentDateTime: {
+        $gte: startOfMonth.toDate(),
+        $lte: endOfMonth.toDate(),
+      },
+    });
+
+    res.status(200).json({
+      success: true,
+      counts: {
+        ΛΕΜΟ: lemoCount,
+        ΦΟΡΟΥ: forouCount,
+      },
+    });
+  } catch (error) {
+    console.error("Error fetching customer counts:", error);
+    next(error);
+  }
+};
 // Get all customers
 const getCustomers = async (req, res, next) => {
   try {
@@ -77,4 +116,5 @@ module.exports = {
   deleteAllCustomers,
   deleteCustomer,
   updateCustomer,
+  getCustomerCounts,
 };
