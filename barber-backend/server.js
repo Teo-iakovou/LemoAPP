@@ -3,6 +3,8 @@ const cors = require("cors");
 const dotenv = require("dotenv");
 const connectDB = require("./utils/db");
 const cron = require("node-cron");
+const noteRoutes = require("./routes/noteRoutes");
+const folderRoutes = require("./routes/folderRoutes");
 const adminRoutes = require("./routes/adminRoutes");
 const appointmentRoutes = require("./routes/appointmentRoutes");
 const { sendReminders } = require("./controllers/reminderScheduler");
@@ -62,6 +64,8 @@ app.use(
 app.get("/", (req, res) => {
   res.send("Welcome to the LemoApp Backend!");
 });
+app.use("/api/notes", noteRoutes);
+app.use("/api/folders", folderRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/appointments", appointmentRoutes);
 app.use("/api", CustomerCountsRoutes);

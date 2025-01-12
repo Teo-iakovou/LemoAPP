@@ -1,6 +1,12 @@
 import React, { useState, useRef, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { FaChartBar, FaHome, FaCalendarAlt, FaUsers } from "react-icons/fa"; // Import icons
+import {
+  FaChartBar,
+  FaHome,
+  FaCalendarAlt,
+  FaUsers,
+  FaClipboard,
+} from "react-icons/fa"; // Import icons
 import LemoLogo from "../assets/LemoLogo.png";
 import LemoBlackLogo from "../assets/LemoLogo.JPG";
 
@@ -74,6 +80,11 @@ const Navbar = ({ isAuth, onLogout }) => {
                 className="text-white hover:text-blue-500 transition"
               >
                 <FaChartBar className="text-xl text-white hover:text-blue-500 transition" />
+              </Link>
+            </li>
+            <li>
+              <Link to="/NotePage">
+                <FaClipboard className="text-white hover:text-blue-500 transition"></FaClipboard>
               </Link>
             </li>
           </ul>
