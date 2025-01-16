@@ -61,14 +61,9 @@ const CalendarPage = () => {
   }, []);
 
   useEffect(() => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0); // Start of the current day
-
-    const upcomingAppointments = appointments.filter(
-      (appointment) => new Date(appointment.start) >= today
-    );
-    console.log("Filtered Appointments for Calendar:", upcomingAppointments); // Debug filtered appointments
-    setFilteredAppointments(upcomingAppointments);
+    // Include all appointments, no filtering for past dates
+    setFilteredAppointments(appointments);
+    console.log("All Appointments for Calendar:", appointments); // Debug all appointments
   }, [appointments]);
 
   const handleSelectSlot = (slotInfo) => {

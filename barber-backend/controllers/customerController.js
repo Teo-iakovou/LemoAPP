@@ -1,8 +1,28 @@
 const Customer = require("../models/customer");
 const Appointment = require("../models/appointment");
 const moment = require("moment");
+const jwt = require("jsonwebtoken");
 const getCustomerCounts = async (req, res, next) => {
   try {
+    // Validate JWT token and extract user ID
+    const authHeader = req.headers.authorization;
+    if (!authHeader) {
+      return res
+        .status(401)
+        .json({ message: "Authorization header is required" });
+    }
+
+    const token = authHeader.split(" ")[1];
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+    // Restrict access to a specific user (e.g., user with _id: 676581f2a97ae0e3cf8375e7)
+    if (decoded.userId !== "676581f2a97ae0e3cf8375e7") {
+      return res
+        .status(403)
+        .json({ message: "Access restricted to authorized user only" });
+    }
+
+    // Fetch counts for the given month and year
     const { month, year } = req.query;
 
     const startOfMonth = moment()
@@ -39,6 +59,7 @@ const getCustomerCounts = async (req, res, next) => {
     next(error);
   }
 };
+
 // Get all customers
 const getCustomers = async (req, res, next) => {
   try {

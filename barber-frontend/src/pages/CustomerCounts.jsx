@@ -44,10 +44,10 @@ const CustomerCounts = () => {
   // Fetch counts from the backend
   const fetchCounts = async () => {
     try {
-      const token = localStorage.getItem("token");
+      const token = localStorage.getItem("token"); // Retrieve the stored token
       const response = await axios.get(`${API_BASE_URL}/CustomerCounts`, {
         params: { month, year },
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${token}` }, // Include the token in the headers
       });
       setCounts(response.data.counts);
     } catch (err) {
@@ -72,9 +72,26 @@ const CustomerCounts = () => {
       });
       localStorage.setItem("token", response.data.token); // Store token
       setIsAuthenticated(true); // Mark as authenticated
+      setAuthError(""); // Clear any previous authentication errors
     } catch (err) {
       console.error("Authentication failed:", err);
-      setAuthError("Invalid username or password.");
+
+      // Check for specific error response
+      if (err.response) {
+        // If the backend sends specific error messages
+        if (err.response.status === 400) {
+          setAuthError("Invalid username or password.");
+        } else if (err.response.status === 500) {
+          setAuthError("Server error. Please try again later.");
+        } else {
+          setAuthError("An unexpected error occurred. Please try again.");
+        }
+      } else {
+        // Handle network or other unexpected errors
+        setAuthError(
+          "Unable to connect to the server. Please check your network."
+        );
+      }
     }
   };
 
@@ -126,7 +143,7 @@ const CustomerCounts = () => {
           className="bg-gray-800 p-6 rounded-lg shadow-md text-white"
         >
           <h1 className="text-2xl font-bold mb-4">ΣΥΝΔΕΣΗ</h1>
-          {error && <p className="text-red-500 mb-4">{error}</p>}
+          {authError && <p className="text-red-500 mb-4">{authError}</p>}
           <div className="mb-4">
             <label className="block text-white">ΟΝΟΜΑ ΧΡΗΣΤΗ</label>
             <input
