@@ -1,6 +1,25 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+/* Reduce the width of events and add padding or margin */
+.rbc-event {
+  margin-right: 10px; /* Space between events and the edge */
+  max-width: 55%; /* Limit the event's width */
+  border-radius: 4px; /* Add a rounded border for better appearance */
+}
+
+.rbc-event-content {
+  white-space: nowrap; /* Prevent text wrapping */
+  overflow: hidden; /* Hide overflow content */
+  text-overflow: ellipsis; /* Add ellipsis for overflowing text */
+  padding: 2px 5px; /* Add padding for better readability */
+}
+
+/* Optional: Adjust the time gutter for better alignment */
+.rbc-time-gutter {
+  width: 50px; /* Adjust the gutter width */
+}
+
 .rbc-toolbar button {
   font-size: 0.85rem; /* Smaller font for mobile */
   padding: 0.3rem 0.6rem; /* Adjust padding */

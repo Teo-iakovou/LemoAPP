@@ -65,7 +65,6 @@ const CalendarPage = () => {
     setFilteredAppointments(appointments);
     console.log("All Appointments for Calendar:", appointments); // Debug all appointments
   }, [appointments]);
-
   const handleSelectSlot = (slotInfo) => {
     const selectedStartDate = new Date(slotInfo.start);
     if (selectedStartDate.getHours() === 0) {

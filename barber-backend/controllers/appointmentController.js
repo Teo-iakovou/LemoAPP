@@ -18,22 +18,11 @@ const createAppointment = async (req, res, next) => {
       repeatMonths,
     } = req.body;
 
-    // Validate required fields
     if (!customerName || !phoneNumber || !appointmentDateTime || !barber) {
       return res.status(400).json({ message: "All fields are required" });
     }
 
-    // Validate data types
-    if (
-      typeof customerName !== "string" ||
-      typeof phoneNumber !== "string" ||
-      typeof barber !== "string"
-    ) {
-      return res.status(400).json({ message: "Invalid data format" });
-    }
-
-    // Validate appointment date
-    const appointmentDate = moment(appointmentDateTime).utc(); // Assume input is in UTC
+    const appointmentDate = moment(appointmentDateTime).utc();
     if (
       !appointmentDate.isValid() ||
       appointmentDate.isBefore(moment().utc())
@@ -43,55 +32,38 @@ const createAppointment = async (req, res, next) => {
         .json({ message: "Invalid or past appointment date" });
     }
 
-    console.log(
-      "Parsed Appointment Date (UTC):",
-      appointmentDate.toISOString()
-    );
-
-    // Convert to Europe/Athens for local display purposes
     const athensTime = appointmentDate.clone().tz("Europe/Athens");
     console.log("Appointment Date (Athens Time):", athensTime.format());
 
-    // Validate barber value
-    if (!["ΛΕΜΟ", "ΦΟΡΟΥ"].includes(barber)) {
-      return res
-        .status(400)
-        .json({ message: "Barber must be either 'ΛΕΜΟ' or 'ΦΟΡΟΥ'" });
-    }
-
-    // Set fixed duration of 40 minutes
-    const duration = 40;
-
-    // Calculate endTime based on fixed duration
-    const endTime = appointmentDate.clone().add(duration, "minutes").toDate();
-
-    // Check if the customer exists or create a new one
     let customer = await Customer.findOne({ phoneNumber });
     if (!customer) {
       customer = new Customer({ name: customerName, phoneNumber });
       await customer.save();
     }
 
-    // Create the initial appointment
+    // Set fixed duration and calculate endTime
+    const duration = 40; // 40 minutes
+    const endTime = appointmentDate.clone().add(duration, "minutes").toDate();
+
+    // Create and save the initial appointment
     const newAppointment = new Appointment({
       customerName,
       phoneNumber,
-      appointmentDateTime: appointmentDate.toDate(), // Save in UTC
+      appointmentDateTime: appointmentDate.toDate(),
       barber,
       duration,
-      endTime, // Include endTime
+      endTime,
     });
-
-    // Save the initial appointment
     const savedAppointment = await newAppointment.save();
 
-    // Send SMS confirmation for the initial appointment
+    // Send confirmation SMS for the initial appointment
     try {
-      const formattedLocalTime = athensTime.format("DD/MM/YYYY HH:mm"); // Local time format
+      const formattedLocalTime = athensTime.format("DD/MM/YYYY HH:mm");
       const message = `Επιβεβαιώνουμε το ραντεβού σας στο LEMO BARBER SHOP με τον ${barber} για τις ${formattedLocalTime}!`;
-
       await sendSMS(phoneNumber, message);
-      console.log("Confirmation SMS sent successfully");
+      console.log(
+        "Confirmation SMS sent successfully for the first appointment."
+      );
     } catch (smsError) {
       console.error("Failed to send confirmation SMS:", smsError.message);
     }
@@ -99,17 +71,14 @@ const createAppointment = async (req, res, next) => {
     // Generate additional appointments if recurrence is provided
     const additionalAppointments = [];
     if (recurrence === "weekly" && repeatWeeks) {
-      let currentDate = appointmentDate.clone(); // Start from the initial date
+      let currentDate = appointmentDate.clone();
       for (let i = 1; i <= repeatWeeks; i++) {
         currentDate.add(1, "week");
-
-        // Calculate endTime for recurring appointments
         const recurringEndTime = currentDate
           .clone()
           .add(duration, "minutes")
           .toDate();
 
-        // Create and save additional appointment
         const additionalAppointment = new Appointment({
           customerName,
           phoneNumber,
@@ -122,17 +91,14 @@ const createAppointment = async (req, res, next) => {
         additionalAppointments.push(savedAdditionalAppointment);
       }
     } else if (recurrence === "monthly" && repeatMonths) {
-      let currentDate = appointmentDate.clone(); // Start from the initial date
+      let currentDate = appointmentDate.clone();
       for (let i = 1; i <= repeatMonths; i++) {
         currentDate.add(1, "month");
-
-        // Calculate endTime for recurring appointments
         const recurringEndTime = currentDate
           .clone()
           .add(duration, "minutes")
           .toDate();
 
-        // Create and save additional appointment
         const additionalAppointment = new Appointment({
           customerName,
           phoneNumber,
@@ -146,7 +112,6 @@ const createAppointment = async (req, res, next) => {
       }
     }
 
-    // Respond with all created appointments and customer details
     res.status(201).json({
       message: "Appointments created successfully",
       customer: {
@@ -157,7 +122,7 @@ const createAppointment = async (req, res, next) => {
       recurringAppointments: additionalAppointments,
     });
   } catch (error) {
-    next(error); // Pass the error to the error-handling middleware
+    next(error);
   }
 };
 
