@@ -39,7 +39,12 @@ const appointmentSchema = new mongoose.Schema({
     enum: ["confirmed", "pending", "canceled"],
     default: "pending",
   },
-  reminderSent: { type: Boolean, default: false },
+  reminders: [
+    {
+      type: { type: String, required: true }, // e.g., "24-hour", "7-day"
+      sentAt: { type: Date, required: true },
+    },
+  ],
 });
 
 // Pre-save middleware to calculate endTime based on a fixed 40-minute duration
