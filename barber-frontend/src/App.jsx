@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import Navbar from "./_components/Navbar";
 import "./index.css";
 import UpdatePasswordForm from "./pages/UpdatePasswordForm";
+
 // Lazy load pages
 const Home = lazy(() => import("./pages/Home"));
 const NotePage = lazy(() => import("./pages/NotePage"));
@@ -11,8 +12,8 @@ const Profile = lazy(() => import("./pages/Profile"));
 const Customers = lazy(() => import("./pages/CustomersPage"));
 const Login = lazy(() => import("./pages/Login"));
 const CustomerCounts = lazy(() => import("./pages/CustomerCounts"));
+
 const App = () => {
-  const [isDarkMode, setIsDarkMode] = useState(false); // Dark mode state
   const [isAuth, setAuth] = useState(false); // Authentication state
 
   // Check authentication on page load
@@ -29,19 +30,10 @@ const App = () => {
 
   return (
     <Router>
-      <div
-        className={`h-screen flex flex-col ${
-          isDarkMode ? "bg-gray-900 text-black" : "bg-gray-900 text-gray-900"
-        } transition-colors duration-300`}
-      >
+      <div className="h-screen flex flex-col bg-gray-900  transition-colors duration-300">
         {/* Navbar Section */}
         <header className="h-16">
-          <Navbar
-            isDarkMode={isDarkMode}
-            onThemeToggle={setIsDarkMode}
-            isAuth={isAuth} // Pass authentication state
-            onLogout={handleLogout} // Pass logout function
-          />
+          <Navbar isAuth={isAuth} onLogout={handleLogout} />
         </header>
 
         {/* Main Content */}
@@ -49,27 +41,16 @@ const App = () => {
           <Suspense fallback={<div>Loading...</div>}>
             {isAuth ? (
               <Routes>
-                <Route path="/" element={<Home isDarkMode={isDarkMode} />} />
-                <Route
-                  path="/calendar"
-                  element={<CalendarPage isDarkMode={isDarkMode} />}
-                />
-                <Route
-                  path="/customers"
-                  element={<Customers isDarkMode={isDarkMode} />}
-                />
-
-                <Route
-                  path="/CustomerCounts"
-                  element={<CustomerCounts />}
-                ></Route>
-
+                <Route path="/" element={<Home />} />
+                <Route path="/calendar" element={<CalendarPage />} />
+                <Route path="/customers" element={<Customers />} />
+                <Route path="/CustomerCounts" element={<CustomerCounts />} />
                 <Route
                   path="/update-password"
                   element={<UpdatePasswordForm />}
                 />
                 <Route path="/profile" element={<Profile />} />
-                <Route path="/NotePage" element={<NotePage />}></Route>
+                <Route path="/NotePage" element={<NotePage />} />
               </Routes>
             ) : (
               <Routes>

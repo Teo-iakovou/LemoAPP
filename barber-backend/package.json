@@ -26,7 +26,8 @@
     "mongoose": "^8.9.5",
     "node-cron": "^3.0.3",
     "node-schedule": "^2.1.1",
-    "nodemailer": "^6.9.16"
+    "nodemailer": "^6.9.16",
+    "react-loading-skeleton": "^3.5.0"
   },
   "devDependencies": {
     "nodemon": "^3.1.9"

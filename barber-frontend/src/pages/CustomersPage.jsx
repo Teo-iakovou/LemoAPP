@@ -2,21 +2,30 @@ import React, { useEffect, useState } from "react";
 import { fetchCustomers } from "../utils/api";
 import Select from "react-select";
 import { FaTrash, FaEdit } from "react-icons/fa";
+import Skeleton from "react-loading-skeleton";
+import "react-loading-skeleton/dist/skeleton.css";
 
 // Base API URL
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:5001/api";
 
-const CustomersPage = ({ isDarkMode }) => {
+const CustomersPage = () => {
   const [customers, setCustomers] = useState([]);
   const [editMode, setEditMode] = useState(null); // Track the customer being edited
   const [editData, setEditData] = useState({ name: "", phoneNumber: "" });
+  const [isLoading, setIsLoading] = useState(true); // Loading state
 
   // Fetch customers from backend
   useEffect(() => {
     const loadCustomers = async () => {
-      const customerData = await fetchCustomers();
-      setCustomers(customerData.sort((a, b) => a.name.localeCompare(b.name)));
+      try {
+        const customerData = await fetchCustomers();
+        setCustomers(customerData.sort((a, b) => a.name.localeCompare(b.name)));
+      } catch (error) {
+        console.error("Error fetching customers:", error);
+      } finally {
+        setIsLoading(false); // Set loading to false after fetching
+      }
     };
     loadCustomers();
   }, []);
@@ -80,7 +89,6 @@ const CustomersPage = ({ isDarkMode }) => {
     }
   };
 
-  // Options for react-select
   const customerOptions = customers.map((customer) => ({
     value: customer._id,
     label: `${customer.name} - ${customer.phoneNumber}`,
@@ -98,105 +106,108 @@ const CustomersPage = ({ isDarkMode }) => {
 
   return (
     <div className="p-6 relative">
-      <h1
-        className={`text-2xl font-bold mb-4 ${
-          isDarkMode ? "text-white" : "text-white"
-        }`}
-      >
-        ΠΕΛΑΤΕΣ
-      </h1>
+      <h1 className="text-2xl font-bold mb-4 text-white">ΠΕΛΑΤΕΣ</h1>
 
-      {customers.length === 0 ? (
-        <p className={isDarkMode ? "text-white" : "text-white"}>
-          ΔΕΝ ΒΡΕΘΗΚΑΝ ΠΕΛΑΤΕΣ.
-        </p>
+      {isLoading ? (
+        <Skeleton count={5} height={30} className="mb-4" />
+      ) : customers.length === 0 ? (
+        <p className="text-white">ΔΕΝ ΒΡΕΘΗΚΑΝ ΠΕΛΑΤΕΣ.</p>
       ) : (
         <div>
           {/* Scrollable Dropdown */}
           <div className="mb-4 w-full max-w-md">
-            <Select
-              options={customerOptions}
-              // onChange={handleSelectCustomer}
-              placeholder="Αναζήτηση Πελάτη"
-              isClearable
-              isSearchable
-              styles={{
-                menu: (provided) => ({
-                  ...provided,
-                  maxHeight: "400px", // Limit dropdown height
-                  overflowY: "400px", // Add vertical scrollbar
-                }),
-              }}
-            />
+            {isLoading ? (
+              <Skeleton height={30} />
+            ) : (
+              <Select
+                options={customerOptions}
+                placeholder="Αναζήτηση Πελάτη"
+                isClearable
+                isSearchable
+                styles={{
+                  menu: (provided) => ({
+                    ...provided,
+                    maxHeight: "400px",
+                    overflowY: "auto", // Fix overflow behavior
+                  }),
+                }}
+              />
+            )}
           </div>
 
           {/* List of all customers */}
           <ul
             className="space-y-2 overflow-y-auto"
-            style={{ maxHeight: "400px" }} // Make the list scrollable
+            style={{ maxHeight: "400px" }}
           >
-            {customers.map((customer) => (
-              <li
-                key={customer._id}
-                className={`flex justify-between items-center border-b pb-2 ${
-                  isDarkMode
-                    ? "border-gray-600 text-white"
-                    : "border-gray-300 text-white"
-                }`}
-              >
-                {editMode === customer._id ? (
-                  <div className="flex-grow">
-                    <input
-                      type="text"
-                      name="name"
-                      value={editData.name}
-                      onChange={handleEditChange}
-                      className={`p-1 rounded border ${
-                        isDarkMode
-                          ? "bg-gray-800 text-white border-gray-600"
-                          : "bg-white text-black"
-                      }`}
+            {isLoading
+              ? Array(5)
+                  .fill()
+                  .map((_, index) => (
+                    <Skeleton
+                      key={index}
+                      height={30}
+                      className="rounded mb-2"
                     />
-                    <input
-                      type="text"
-                      name="phoneNumber"
-                      value={editData.phoneNumber}
-                      onChange={handleEditChange}
-                      className={`p-1 rounded border ml-2 ${
-                        isDarkMode
-                          ? "bg-gray-800 text-white border-gray-600"
-                          : "bg-white text-black"
-                      }`}
-                    />
-                    <button
-                      onClick={() => handleEditSubmit(customer._id)}
-                      className="ml-2 px-2 py-1 bg-green-500 text-white rounded"
-                    >
-                      Save
-                    </button>
-                  </div>
-                ) : (
-                  <div className="flex-grow">
-                    <span className="font-medium">{customer.name}</span>
-                    <span className="ml-4">{customer.phoneNumber}</span>
-                  </div>
-                )}
-                <div className="flex space-x-2">
-                  <button
-                    onClick={() => handleEditClick(customer)}
-                    className="text-blue-500 hover:text-blue-700"
+                  ))
+              : customers.map((customer) => (
+                  <li
+                    key={customer._id}
+                    className={`flex justify-between items-center border-b pb-2 ${
+                      customer.barber === "ΛΕΜΟ"
+                        ? "text-purple-600"
+                        : customer.barber === "ΦΟΡΟΥ"
+                        ? "text-orange-500"
+                        : "text-white"
+                    }`}
                   >
-                    <FaEdit size={20} />
-                  </button>
-                  <button
-                    onClick={() => deleteCustomer(customer._id)}
-                    className="text-red-500 hover:text-red-700"
-                  >
-                    <FaTrash size={20} />
-                  </button>
-                </div>
-              </li>
-            ))}
+                    {editMode === customer._id ? (
+                      <div className="flex-grow">
+                        {/* Edit Mode */}
+                        <input
+                          type="text"
+                          name="name"
+                          value={editData.name}
+                          onChange={handleEditChange}
+                          className="p-1 rounded border bg-white text-black"
+                        />
+                        <input
+                          type="text"
+                          name="phoneNumber"
+                          value={editData.phoneNumber}
+                          onChange={handleEditChange}
+                          className="p-1 rounded border ml-2 bg-white text-black"
+                        />
+                        <button
+                          onClick={() => handleEditSubmit(customer._id)}
+                          className="ml-2 px-2 py-1 bg-green-500 text-white rounded"
+                        >
+                          Save
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex-grow">
+                        {/* Display Mode */}
+                        <span className="font-medium">{customer.name}</span>
+                        <span className="ml-4">{customer.phoneNumber}</span>
+                      </div>
+                    )}
+                    <div className="flex space-x-2">
+                      <button
+                        onClick={() => handleEditClick(customer)}
+                        className="text-blue-500 hover:text-blue-700"
+                      >
+                        <FaEdit size={20} />
+                      </button>
+                      <button
+                        onClick={() => deleteCustomer(customer._id)}
+                        className="text-red-500 hover:text-red-700"
+                      >
+                        <FaTrash size={20} />
+                      </button>
+                    </div>
+                  </li>
+                ))}
           </ul>
         </div>
       )}

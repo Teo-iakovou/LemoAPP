@@ -63,9 +63,30 @@ const getCustomerCounts = async (req, res, next) => {
 // Get all customers
 const getCustomers = async (req, res, next) => {
   try {
-    const customers = await Customer.find().sort({ name: 1 });
-    res.status(200).json(customers);
+    // Fetch all customers
+    const customers = await Customer.find().sort({ name: 1 }).lean();
+
+    // Fetch the latest barber information for each customer
+    const customersWithBarber = await Promise.all(
+      customers.map(async (customer) => {
+        // Get the most recent appointment for this customer
+        const latestAppointment = await Appointment.findOne({
+          phoneNumber: customer.phoneNumber,
+        })
+          .sort({ appointmentDateTime: -1 }) // Sort by appointment date in descending order
+          .lean();
+
+        return {
+          ...customer,
+          barber: latestAppointment ? latestAppointment.barber : null, // Include barber info if available
+        };
+      })
+    );
+
+    // Respond with customers and their associated barber information
+    res.status(200).json(customersWithBarber);
   } catch (error) {
+    console.error("Error fetching customers with barber info:", error);
     next(error);
   }
 };
