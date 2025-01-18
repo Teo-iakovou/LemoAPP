@@ -4,11 +4,14 @@ const moment = require("moment-timezone");
 
 const sendReminders = async () => {
   try {
+    // Current time in UTC
     const now = moment().utc();
 
+    // Define the 24-hour window for daily reminders
     const startOf24HourWindow = now.clone().add(24, "hours").startOf("minute");
     const endOf24HourWindow = startOf24HourWindow.clone().add(1, "hour");
 
+    // Define the 7-day window for weekly/monthly recurring reminders
     const startOf7DayWindow = now.clone().add(7, "days").startOf("minute");
     const endOf7DayWindow = startOf7DayWindow.clone().add(1, "hour");
 
@@ -24,25 +27,23 @@ const sendReminders = async () => {
       endOf7DayWindow.toDate()
     );
 
-    // Find daily appointments that haven't been reminded yet
+    // Find appointments within the 24-hour window for daily appointments
     const dailyAppointments = await Appointment.find({
       appointmentDateTime: {
         $gte: startOf24HourWindow.toDate(),
         $lt: endOf24HourWindow.toDate(),
       },
-      reminders: { $not: { $elemMatch: { type: "24-hour" } } }, // Check reminders
     });
 
-    // Find recurring appointments that haven't been reminded yet
+    // Find appointments within the 7-day window for recurring appointments
     const recurringAppointments = await Appointment.find({
       appointmentDateTime: {
         $gte: startOf7DayWindow.toDate(),
         $lt: endOf7DayWindow.toDate(),
       },
-      reminders: { $not: { $elemMatch: { type: "7-day" } } }, // Check reminders
     });
 
-    // Send reminders for daily appointments
+    // Send reminders for daily appointments (24 hours before)
     for (const appointment of dailyAppointments) {
       const appointmentDateTime = moment(appointment.appointmentDateTime)
         .tz("Europe/Athens")
@@ -51,11 +52,6 @@ const sendReminders = async () => {
 
       try {
         await sendSMS(appointment.phoneNumber, message);
-
-        // Mark reminder as sent
-        appointment.reminders.push({ type: "24-hour", sentAt: new Date() });
-        await appointment.save();
-
         console.log(
           `Reminder sent successfully to ${appointment.phoneNumber} for daily appointment.`
         );
@@ -67,20 +63,15 @@ const sendReminders = async () => {
       }
     }
 
-    // Send reminders for recurring appointments
+    // Send reminders for recurring appointments (7 days before)
     for (const appointment of recurringAppointments) {
       const appointmentDateTime = moment(appointment.appointmentDateTime)
         .tz("Europe/Athens")
         .format("DD/MM/YYYY HH:mm");
-      const message = `Υπενθύμιση: Το ραντεβού σας στο Lemo Barber Shop με τον ${appointment.barber} είναι στις ${appointmentDateTime}.`;
+      const message = `Επιβεβαιώνουμε το ραντεβού σας στο LEMO BARBER SHOP με τον ${appointment.barber} για τις ${appointmentDateTime}!`;
 
       try {
         await sendSMS(appointment.phoneNumber, message);
-
-        // Mark reminder as sent
-        appointment.reminders.push({ type: "7-day", sentAt: new Date() });
-        await appointment.save();
-
         console.log(
           `Reminder sent successfully to ${appointment.phoneNumber} for recurring appointment.`
         );
