@@ -125,20 +125,27 @@ const deleteCustomer = async (req, res, next) => {
 // Controller to update a customer
 const updateCustomer = async (req, res) => {
   const { id } = req.params; // Extract customer ID from URL
-  const { name, phoneNumber } = req.body; // Extract fields from request body
+  const { name, phoneNumber, barber } = req.body; // Extract fields from request body
 
   try {
-    // Validate input (optional)
+    // Validate input
     if (!name || !phoneNumber) {
       return res
         .status(400)
         .json({ error: "Name and phone number are required." });
     }
 
+    // Validate barber field if provided
+    if (barber && !["ΛΕΜΟ", "ΦΟΡΟΥ"].includes(barber)) {
+      return res
+        .status(400)
+        .json({ error: "Invalid barber value. Must be 'ΛΕΜΟ' or 'ΦΟΡΟΥ'." });
+    }
+
     // Find and update the customer
     const updatedCustomer = await Customer.findByIdAndUpdate(
       id,
-      { name, phoneNumber },
+      { name, phoneNumber, barber }, // Include barber in the update
       { new: true, runValidators: true } // Return updated document and run validation
     );
 

@@ -11,7 +11,7 @@ const sendReminders = async () => {
     const startOf24HourWindow = now.clone().add(24, "hours").startOf("minute");
     const endOf24HourWindow = startOf24HourWindow.clone().add(1, "hour");
 
-    // Define the 7-day window for weekly/monthly recurring reminders
+    // Define the 7-day window for recurring appointments
     const startOf7DayWindow = now.clone().add(7, "days").startOf("minute");
     const endOf7DayWindow = startOf7DayWindow.clone().add(1, "hour");
 
@@ -27,7 +27,7 @@ const sendReminders = async () => {
       endOf7DayWindow.toDate()
     );
 
-    // Find appointments within the 24-hour window for daily appointments
+    // Find appointments within the 24-hour window for daily reminders
     const dailyAppointments = await Appointment.find({
       appointmentDateTime: {
         $gte: startOf24HourWindow.toDate(),
@@ -35,12 +35,16 @@ const sendReminders = async () => {
       },
     });
 
-    // Find appointments within the 7-day window for recurring appointments
+    // Find recurring appointments within the 7-day window
     const recurringAppointments = await Appointment.find({
       appointmentDateTime: {
         $gte: startOf7DayWindow.toDate(),
         $lt: endOf7DayWindow.toDate(),
       },
+      $or: [
+        { recurrence: "weekly" }, // Recurring weekly appointments
+        { recurrence: "monthly" }, // Recurring monthly appointments
+      ],
     });
 
     // Send reminders for daily appointments (24 hours before)

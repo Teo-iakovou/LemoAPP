@@ -11,6 +11,7 @@ const customerSchema = new mongoose.Schema({
       message: "Phone number must be between 6 and 15 characters",
     },
   },
+  barber: { type: String, enum: ["ΛΕΜΟ", "ΦΟΡΟΥ"], default: null }, // Add this field
 });
 
 module.exports = mongoose.model("Customer", customerSchema);

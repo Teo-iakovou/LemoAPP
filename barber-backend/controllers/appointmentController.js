@@ -53,6 +53,7 @@ const createAppointment = async (req, res, next) => {
       barber,
       duration,
       endTime,
+      recurrence: recurrence || "one-time", // Default to one-time if not specified
     });
     const savedAppointment = await newAppointment.save();
 
@@ -86,6 +87,7 @@ const createAppointment = async (req, res, next) => {
           barber,
           duration,
           endTime: recurringEndTime,
+          recurrence: "weekly",
         });
         const savedAdditionalAppointment = await additionalAppointment.save();
         additionalAppointments.push(savedAdditionalAppointment);
@@ -106,6 +108,7 @@ const createAppointment = async (req, res, next) => {
           barber,
           duration,
           endTime: recurringEndTime,
+          recurrence: "monthly",
         });
         const savedAdditionalAppointment = await additionalAppointment.save();
         additionalAppointments.push(savedAdditionalAppointment);

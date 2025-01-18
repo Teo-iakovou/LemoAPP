@@ -12,7 +12,11 @@ const API_BASE_URL =
 const CustomersPage = () => {
   const [customers, setCustomers] = useState([]);
   const [editMode, setEditMode] = useState(null); // Track the customer being edited
-  const [editData, setEditData] = useState({ name: "", phoneNumber: "" });
+  const [editData, setEditData] = useState({
+    name: "",
+    phoneNumber: "",
+    barber: "",
+  });
   const [isLoading, setIsLoading] = useState(true); // Loading state
 
   // Fetch customers from backend
@@ -20,6 +24,8 @@ const CustomersPage = () => {
     const loadCustomers = async () => {
       try {
         const customerData = await fetchCustomers();
+        console.log("Fetched customers:", customerData); // Verify barber field
+
         setCustomers(customerData.sort((a, b) => a.name.localeCompare(b.name)));
       } catch (error) {
         console.error("Error fetching customers:", error);
@@ -55,12 +61,20 @@ const CustomersPage = () => {
   // Edit customer
   const handleEditClick = (customer) => {
     setEditMode(customer._id); // Enable edit mode for this customer
-    setEditData({ name: customer.name, phoneNumber: customer.phoneNumber });
+    setEditData({
+      name: customer.name,
+      phoneNumber: customer.phoneNumber,
+      barber: customer.barber || "", // Set barber if it exists
+    });
   };
 
   const handleEditChange = (e) => {
     const { name, value } = e.target;
     setEditData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleBarberChange = (selectedOption) => {
+    setEditData((prev) => ({ ...prev, barber: selectedOption.value }));
   };
 
   const handleEditSubmit = async (id) => {
@@ -95,14 +109,10 @@ const CustomersPage = () => {
     copyText: `${customer.name} - ${customer.phoneNumber}`, // Copyable text
   }));
 
-  const handleSelectCustomer = (selectedOption) => {
-    if (selectedOption) {
-      navigator.clipboard
-        .writeText(selectedOption.copyText)
-        .then(() => alert("Copied to clipboard: " + selectedOption.copyText))
-        .catch((err) => console.error("Failed to copy text: ", err));
-    }
-  };
+  const barberOptions = [
+    { value: "ΛΕΜΟ", label: "ΛΕΜΟ", color: "#7C3AED" },
+    { value: "ΦΟΡΟΥ", label: "ΦΟΡΟΥ", color: "orange" },
+  ];
 
   return (
     <div className="p-6 relative">
@@ -153,7 +163,7 @@ const CustomersPage = () => {
               : customers.map((customer) => (
                   <li
                     key={customer._id}
-                    className={`flex justify-between items-center border-b pb-2 ${
+                    className={`flex justify-between items-center text-black border-b pb-2 ${
                       customer.barber === "ΛΕΜΟ"
                         ? "text-purple-600"
                         : customer.barber === "ΦΟΡΟΥ"
@@ -178,11 +188,56 @@ const CustomersPage = () => {
                           onChange={handleEditChange}
                           className="p-1 rounded border ml-2 bg-white text-black"
                         />
+                        <Select
+                          options={barberOptions}
+                          placeholder="Επιλέξτε Barber"
+                          value={barberOptions.find(
+                            (option) => option.value === editData.barber
+                          )}
+                          onChange={handleBarberChange}
+                          className="ml-2"
+                          styles={{
+                            control: (provided) => ({
+                              ...provided,
+                              borderColor:
+                                editData.barber === "ΛΕΜΟ"
+                                  ? "#7C3AED"
+                                  : editData.barber === "ΦΟΡΟΥ"
+                                  ? "orange"
+                                  : "#ccc",
+                            }),
+                            singleValue: (provided, state) => ({
+                              ...provided,
+                              color:
+                                state.data.value === "ΛΕΜΟ"
+                                  ? "#7C3AED"
+                                  : state.data.value === "ΦΟΡΟΥ"
+                                  ? "orange"
+                                  : "#000",
+                            }),
+                            option: (provided, state) => ({
+                              ...provided,
+                              color:
+                                state.data.value === "ΛΕΜΟ"
+                                  ? "#7C3AED"
+                                  : state.data.value === "ΦΟΡΟΥ"
+                                  ? "orange"
+                                  : "#000",
+                              backgroundColor: state.isFocused
+                                ? state.data.value === "ΛΕΜΟ"
+                                  ? "#E9D5FF"
+                                  : state.data.value === "ΦΟΡΟΥ"
+                                  ? "#FFDAB9"
+                                  : "#f3f3f3"
+                                : "#fff",
+                            }),
+                          }}
+                        />
                         <button
                           onClick={() => handleEditSubmit(customer._id)}
                           className="ml-2 px-2 py-1 bg-green-500 text-white rounded"
                         >
-                          Save
+                          ΑΠΟΘΗΚΕΥΣΗ
                         </button>
                       </div>
                     ) : (
