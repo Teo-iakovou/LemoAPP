@@ -19,18 +19,31 @@ const CustomersPage = () => {
   });
   const [isLoading, setIsLoading] = useState(true); // Loading state
 
+  // Mapping barbers to their corresponding text colors
+  const barberColors = {
+    ΛΕΜΟ: "text-purple-600", // Barber ΛΕΜΟ gets purple text
+    ΦΟΡΟΥ: "text-orange-500", // Barber ΦΟΡΟΥ gets orange text
+  };
+
   // Fetch customers from backend
   useEffect(() => {
     const loadCustomers = async () => {
       try {
         const customerData = await fetchCustomers();
-        console.log("Fetched customers:", customerData); // Verify barber field
 
-        setCustomers(customerData.sort((a, b) => a.name.localeCompare(b.name)));
+        // Assign barberColor dynamically based on barber value
+        const updatedCustomers = customerData.map((customer) => ({
+          ...customer,
+          barberColor: barberColors[customer.barber] || "text-white", // Default to white if barber is not set
+        }));
+
+        setCustomers(
+          updatedCustomers.sort((a, b) => a.name.localeCompare(b.name))
+        );
       } catch (error) {
         console.error("Error fetching customers:", error);
       } finally {
-        setIsLoading(false); // Set loading to false after fetching
+        setIsLoading(false);
       }
     };
     loadCustomers();
@@ -58,13 +71,13 @@ const CustomersPage = () => {
     }
   };
 
-  // Edit customer
+  // Enable edit mode for a specific customer
   const handleEditClick = (customer) => {
-    setEditMode(customer._id); // Enable edit mode for this customer
+    setEditMode(customer._id);
     setEditData({
       name: customer.name,
       phoneNumber: customer.phoneNumber,
-      barber: customer.barber || "", // Set barber if it exists
+      barber: customer.barber || "",
     });
   };
 
@@ -77,6 +90,7 @@ const CustomersPage = () => {
     setEditData((prev) => ({ ...prev, barber: selectedOption.value }));
   };
 
+  // Submit the edited customer data
   const handleEditSubmit = async (id) => {
     try {
       const response = await fetch(`${API_BASE_URL}/customers/${id}`, {
@@ -86,15 +100,25 @@ const CustomersPage = () => {
         },
         body: JSON.stringify(editData),
       });
+
       if (!response.ok) {
         throw new Error("Failed to update customer");
       }
+
       const updatedCustomer = await response.json();
+
+      // Assign the correct barberColor dynamically based on the updated barber
+      const updatedCustomerWithColor = {
+        ...updatedCustomer,
+        barberColor: barberColors[updatedCustomer.barber] || "text-white",
+      };
+
       setCustomers((prev) =>
         prev.map((customer) =>
-          customer._id === id ? updatedCustomer : customer
+          customer._id === id ? updatedCustomerWithColor : customer
         )
       );
+
       setEditMode(null); // Exit edit mode
       alert("Customer updated successfully.");
     } catch (error) {
@@ -106,12 +130,11 @@ const CustomersPage = () => {
   const customerOptions = customers.map((customer) => ({
     value: customer._id,
     label: `${customer.name} - ${customer.phoneNumber}`,
-    copyText: `${customer.name} - ${customer.phoneNumber}`, // Copyable text
   }));
 
   const barberOptions = [
-    { value: "ΛΕΜΟ", label: "ΛΕΜΟ", color: "#7C3AED" },
-    { value: "ΦΟΡΟΥ", label: "ΦΟΡΟΥ", color: "orange" },
+    { value: "ΛΕΜΟ", label: "ΛΕΜΟ" },
+    { value: "ΦΟΡΟΥ", label: "ΦΟΡΟΥ" },
   ];
 
   return (
@@ -124,145 +147,85 @@ const CustomersPage = () => {
         <p className="text-white">ΔΕΝ ΒΡΕΘΗΚΑΝ ΠΕΛΑΤΕΣ.</p>
       ) : (
         <div>
-          {/* Scrollable Dropdown */}
           <div className="mb-4 w-full max-w-md">
-            {isLoading ? (
-              <Skeleton height={30} />
-            ) : (
-              <Select
-                options={customerOptions}
-                placeholder="Αναζήτηση Πελάτη"
-                isClearable
-                isSearchable
-                styles={{
-                  menu: (provided) => ({
-                    ...provided,
-                    maxHeight: "400px",
-                    overflowY: "auto", // Fix overflow behavior
-                  }),
-                }}
-              />
-            )}
+            <Select
+              options={customerOptions}
+              placeholder="Αναζήτηση Πελάτη"
+              isClearable
+              isSearchable
+              styles={{
+                menu: (provided) => ({
+                  ...provided,
+                  maxHeight: "400px",
+                  overflowY: "auto",
+                }),
+              }}
+            />
           </div>
 
-          {/* List of all customers */}
           <ul
             className="space-y-2 overflow-y-auto"
             style={{ maxHeight: "400px" }}
           >
-            {isLoading
-              ? Array(5)
-                  .fill()
-                  .map((_, index) => (
-                    <Skeleton
-                      key={index}
-                      height={30}
-                      className="rounded mb-2"
+            {customers.map((customer) => (
+              <li
+                key={customer._id}
+                className={`flex justify-between items-center border-b pb-2 ${customer.barberColor}`}
+              >
+                {editMode === customer._id ? (
+                  <div className="flex-grow">
+                    <input
+                      type="text"
+                      name="name"
+                      value={editData.name}
+                      onChange={handleEditChange}
+                      className="p-1 rounded border bg-white text-black"
                     />
-                  ))
-              : customers.map((customer) => (
-                  <li
-                    key={customer._id}
-                    className={`flex justify-between items-center text-black border-b pb-2 ${
-                      customer.barber === "ΛΕΜΟ"
-                        ? "text-purple-600"
-                        : customer.barber === "ΦΟΡΟΥ"
-                        ? "text-orange-500"
-                        : "text-white"
-                    }`}
+                    <input
+                      type="text"
+                      name="phoneNumber"
+                      value={editData.phoneNumber}
+                      onChange={handleEditChange}
+                      className="p-1 rounded border ml-2 bg-white text-black"
+                    />
+                    <Select
+                      options={barberOptions}
+                      placeholder="Επιλέξτε Barber"
+                      value={barberOptions.find(
+                        (option) => option.value === editData.barber
+                      )}
+                      onChange={handleBarberChange}
+                      className="h-10 w-48"
+                    />
+                    <button
+                      onClick={() => handleEditSubmit(customer._id)}
+                      className="px-2 py-1 bg-green-500 text-white rounded"
+                    >
+                      ΑΠΟΘΗΚΕΥΣΗ
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex-grow">
+                    <span className="font-medium">{customer.name}</span>
+                    <span className="ml-4">{customer.phoneNumber}</span>
+                  </div>
+                )}
+                <div className="flex space-x-2">
+                  <button
+                    onClick={() => handleEditClick(customer)}
+                    className="text-blue-500 hover:text-blue-700"
                   >
-                    {editMode === customer._id ? (
-                      <div className="flex-grow">
-                        {/* Edit Mode */}
-                        <input
-                          type="text"
-                          name="name"
-                          value={editData.name}
-                          onChange={handleEditChange}
-                          className="p-1 rounded border bg-white text-black"
-                        />
-                        <input
-                          type="text"
-                          name="phoneNumber"
-                          value={editData.phoneNumber}
-                          onChange={handleEditChange}
-                          className="p-1 rounded border ml-2 bg-white text-black"
-                        />
-                        <Select
-                          options={barberOptions}
-                          placeholder="Επιλέξτε Barber"
-                          value={barberOptions.find(
-                            (option) => option.value === editData.barber
-                          )}
-                          onChange={handleBarberChange}
-                          className="ml-2"
-                          styles={{
-                            control: (provided) => ({
-                              ...provided,
-                              borderColor:
-                                editData.barber === "ΛΕΜΟ"
-                                  ? "#7C3AED"
-                                  : editData.barber === "ΦΟΡΟΥ"
-                                  ? "orange"
-                                  : "#ccc",
-                            }),
-                            singleValue: (provided, state) => ({
-                              ...provided,
-                              color:
-                                state.data.value === "ΛΕΜΟ"
-                                  ? "#7C3AED"
-                                  : state.data.value === "ΦΟΡΟΥ"
-                                  ? "orange"
-                                  : "#000",
-                            }),
-                            option: (provided, state) => ({
-                              ...provided,
-                              color:
-                                state.data.value === "ΛΕΜΟ"
-                                  ? "#7C3AED"
-                                  : state.data.value === "ΦΟΡΟΥ"
-                                  ? "orange"
-                                  : "#000",
-                              backgroundColor: state.isFocused
-                                ? state.data.value === "ΛΕΜΟ"
-                                  ? "#E9D5FF"
-                                  : state.data.value === "ΦΟΡΟΥ"
-                                  ? "#FFDAB9"
-                                  : "#f3f3f3"
-                                : "#fff",
-                            }),
-                          }}
-                        />
-                        <button
-                          onClick={() => handleEditSubmit(customer._id)}
-                          className="ml-2 px-2 py-1 bg-green-500 text-white rounded"
-                        >
-                          ΑΠΟΘΗΚΕΥΣΗ
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="flex-grow">
-                        {/* Display Mode */}
-                        <span className="font-medium">{customer.name}</span>
-                        <span className="ml-4">{customer.phoneNumber}</span>
-                      </div>
-                    )}
-                    <div className="flex space-x-2">
-                      <button
-                        onClick={() => handleEditClick(customer)}
-                        className="text-blue-500 hover:text-blue-700"
-                      >
-                        <FaEdit size={20} />
-                      </button>
-                      <button
-                        onClick={() => deleteCustomer(customer._id)}
-                        className="text-red-500 hover:text-red-700"
-                      >
-                        <FaTrash size={20} />
-                      </button>
-                    </div>
-                  </li>
-                ))}
+                    <FaEdit size={20} />
+                  </button>
+                  <button
+                    onClick={() => deleteCustomer(customer._id)}
+                    className="text-red-500 hover:text-red-700"
+                  >
+                    <FaTrash size={20} />
+                  </button>
+                </div>
+              </li>
+            ))}
           </ul>
         </div>
       )}

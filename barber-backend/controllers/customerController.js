@@ -63,10 +63,16 @@ const getCustomerCounts = async (req, res, next) => {
 // Get all customers
 const getCustomers = async (req, res, next) => {
   try {
+    // Define barber colors
+    const barberColors = {
+      ΛΕΜΟ: "text-purple-600",
+      ΦΟΡΟΥ: "text-orange-500",
+    };
+
     // Fetch all customers
     const customers = await Customer.find().sort({ name: 1 }).lean();
 
-    // Fetch the latest barber information for each customer
+    // Fetch the latest barber information for each customer and calculate color
     const customersWithBarber = await Promise.all(
       customers.map(async (customer) => {
         // Get the most recent appointment for this customer
@@ -76,14 +82,21 @@ const getCustomers = async (req, res, next) => {
           .sort({ appointmentDateTime: -1 }) // Sort by appointment date in descending order
           .lean();
 
+        // Determine the barber and color
+        const barber = latestAppointment
+          ? latestAppointment.barber
+          : customer.barber;
+        const color = barber ? barberColors[barber] : "text-white"; // Default to white if no barber
+
         return {
           ...customer,
-          barber: latestAppointment ? latestAppointment.barber : null, // Include barber info if available
+          barber, // Use the barber from the latest appointment if available
+          barberColor: color, // Include the dynamically calculated color
         };
       })
     );
 
-    // Respond with customers and their associated barber information
+    // Respond with customers and their associated barber and color information
     res.status(200).json(customersWithBarber);
   } catch (error) {
     console.error("Error fetching customers with barber info:", error);
@@ -142,10 +155,19 @@ const updateCustomer = async (req, res) => {
         .json({ error: "Invalid barber value. Must be 'ΛΕΜΟ' or 'ΦΟΡΟΥ'." });
     }
 
-    // Find and update the customer
+    // Define barber colors
+    const barberColors = {
+      ΛΕΜΟ: "#7C3AED", // Purple for ΛΕΜΟ
+      ΦΟΡΟΥ: "orange", // Orange for ΦΟΡΟΥ
+    };
+
+    // Assign color dynamically based on barber
+    const color = barber ? barberColors[barber] || "#ffffff" : "#ffffff";
+
+    // Find and update the customer, including the color
     const updatedCustomer = await Customer.findByIdAndUpdate(
       id,
-      { name, phoneNumber, barber }, // Include barber in the update
+      { name, phoneNumber, barber, color }, // Include color in the update
       { new: true, runValidators: true } // Return updated document and run validation
     );
 
