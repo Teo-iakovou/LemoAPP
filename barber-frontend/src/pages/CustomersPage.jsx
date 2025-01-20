@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { fetchCustomers } from "../utils/api";
 import Select from "react-select";
 import { FaTrash, FaEdit } from "react-icons/fa";
@@ -18,6 +18,7 @@ const CustomersPage = () => {
     barber: "",
   });
   const [isLoading, setIsLoading] = useState(true); // Loading state
+  const editRef = useRef(null); // Ref to track clicks outside the edit form
 
   // Mapping barbers to their corresponding text colors
   const barberColors = {
@@ -47,6 +48,20 @@ const CustomersPage = () => {
       }
     };
     loadCustomers();
+  }, []);
+
+  // Click outside handler to exit edit mode
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (editRef.current && !editRef.current.contains(event.target)) {
+        setEditMode(null);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
   }, []);
 
   // Delete customer
@@ -154,10 +169,34 @@ const CustomersPage = () => {
               isClearable
               isSearchable
               styles={{
-                menu: (provided) => ({
-                  ...provided,
-                  maxHeight: "400px",
-                  overflowY: "auto",
+                control: (base) => ({
+                  ...base,
+                  backgroundColor: "#1e293b",
+                  color: "white",
+                  borderColor: "#3b82f6",
+                  borderRadius: "8px",
+                  padding: "5px",
+                  fontSize: "14px",
+                }),
+                menu: (base) => ({
+                  ...base,
+                  backgroundColor: "#1e293b",
+                  color: "white",
+                  borderRadius: "8px",
+                }),
+                option: (base, state) => ({
+                  ...base,
+                  backgroundColor: state.isFocused ? "#3b82f6" : "#1e293b",
+                  color: "white",
+                  padding: "10px",
+                }),
+                singleValue: (base) => ({
+                  ...base,
+                  color: "white",
+                }),
+                placeholder: (base) => ({
+                  ...base,
+                  color: "#9ca3af",
                 }),
               }}
             />
@@ -173,20 +212,20 @@ const CustomersPage = () => {
                 className={`flex justify-between items-center border-b pb-2 ${customer.barberColor}`}
               >
                 {editMode === customer._id ? (
-                  <div className="flex-grow">
+                  <div className="flex-grow" ref={editRef}>
                     <input
                       type="text"
                       name="name"
                       value={editData.name}
                       onChange={handleEditChange}
-                      className="p-1 rounded border bg-white text-black"
+                      className="p-2 rounded border bg-white text-black"
                     />
                     <input
                       type="text"
                       name="phoneNumber"
                       value={editData.phoneNumber}
                       onChange={handleEditChange}
-                      className="p-1 rounded border ml-2 bg-white text-black"
+                      className="p-2 rounded border ml-2 bg-white text-black"
                     />
                     <Select
                       options={barberOptions}
@@ -195,8 +234,41 @@ const CustomersPage = () => {
                         (option) => option.value === editData.barber
                       )}
                       onChange={handleBarberChange}
-                      className="h-10 w-48"
+                      styles={{
+                        control: (base) => ({
+                          ...base,
+                          backgroundColor: "#1e293b", // Dark background
+                          color: "white", // White text for better contrast
+                          borderColor: "#3b82f6", // Blue border
+                          borderRadius: "8px", // Rounded corners
+                          padding: "5px",
+                          fontSize: "14px",
+                        }),
+                        menu: (base) => ({
+                          ...base,
+                          backgroundColor: "#1e293b", // Dark dropdown menu background
+                          color: "white", // White text
+                          borderRadius: "8px",
+                        }),
+                        option: (base, state) => ({
+                          ...base,
+                          backgroundColor: state.isFocused
+                            ? "#3b82f6"
+                            : "#1e293b", // Blue on hover
+                          color: "white", // White text
+                          padding: "10px",
+                        }),
+                        singleValue: (base) => ({
+                          ...base,
+                          color: "white", // White text for selected value
+                        }),
+                        placeholder: (base) => ({
+                          ...base,
+                          color: "#9ca3af", // Light gray for placeholder text
+                        }),
+                      }}
                     />
+
                     <button
                       onClick={() => handleEditSubmit(customer._id)}
                       className="px-2 py-1 bg-green-500 text-white rounded"
