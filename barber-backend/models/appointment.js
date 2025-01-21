@@ -14,20 +14,9 @@ const appointmentSchema = new mongoose.Schema({
     type: Date,
     required: true,
     validate: {
-      validator: function (v) {
-        return v > new Date(); // Ensure appointment is in the future
-      },
+      validator: (v) => v > new Date(), // Ensure appointment is in the future
       message: "Appointment date must be in the future",
     },
-  },
-  duration: {
-    type: Number,
-    required: true,
-    default: 40, // Default to 40 minutes
-  },
-  endTime: {
-    type: Date,
-    required: true,
   },
   barber: {
     type: String,
@@ -47,44 +36,38 @@ const appointmentSchema = new mongoose.Schema({
   ],
 });
 
-// Pre-save middleware to calculate endTime based on a fixed 40-minute duration
+// Middleware to calculate and set `endTime` before saving
 appointmentSchema.pre("save", function (next) {
-  const appointmentDate = new Date(this.appointmentDateTime);
-
-  // Set fixed duration
-  this.duration = 40;
-
-  // Calculate end time based on duration
-  this.endTime = new Date(
-    appointmentDate.getTime() + this.duration * 60 * 1000
-  );
-
-  next();
-});
-
-// Pre-update middleware to handle `findByIdAndUpdate` and similar methods
-appointmentSchema.pre("findOneAndUpdate", function (next) {
-  const update = this.getUpdate();
-
-  if (update.appointmentDateTime) {
-    const appointmentStart = new Date(update.appointmentDateTime);
-
-    // Ensure `appointmentDateTime` is valid and in the future
-    if (isNaN(appointmentStart) || appointmentStart <= new Date()) {
-      return next(new Error("Invalid or past appointmentDateTime"));
-    }
-
-    // Recalculate `endTime` based on the updated `appointmentDateTime`
-    update.endTime = new Date(
-      appointmentStart.getTime() + (update.duration || 40) * 60 * 1000
+  if (this.isModified("appointmentDateTime")) {
+    this.endTime = new Date(
+      new Date(this.appointmentDateTime).getTime() + 40 * 60 * 1000 // Default 40 minutes duration
     );
   }
-
   next();
 });
 
-// Add an index to optimize status-based queries
+// Add indexes for optimized queries
 appointmentSchema.index({ appointmentStatus: 1 });
 appointmentSchema.index({ appointmentDateTime: 1 });
+
+/**
+ * Check if a reminder has already been sent for the given type.
+ * @param {String} type - Reminder type (e.g., "24-hour", "7-day")
+ * @returns {Boolean} - True if reminder of this type was already sent.
+ */
+appointmentSchema.methods.isReminderSent = function (type) {
+  return this.reminders.some(
+    (reminder) => reminder.type === type && reminder.sentAt
+  );
+};
+
+/**
+ * Log a reminder as sent.
+ * @param {String} type - Reminder type
+ */
+appointmentSchema.methods.logReminder = function (type) {
+  this.reminders.push({ type, sentAt: new Date() });
+  return this.save();
+};
 
 module.exports = mongoose.model("Appointment", appointmentSchema);
