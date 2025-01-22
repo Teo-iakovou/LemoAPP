@@ -12,16 +12,24 @@ import {
 
 ChartJS.register(BarElement, CategoryScale, LinearScale, Title, Tooltip);
 
-const CustomerCounts = () => {
-  const [isAuthenticated, setIsAuthenticated] = useState(false); // Track authentication
-  const [authError, setAuthError] = useState(""); // For authentication errors
-  const [username, setUsername] = useState(""); // Input username
-  const [password, setPassword] = useState(""); // Input password
+const getWeek = (date) => {
+  const firstDayOfYear = new Date(date.getFullYear(), 0, 1);
+  const pastDaysOfYear = (date - firstDayOfYear + 86400000) / 86400000;
+  return Math.ceil((pastDaysOfYear + firstDayOfYear.getDay() + 1) / 7);
+};
 
-  const [counts, setCounts] = useState(null);
+const CustomerCounts = () => {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [authError, setAuthError] = useState("");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+
+  const [counts, setCounts] = useState(null); // Monthly counts
+  const [weeklyCounts, setWeeklyCounts] = useState(null); // Weekly counts
   const [month, setMonth] = useState(new Date().getMonth());
   const [year, setYear] = useState(new Date().getFullYear());
   const [error, setError] = useState(null);
+  const [view, setView] = useState("monthly"); // Track the current view
 
   const API_BASE_URL =
     import.meta.env.VITE_API_BASE_URL || "http://localhost:5001/api";
@@ -41,13 +49,12 @@ const CustomerCounts = () => {
     "Δεκέμβριος",
   ];
 
-  // Fetch counts from the backend
   const fetchCounts = async () => {
     try {
-      const token = localStorage.getItem("token"); // Retrieve the stored token
+      const token = localStorage.getItem("token");
       const response = await axios.get(`${API_BASE_URL}/CustomerCounts`, {
         params: { month, year },
-        headers: { Authorization: `Bearer ${token}` }, // Include the token in the headers
+        headers: { Authorization: `Bearer ${token}` },
       });
       setCounts(response.data.counts);
     } catch (err) {
@@ -56,13 +63,28 @@ const CustomerCounts = () => {
     }
   };
 
+  const fetchWeeklyCounts = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const currentWeek = getWeek(new Date());
+      const response = await axios.get(`${API_BASE_URL}/WeeklyCustomerCounts`, {
+        params: { week: currentWeek, year },
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setWeeklyCounts(response.data.weeklyCounts);
+    } catch (err) {
+      console.error("Error fetching weekly customer counts:", err);
+      setError("Failed to fetch weekly customer counts.");
+    }
+  };
+
   useEffect(() => {
     if (isAuthenticated) {
       fetchCounts();
+      fetchWeeklyCounts();
     }
   }, [isAuthenticated, month, year]);
 
-  // Handle login submission
   const handleLogin = async (e) => {
     e.preventDefault();
     try {
@@ -70,40 +92,38 @@ const CustomerCounts = () => {
         username,
         password,
       });
-      localStorage.setItem("token", response.data.token); // Store token
-      setIsAuthenticated(true); // Mark as authenticated
-      setAuthError(""); // Clear any previous authentication errors
+      localStorage.setItem("token", response.data.token);
+      setIsAuthenticated(true);
+      setAuthError("");
     } catch (err) {
       console.error("Authentication failed:", err);
-
-      // Check for specific error response
-      if (err.response) {
-        // If the backend sends specific error messages
-        if (err.response.status === 400) {
-          setAuthError("Invalid username or password.");
-        } else if (err.response.status === 500) {
-          setAuthError("Server error. Please try again later.");
-        } else {
-          setAuthError("An unexpected error occurred. Please try again.");
-        }
-      } else {
-        // Handle network or other unexpected errors
-        setAuthError(
-          "Unable to connect to the server. Please check your network."
-        );
-      }
+      setAuthError(
+        err.response?.data?.message || "An unexpected error occurred."
+      );
     }
   };
 
-  // Prepare chart data
   const chartData = counts
     ? {
         labels: ["ΛΕΜΟ", "ΦΟΡΟΥ"],
         datasets: [
           {
-            label: `Customer Counts for ${months[month]} ${year}`,
+            label: `Monthly Customer Counts for ${months[month]} ${year}`,
             data: [counts["ΛΕΜΟ"], counts["ΦΟΡΟΥ"]],
             backgroundColor: ["#6A0DAD", "#9B59B6"],
+          },
+        ],
+      }
+    : null;
+
+  const weeklyChartData = weeklyCounts
+    ? {
+        labels: ["ΛΕΜΟ", "ΦΟΡΟΥ"],
+        datasets: [
+          {
+            label: `Weekly Customer Counts (Week ${getWeek(new Date())})`,
+            data: [weeklyCounts["ΛΕΜΟ"], weeklyCounts["ΦΟΡΟΥ"]],
+            backgroundColor: ["#1E90FF", "#00CED1"],
           },
         ],
       }
@@ -179,34 +199,60 @@ const CustomerCounts = () => {
 
   return (
     <div className="fixed inset-0 bg-gray-800 bg-opacity-75 flex flex-col items-center justify-center pt-16">
-      <h1 className="text-2xl font-bold mb-4 text-white">ΜΗΝΙΑΙΟΙ ΠΕΛΑΤΕΣ</h1>
+      <h1 className="text-2xl font-bold mb-4 text-white">ΠΕΛΑΤΕΣ</h1>
       {error && <div className="text-red-500">{error}</div>}
-      <div className="mb-6">
-        <label className="block mb-2 text-white">ΕΠΕΛΕΞΕ ΜΗΝΑ</label>
-        <select
-          value={month}
-          onChange={(e) => setMonth(parseInt(e.target.value, 10))}
-          className="p-2 border rounded-md"
-        >
-          {months.map((m, index) => (
-            <option key={index} value={index}>
-              {m}
-            </option>
-          ))}
-        </select>
+
+      <div className="mb-6 flex items-center space-x-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-300 mb-1">
+            ΕΠΕΛΕΞΕ ΜΗΝΑ
+          </label>
+          <select
+            value={month}
+            onChange={(e) => setMonth(parseInt(e.target.value, 10))}
+            className="p-2 border border-gray-400 rounded-md bg-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            {months.map((m, index) => (
+              <option key={index} value={index}>
+                {m}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-300 mb-1">
+            ΕΠΕΛΕΞΕ ΧΡΟΝΙΑ
+          </label>
+          <input
+            type="number"
+            value={year}
+            onChange={(e) => setYear(parseInt(e.target.value, 10))}
+            className="p-2 border border-gray-400 rounded-md bg-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-300 mb-1">
+            ΕΠΕΛΕΞΕ ΧΡΟΝΟ
+          </label>
+          <select
+            value={view}
+            onChange={(e) => setView(e.target.value)}
+            className="p-2 border border-gray-400 rounded-md bg-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="monthly">Μηνιαία</option>
+            <option value="weekly">Εβδομαδιαία</option>
+          </select>
+        </div>
       </div>
-      <div className="mb-6">
-        <label className="block mb-2 text-white">ΕΠΕΛΕΞΕ ΧΡΟΝΙΑ</label>
-        <input
-          type="number"
-          value={year}
-          onChange={(e) => setYear(parseInt(e.target.value, 10))}
-          className="p-2 border rounded-md"
-        />
-      </div>
-      {counts && (
+
+      {view === "monthly" && counts && (
         <div className="bg-gray-800 p-8 rounded-lg shadow-md w-full max-w-4xl h-[400px] flex items-center justify-center">
           <Bar data={chartData} options={chartOptions} />
+        </div>
+      )}
+      {view === "weekly" && weeklyCounts && (
+        <div className="bg-gray-800 p-8 rounded-lg shadow-md w-full max-w-4xl h-[400px] flex items-center justify-center mt-8">
+          <Bar data={weeklyChartData} options={chartOptions} />
         </div>
       )}
     </div>

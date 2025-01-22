@@ -59,6 +59,60 @@ const getCustomerCounts = async (req, res, next) => {
     next(error);
   }
 };
+const getWeeklyCustomerCounts = async (req, res, next) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader) {
+      return res
+        .status(401)
+        .json({ message: "Authorization header is required" });
+    }
+
+    const token = authHeader.split(" ")[1];
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+    if (decoded.userId !== "676581f2a97ae0e3cf8375e7") {
+      return res
+        .status(403)
+        .json({ message: "Access restricted to authorized user only" });
+    }
+
+    const { year, week } = req.query;
+
+    const startOfWeek = moment()
+      .year(year || moment().year())
+      .week(week || moment().week())
+      .startOf("week");
+    const endOfWeek = startOfWeek.clone().endOf("week");
+
+    const lemoWeeklyCount = await Appointment.countDocuments({
+      barber: "ΛΕΜΟ",
+      appointmentDateTime: {
+        $gte: startOfWeek.toDate(),
+        $lte: endOfWeek.toDate(),
+      },
+    });
+
+    const forouWeeklyCount = await Appointment.countDocuments({
+      barber: "ΦΟΡΟΥ",
+      appointmentDateTime: {
+        $gte: startOfWeek.toDate(),
+        $lte: endOfWeek.toDate(),
+      },
+    });
+
+    res.status(200).json({
+      success: true,
+      weeklyCounts: {
+        ΛΕΜΟ: lemoWeeklyCount,
+        ΦΟΡΟΥ: forouWeeklyCount,
+      },
+    });
+  } catch (error) {
+    console.error("Error fetching weekly customer counts:", error);
+    next(error);
+  }
+};
 
 // Get all customers
 const getCustomers = async (req, res, next) => {
@@ -188,4 +242,5 @@ module.exports = {
   deleteCustomer,
   updateCustomer,
   getCustomerCounts,
+  getWeeklyCustomerCounts,
 };
