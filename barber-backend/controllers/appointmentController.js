@@ -161,8 +161,6 @@ const generateRecurringAppointments = async ({
   return appointments;
 };
 
-module.exports = { createAppointment };
-
 // Get all appointments
 const getAppointments = async (req, res, next) => {
   try {
@@ -221,7 +219,7 @@ const updateAppointment = async (req, res, next) => {
       const formattedDateTime = moment(updatedAppointment.appointmentDateTime)
         .tz("Europe/Athens")
         .format("DD/MM/YYYY HH:mm");
-      const message = `Το ραντεβού σας στο LEMO BARBER SHOP με τον ${barber} έχει αλλάξει στις ${formattedDateTime}.`;
+      const message = `Το ραντεβού σας στο LEMO BARBER SHOP έχει αλλάξει στις ${formattedDateTime}.`;
 
       await sendSMS(phoneNumber || updatedAppointment.phoneNumber, message);
       console.log("Update SMS sent successfully");
