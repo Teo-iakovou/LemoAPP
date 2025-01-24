@@ -221,7 +221,7 @@ const CustomerCounts = () => {
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-300 mb-1">
-            ΕΠΕΛΕΞΕ ΧΡΟΝΙΑ
+            ΕΠΕΛΕΞΕ ΧΡΟΝO
           </label>
           <input
             type="number"
@@ -232,7 +232,7 @@ const CustomerCounts = () => {
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-300 mb-1">
-            ΕΠΕΛΕΞΕ ΧΡΟΝΟ
+            ΕΠΕΛΕΞΕ ΧΡΟΝΙΑ
           </label>
           <select
             value={view}
