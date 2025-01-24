@@ -1,8 +1,7 @@
 const Appointment = require("../models/appointment");
 const { sendSMS } = require("../utils/smsService");
 const moment = require("moment-timezone");
-const LastRun = require("../models/lastRun");
-
+const LastRun = require("../models/LastRun");
 // Function to fetch and persist the last run timestamp in the database
 const getLastRunTimestamp = async () => {
   const lastRun = await LastRun.findOne({ key: "sendReminders" });
