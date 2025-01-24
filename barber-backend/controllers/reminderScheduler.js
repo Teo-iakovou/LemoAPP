@@ -1,7 +1,7 @@
 const Appointment = require("../models/appointment");
 const { sendSMS } = require("../utils/smsService");
 const moment = require("moment-timezone");
-const LastRun = require("../models/lastRun"); // Example model for storing last run timestamp
+const LastRun = require("../models/lastRun");
 
 // Function to fetch and persist the last run timestamp in the database
 const getLastRunTimestamp = async () => {
@@ -21,6 +21,13 @@ const sendReminders = async () => {
   try {
     const now = moment().utc();
 
+    // Fetch the last run timestamp
+    const lastRunTimestamp = await getLastRunTimestamp();
+    console.log("Last run timestamp:", lastRunTimestamp);
+
+    // Save the current run timestamp
+    await saveLastRunTimestamp(now.toDate());
+
     // Define the reminder windows
     const startOf24HourWindow = now.clone().add(24, "hours").startOf("minute");
     const startOf7DayWindow = now.clone().add(7, "days").startOf("minute");
@@ -36,10 +43,10 @@ const sendReminders = async () => {
         $gte: startOf24HourWindow.toDate(),
         $lt: startOf24HourWindow.clone().add(1, "hour").toDate(),
       },
-      "reminderLogs.type": { $ne: "24-hour" }, // Check reminder type
+      "reminderLogs.type": { $ne: "24-hour" },
       $or: [
-        { "reminderLogs.timestamp": { $exists: false } }, // If no reminders exist
-        { "reminderLogs.timestamp": { $lte: cooldownPeriod } }, // Ensure no recent reminders
+        { "reminderLogs.timestamp": { $exists: false } },
+        { "reminderLogs.timestamp": { $lte: cooldownPeriod } },
       ],
     });
 
