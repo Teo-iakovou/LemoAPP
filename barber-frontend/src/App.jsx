@@ -5,6 +5,7 @@ import "./index.css";
 import UpdatePasswordForm from "./pages/UpdatePasswordForm";
 
 // Lazy load pages
+// const PaymentPage = lazy(() => import("./pages/PaymentPage"));
 const Home = lazy(() => import("./pages/Home"));
 const NotePage = lazy(() => import("./pages/NotePage"));
 const CalendarPage = lazy(() => import("./pages/CalendarPage"));
@@ -51,6 +52,7 @@ const App = () => {
                 />
                 <Route path="/profile" element={<Profile />} />
                 <Route path="/NotePage" element={<NotePage />} />
+                {/* <Route path="/payment" element={<PaymentPage />} />; */}
               </Routes>
             ) : (
               <Routes>

@@ -7,25 +7,23 @@ import {
   FaUsers,
   FaClipboard,
   FaBars,
+  FaSms,
 } from "react-icons/fa"; // Import icons
+import Swal from "sweetalert2";
+import withReactContent from "sweetalert2-react-content";
 import LemoLogo from "../assets/LemoLogo.png";
 
 const Navbar = ({ isAuth, onLogout }) => {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false); // Dropdown inside logo
   const dropdownRef = useRef(null); // Ref for dropdown
   const navigate = useNavigate();
-
+  const MySwal = withReactContent(Swal);
   const toggleDropdown = () => {
     setIsDropdownOpen(!isDropdownOpen);
   };
 
   const handleClickOutside = (event) => {
-    // Close dropdown if clicking outside
-    if (
-      dropdownRef.current &&
-      !dropdownRef.current.contains(event.target) &&
-      !event.target.closest(".logo-button")
-    ) {
+    if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
       setIsDropdownOpen(false);
     }
   };
@@ -38,12 +36,34 @@ const Navbar = ({ isAuth, onLogout }) => {
   }, []);
 
   const handleLogout = () => {
-    const confirmLogout = window.confirm("Are you sure you want to log out?");
-    if (confirmLogout) {
-      localStorage.removeItem("token"); // Clear token
-      navigate("/login"); // Redirect to login page
-      onLogout(); // Notify parent
-    }
+    MySwal.fire({
+      title: "Are you sure?",
+      text: "You will be logged out and redirected to the login page.",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#d33",
+      cancelButtonColor: "#3085d6",
+      confirmButtonText: "Yes, log out!",
+      cancelButtonText: "Cancel",
+    }).then((result) => {
+      if (result.isConfirmed) {
+        localStorage.removeItem("token"); // Clear token
+        navigate("/"); // Redirect to login page
+        onLogout(); // Notify parent
+        setIsDropdownOpen(false); // Close dropdown
+        MySwal.fire({
+          title: "Logged Out",
+          text: "You have successfully logged out.",
+          icon: "success",
+          timer: 1500,
+          showConfirmButton: false,
+        });
+      }
+    });
+  };
+
+  const handleRedirectToSmsTo = () => {
+    window.open("https://sms.to/app#/add-funds", "_blank"); // Open in new tab
   };
 
   return (
@@ -59,83 +79,95 @@ const Navbar = ({ isAuth, onLogout }) => {
         </Link>
       </div>
 
-      {/* Navigation Icons */}
-      <ul className="flex space-x-6 text-white text-xl">
-        <li>
-          <Link
-            to="/"
-            className="hover:text-blue-500 transition-colors duration-300"
-          >
-            <FaHome />
-          </Link>
-        </li>
-        <li>
-          <Link
-            to="/calendar"
-            className="hover:text-blue-500 transition-colors duration-300"
-          >
-            <FaCalendarAlt />
-          </Link>
-        </li>
-        <li>
-          <Link
-            to="/customers"
-            className="hover:text-blue-500 transition-colors duration-300"
-          >
-            <FaUsers />
-          </Link>
-        </li>
-        <li>
-          <Link
-            to="/CustomerCounts"
-            className="hover:text-blue-500 transition-colors duration-300"
-          >
-            <FaChartBar />
-          </Link>
-        </li>
-        <li>
-          <Link
-            to="/NotePage"
-            className="hover:text-blue-500 transition-colors duration-300"
-          >
-            <FaClipboard />
-          </Link>
-        </li>
-      </ul>
-
-      {/* Profile Dropdown */}
-      <div className="relative" ref={dropdownRef}>
-        <button
-          className="menu-button text-white text-2xl hover:text-blue-500 transition-colors duration-300"
-          onClick={toggleDropdown}
-        >
-          <FaBars />
-        </button>
-        {isDropdownOpen && (
-          <div className="absolute top-12 right-0 bg-white shadow-lg rounded-3xl py-3 px-4 w-40 z-50 border border-gray-200">
+      {/* Navigation Icons - Render only if authenticated */}
+      {isAuth && (
+        <ul className="flex space-x-6 text-white text-xl">
+          <li>
             <Link
-              to="/profile"
-              className="block px-4 py-2 text-gray-700 hover:bg-gray-100 rounded"
-              onClick={() => setIsDropdownOpen(false)}
+              to="/"
+              className="hover:text-blue-500 transition-colors duration-300"
             >
-              ΠΡΟΦΙΛ
+              <FaHome />
             </Link>
+          </li>
+          <li>
             <Link
-              to="/update-password"
-              className="block px-4 py-2 text-gray-700 hover:bg-gray-100 rounded"
-              onClick={() => setIsDropdownOpen(false)}
+              to="/calendar"
+              className="hover:text-blue-500 transition-colors duration-300"
             >
-              ΑΛΛΑΓΗ ΚΩΔΙΚΟΥ
+              <FaCalendarAlt />
             </Link>
+          </li>
+          <li>
+            <Link
+              to="/customers"
+              className="hover:text-blue-500 transition-colors duration-300"
+            >
+              <FaUsers />
+            </Link>
+          </li>
+          <li>
+            <Link
+              to="/CustomerCounts"
+              className="hover:text-blue-500 transition-colors duration-300"
+            >
+              <FaChartBar />
+            </Link>
+          </li>
+          <li>
+            <Link
+              to="/NotePage"
+              className="hover:text-blue-500 transition-colors duration-300"
+            >
+              <FaClipboard />
+            </Link>
+          </li>
+          <li>
             <button
-              onClick={handleLogout}
-              className="w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100 rounded"
+              onClick={handleRedirectToSmsTo}
+              className="hover:text-blue-500 transition-colors duration-300 text-white"
             >
-              ΕΞΟΔΟΣ
+              <FaSms />
             </button>
-          </div>
-        )}
-      </div>
+          </li>
+        </ul>
+      )}
+
+      {/* Profile Dropdown - Render only if authenticated */}
+      {isAuth && (
+        <div className="relative" ref={dropdownRef}>
+          <button
+            className="menu-button text-white text-2xl hover:text-blue-500 transition-colors duration-300"
+            onClick={toggleDropdown}
+          >
+            <FaBars />
+          </button>
+          {isDropdownOpen && (
+            <div className="absolute top-12 right-0 bg-white shadow-lg rounded-3xl py-3 px-4 w-40 z-50 border border-gray-200">
+              <Link
+                to="/profile"
+                className="block px-4 py-2 text-gray-700 hover:bg-gray-100 rounded"
+                onClick={() => setIsDropdownOpen(false)}
+              >
+                ΠΡΟΦΙΛ
+              </Link>
+              <Link
+                to="/update-password"
+                className="block px-4 py-2 text-gray-700 hover:bg-gray-100 rounded"
+                onClick={() => setIsDropdownOpen(false)}
+              >
+                ΑΛΛΑΓΗ ΚΩΔΙΚΟΥ
+              </Link>
+              <button
+                onClick={handleLogout}
+                className="w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100 rounded"
+              >
+                ΕΞΟΔΟΣ
+              </button>
+            </div>
+          )}
+        </div>
+      )}
     </nav>
   );
 };
