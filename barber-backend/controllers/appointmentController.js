@@ -25,16 +25,16 @@ const createAppointment = async (req, res, next) => {
 
     // Validate appointment date
     const appointmentDateUTC = moment(appointmentDateTime).utc();
-    if (
-      !appointmentDateUTC.isValid() ||
-      appointmentDateUTC.isBefore(moment().utc())
-    ) {
-      return res
-        .status(400)
-        .json({ message: "Invalid or past appointment date." });
+    if (!appointmentDateUTC.isValid()) {
+      return res.status(400).json({ message: "Invalid appointment date." });
     }
 
-    // Convert to Athens time for logging and SMS
+    // Check if the appointment is for a past date
+    const isPastDate = appointmentDateUTC.isBefore(moment().utc());
+    if (isPastDate) {
+      console.log("Appointment is in the past. Skipping SMS notification.");
+    }
+    // Convert to Athens time for logging
     const appointmentDateAthens = appointmentDateUTC
       .clone()
       .tz("Europe/Athens");
@@ -69,15 +69,22 @@ const createAppointment = async (req, res, next) => {
     });
     const savedAppointment = await newAppointment.save();
 
-    // Send confirmation SMS
-    try {
-      const formattedLocalTime =
-        appointmentDateAthens.format("DD/MM/YYYY HH:mm");
-      const message = `Επιβεβαιώνουμε το ραντεβού σας στο LEMO BARBER SHOP με τον ${barber} για τις ${formattedLocalTime}!`;
-      await sendSMS(phoneNumber, message);
-      console.log("Confirmation SMS sent successfully.");
-    } catch (smsError) {
-      console.error("Failed to send confirmation SMS:", smsError.message);
+    // Send confirmation SMS only for future appointments
+    if (!isPastDate) {
+      try {
+        const formattedLocalTime =
+          appointmentDateAthens.format("DD/MM/YYYY HH:mm");
+        const message = `Επιβεβαιώνουμε το ραντεβού σας στο LEMO BARBER SHOP με τον ${barber} για τις ${formattedLocalTime}!`;
+        await sendSMS(phoneNumber, message);
+        console.log("Confirmation SMS sent successfully.");
+      } catch (smsError) {
+        console.error("Failed to send confirmation SMS:", smsError.message);
+      }
+    } else {
+      console.log(
+        "Appointment is in the past. SMS notification skipped for:",
+        phoneNumber
+      );
     }
 
     // Generate recurring appointments if applicable

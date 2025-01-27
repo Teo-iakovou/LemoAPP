@@ -79,7 +79,7 @@ function AppointmentForm({
     const formattedAppointmentDateTime = appointmentDateTime
       ? new Date(appointmentDateTime).toISOString()
       : null;
-
+    const isPastDate = new Date(appointmentDateTime) < new Date();
     const appointmentDetails = {
       ...appointmentData, // Preserve existing data (e.g., `_id`) for editing
       customerName: data.customerName,
@@ -90,6 +90,7 @@ function AppointmentForm({
       recurrence: recurrence !== "none" ? recurrence : null,
       repeatWeeks: recurrence === "weekly" ? parseInt(weeksOption) : null,
       repeatMonths: recurrence === "monthly" ? parseInt(monthsOption) : null,
+      isPastDate,
     };
 
     console.log("Submitting Appointment Data:", appointmentDetails);
