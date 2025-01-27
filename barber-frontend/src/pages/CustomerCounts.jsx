@@ -18,6 +18,31 @@ const getWeek = (date) => {
   return Math.ceil((pastDaysOfYear + firstDayOfYear.getDay() + 1) / 7);
 };
 
+const getWeeksInMonth = (month, year) => {
+  const firstDay = new Date(year, month, 1);
+  const lastDay = new Date(year, month + 1, 0);
+  const weeks = [];
+
+  let currentWeek = getWeek(firstDay);
+  let startOfWeek = new Date(firstDay); // Clone the first day
+
+  while (startOfWeek <= lastDay) {
+    const endOfWeek = new Date(startOfWeek);
+    endOfWeek.setDate(startOfWeek.getDate() + 6);
+
+    weeks.push({
+      week: currentWeek,
+      startDate: new Date(startOfWeek),
+      endDate: new Date(Math.min(endOfWeek, lastDay)), // Ensure it doesn't exceed the month's end
+    });
+
+    startOfWeek.setDate(startOfWeek.getDate() + 7);
+    currentWeek++;
+  }
+
+  return weeks;
+};
+
 const CustomerCounts = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [authError, setAuthError] = useState("");
@@ -28,8 +53,24 @@ const CustomerCounts = () => {
   const [weeklyCounts, setWeeklyCounts] = useState(null); // Weekly counts
   const [month, setMonth] = useState(new Date().getMonth());
   const [year, setYear] = useState(new Date().getFullYear());
+  const [week, setWeek] = useState(getWeek(new Date()));
   const [error, setError] = useState(null);
   const [view, setView] = useState("monthly"); // Track the current view
+  const [isWeekStabilized, setIsWeekStabilized] = useState(true);
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      const weeksInMonth = getWeeksInMonth(month, year);
+
+      if (!weeksInMonth.some((w) => w.week === week)) {
+        console.log("Resetting week to:", weeksInMonth[0].week);
+        setIsWeekStabilized(false); // Mark week as not stabilized
+        setWeek(weeksInMonth[0].week); // Update the week
+      } else {
+        setIsWeekStabilized(true); // Mark week as stabilized
+      }
+    }
+  }, [isAuthenticated, month, year]);
 
   const API_BASE_URL =
     import.meta.env.VITE_API_BASE_URL || "http://localhost:5001/api";
@@ -47,6 +88,20 @@ const CustomerCounts = () => {
     "Οκτώβριος",
     "Νοέμβριος",
     "Δεκέμβριος",
+  ];
+  const shortMonths = [
+    "Ιαν", // January
+    "Φεβ", // February
+    "Μαρ", // March
+    "Απρ", // April
+    "Μάι", // May
+    "Ιουν", // June
+    "Ιουλ", // July
+    "Αυγ", // August
+    "Σεπ", // September
+    "Οκτ", // October
+    "Νοέ", // November
+    "Δεκ", // December
   ];
 
   const fetchCounts = async () => {
@@ -66,9 +121,8 @@ const CustomerCounts = () => {
   const fetchWeeklyCounts = async () => {
     try {
       const token = localStorage.getItem("token");
-      const currentWeek = getWeek(new Date());
       const response = await axios.get(`${API_BASE_URL}/WeeklyCustomerCounts`, {
-        params: { week: currentWeek, year },
+        params: { week, year },
         headers: { Authorization: `Bearer ${token}` },
       });
       setWeeklyCounts(response.data.weeklyCounts);
@@ -80,28 +134,33 @@ const CustomerCounts = () => {
 
   useEffect(() => {
     if (isAuthenticated) {
-      fetchCounts();
-      fetchWeeklyCounts();
-    }
-  }, [isAuthenticated, month, year]);
+      const weeksInMonth = getWeeksInMonth(month, year);
 
-  const handleLogin = async (e) => {
-    e.preventDefault();
-    try {
-      const response = await axios.post(`${API_BASE_URL}/auth/signin`, {
-        username,
-        password,
-      });
-      localStorage.setItem("token", response.data.token);
-      setIsAuthenticated(true);
-      setAuthError("");
-    } catch (err) {
-      console.error("Authentication failed:", err);
-      setAuthError(
-        err.response?.data?.message || "An unexpected error occurred."
-      );
+      // Check if the current week is valid
+      if (!weeksInMonth.some((w) => w.week === week)) {
+        console.log("Resetting week to:", weeksInMonth[0].week);
+        setWeek(weeksInMonth[0].week); // Reset to the first valid week
+      }
+
+      // Fetch data based on the current view
+      console.log("Fetching data with", { week, month, year, view });
+      if (view === "monthly") {
+        fetchCounts();
+      } else if (view === "weekly") {
+        fetchWeeklyCounts();
+      }
     }
-  };
+  }, [isAuthenticated, week, month, year, view]);
+
+  // Generate week options dynamically based on the selected month and year
+  const weekOptions = getWeeksInMonth(month, year).map(
+    ({ week, startDate, endDate }) => ({
+      value: week,
+      label: `${startDate.getDate()}-${endDate.getDate()} ${
+        shortMonths[month]
+      }`, // Use short month names
+    })
+  );
 
   const chartData = counts
     ? {
@@ -115,13 +174,19 @@ const CustomerCounts = () => {
         ],
       }
     : null;
+  const greekWeekLabels = Array.from(
+    { length: 53 },
+    (_, i) => `Εβδομάδα ${i + 1}`
+  );
 
   const weeklyChartData = weeklyCounts
     ? {
         labels: ["ΛΕΜΟ", "ΦΟΡΟΥ"],
         datasets: [
           {
-            label: `Weekly Customer Counts (Week ${getWeek(new Date())})`,
+            label: `Εβδομαδιαίος Αριθμός Πελατών (${
+              greekWeekLabels[week - 1]
+            }, ${months[month]} ${year})`,
             data: [weeklyCounts["ΛΕΜΟ"], weeklyCounts["ΦΟΡΟΥ"]],
             backgroundColor: ["#1E90FF", "#00CED1"],
           },
@@ -154,7 +219,23 @@ const CustomerCounts = () => {
       },
     },
   };
-
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    try {
+      const response = await axios.post(`${API_BASE_URL}/auth/signin`, {
+        username,
+        password,
+      });
+      localStorage.setItem("token", response.data.token);
+      setIsAuthenticated(true);
+      setAuthError("");
+    } catch (err) {
+      console.error("Authentication failed:", err);
+      setAuthError(
+        err.response?.data?.message || "An unexpected error occurred."
+      );
+    }
+  };
   if (!isAuthenticated) {
     return (
       <div className="fixed inset-0 flex items-center justify-center bg-gray-900">
@@ -219,9 +300,29 @@ const CustomerCounts = () => {
             ))}
           </select>
         </div>
+
+        {view === "weekly" && (
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-1">
+              ΕΠΕΛΕΞΕ ΕΒΔΟΜΑΔΑ
+            </label>
+            <select
+              value={week}
+              onChange={(e) => setWeek(parseInt(e.target.value, 10))}
+              className="p-2 border border-gray-400 rounded-md bg-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              {weekOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
         <div>
           <label className="block text-sm font-medium text-gray-300 mb-1">
-            ΕΠΕΛΕΞΕ ΧΡΟΝO
+            ΕΠΕΛΕΞΕ ΧΡΟΝΙΑ
           </label>
           <input
             type="number"
@@ -230,9 +331,10 @@ const CustomerCounts = () => {
             className="p-2 border border-gray-400 rounded-md bg-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
+
         <div>
           <label className="block text-sm font-medium text-gray-300 mb-1">
-            ΕΠΕΛΕΞΕ ΧΡΟΝΙΑ
+            ΕΠΕΛΕΞΕ ΘΕΑ
           </label>
           <select
             value={view}
@@ -250,6 +352,7 @@ const CustomerCounts = () => {
           <Bar data={chartData} options={chartOptions} />
         </div>
       )}
+
       {view === "weekly" && weeklyCounts && (
         <div className="bg-gray-800 p-8 rounded-lg shadow-md w-full max-w-4xl h-[400px] flex items-center justify-center mt-8">
           <Bar data={weeklyChartData} options={chartOptions} />

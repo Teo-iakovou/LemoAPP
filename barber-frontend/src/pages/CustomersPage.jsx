@@ -243,12 +243,14 @@ const CustomersPage = () => {
                           borderRadius: "8px", // Rounded corners
                           padding: "5px",
                           fontSize: "14px",
+                          width: "200px",
                         }),
                         menu: (base) => ({
                           ...base,
                           backgroundColor: "#1e293b", // Dark dropdown menu background
                           color: "white", // White text
                           borderRadius: "8px",
+                          width: "200px",
                         }),
                         option: (base, state) => ({
                           ...base,
