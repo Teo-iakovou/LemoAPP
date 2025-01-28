@@ -2,21 +2,57 @@ const Appointment = require("../models/appointment");
 const { sendSMS } = require("../utils/smsService");
 const moment = require("moment-timezone");
 const LastRun = require("../models/LastRun");
-// Function to fetch and persist the last run timestamp in the database
+
+// Function to fetch the last run timestamp
 const getLastRunTimestamp = async () => {
   const lastRun = await LastRun.findOne({ key: "sendReminders" });
   return lastRun ? lastRun.timestamp : null;
 };
 
+// Function to save the last run timestamp
 const saveLastRunTimestamp = async (timestamp) => {
-  await LastRun.findOneAndUpdate(
-    { key: "sendReminders" },
-    { key: "sendReminders", timestamp },
-    { upsert: true } // Create if not exists
-  );
+  try {
+    await LastRun.findOneAndUpdate(
+      { key: "sendReminders" }, // Filter by key
+      { $set: { timestamp } }, // Only update the timestamp field
+      { upsert: true, new: true } // Create if not exists
+    );
+    console.log(`Last run timestamp successfully updated to: ${timestamp}`);
+  } catch (error) {
+    console.error("Failed to update the last run timestamp:", error.message);
+  }
 };
 
+// Lock mechanism to prevent concurrent executions
+const acquireLock = async () => {
+  const now = new Date();
+  const lock = await LastRun.findOneAndUpdate(
+    { key: "sendRemindersLock", timestamp: { $lte: now } }, // Expired or no lock
+    { $set: { timestamp: now } }, // Set new lock timestamp
+    { upsert: true, new: true }
+  );
+  return !!lock;
+};
+
+const releaseLock = async () => {
+  try {
+    await LastRun.findOneAndUpdate(
+      { key: "sendRemindersLock" },
+      { $set: { timestamp: new Date(0) } } // Reset lock
+    );
+    console.log("Lock released.");
+  } catch (error) {
+    console.error("Failed to release the lock:", error.message);
+  }
+};
+
+// Main function to send reminders
 const sendReminders = async () => {
+  if (!(await acquireLock())) {
+    console.log("Another instance is already running. Exiting...");
+    return;
+  }
+
   try {
     const now = moment().utc();
 
@@ -42,10 +78,14 @@ const sendReminders = async () => {
         $gte: startOf24HourWindow.toDate(),
         $lt: startOf24HourWindow.clone().add(1, "hour").toDate(),
       },
-      "reminderLogs.type": { $ne: "24-hour" },
-      $or: [
-        { "reminderLogs.timestamp": { $exists: false } },
-        { "reminderLogs.timestamp": { $lte: cooldownPeriod } },
+      $and: [
+        { "reminderLogs.type": { $ne: "24-hour" } },
+        {
+          $or: [
+            { "reminderLogs.timestamp": { $exists: false } },
+            { "reminderLogs.timestamp": { $lte: cooldownPeriod } },
+          ],
+        },
       ],
     });
 
@@ -56,10 +96,14 @@ const sendReminders = async () => {
         $lt: startOf7DayWindow.clone().add(1, "hour").toDate(),
       },
       $or: [{ recurrence: "weekly" }, { recurrence: "monthly" }],
-      "reminderLogs.type": { $ne: "7-day" },
-      $or: [
-        { "reminderLogs.timestamp": { $exists: false } },
-        { "reminderLogs.timestamp": { $lte: cooldownPeriod } },
+      $and: [
+        { "reminderLogs.type": { $ne: "7-day" } },
+        {
+          $or: [
+            { "reminderLogs.timestamp": { $exists: false } },
+            { "reminderLogs.timestamp": { $lte: cooldownPeriod } },
+          ],
+        },
       ],
     });
 
@@ -158,6 +202,8 @@ const sendReminders = async () => {
     console.log("Reminders processed successfully.");
   } catch (error) {
     console.error("Error while sending reminders:", error.message);
+  } finally {
+    await releaseLock();
   }
 };
 

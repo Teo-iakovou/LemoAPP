@@ -15,7 +15,14 @@ ChartJS.register(BarElement, CategoryScale, LinearScale, Title, Tooltip);
 const getWeek = (date) => {
   const firstDayOfYear = new Date(date.getFullYear(), 0, 1);
   const pastDaysOfYear = (date - firstDayOfYear + 86400000) / 86400000;
-  return Math.ceil((pastDaysOfYear + firstDayOfYear.getDay() + 1) / 7);
+
+  // Adjust the week calculation to start from Monday
+  const weekNumber = Math.ceil(
+    (pastDaysOfYear +
+      (firstDayOfYear.getDay() === 0 ? 6 : firstDayOfYear.getDay() - 1)) /
+      7
+  );
+  return weekNumber;
 };
 
 const getWeeksInMonth = (month, year) => {
@@ -24,7 +31,15 @@ const getWeeksInMonth = (month, year) => {
   const weeks = [];
 
   let currentWeek = getWeek(firstDay);
-  let startOfWeek = new Date(firstDay); // Clone the first day
+  let startOfWeek = new Date(firstDay);
+
+  // Adjust the start of the week to Monday
+  if (startOfWeek.getDay() !== 1) {
+    startOfWeek.setDate(
+      startOfWeek.getDate() -
+        (startOfWeek.getDay() === 0 ? 6 : startOfWeek.getDay() - 1)
+    );
+  }
 
   while (startOfWeek <= lastDay) {
     const endOfWeek = new Date(startOfWeek);
@@ -277,7 +292,47 @@ const CustomerCounts = () => {
       </div>
     );
   }
-
+  if (!isAuthenticated) {
+    return (
+      <div className="fixed inset-0 flex items-center justify-center bg-gray-900">
+        <form
+          onSubmit={handleLogin}
+          className="bg-gray-800 p-6 rounded-lg shadow-md text-white"
+        >
+          <h1 className="text-2xl font-bold mb-4">ΣΥΝΔΕΣΗ</h1>
+          {authError && <p className="text-red-500 mb-4">{authError}</p>}
+          <div className="mb-4">
+            <label className="block text-white">ΟΝΟΜΑ ΧΡΗΣΤΗ</label>
+            <input
+              type="text"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+              placeholder="Εισάγετε όνομα χρήστη"
+              required
+            />
+          </div>
+          <div className="mb-4">
+            <label className="block text-white">ΚΩΔΙΚΟΣ</label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+              placeholder="Εισάγετε κωδικό"
+              required
+            />
+          </div>
+          <button
+            type="submit"
+            className="w-full bg-blue-500 text-white p-2 rounded hover:bg-blue-600"
+          >
+            ΣΥΝΔΕΣΗ
+          </button>
+        </form>
+      </div>
+    );
+  }
   return (
     <div className="fixed inset-0 bg-gray-800 bg-opacity-75 flex flex-col items-center justify-center pt-16">
       <h1 className="text-2xl font-bold mb-4 text-white">ΠΕΛΑΤΕΣ</h1>
