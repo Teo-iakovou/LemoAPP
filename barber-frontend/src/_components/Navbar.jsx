@@ -63,7 +63,7 @@ const Navbar = ({ isAuth, onLogout }) => {
   };
 
   const handleRedirectToSmsTo = () => {
-    window.open("https://sms.to/app#/add-funds", "_blank"); // Open in new tab
+    window.open("https://app.sms.to/app#/", "_blank"); // Open in new tab
   };
 
   return (
