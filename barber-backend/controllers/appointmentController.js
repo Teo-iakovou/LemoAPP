@@ -206,6 +206,9 @@ const updateAppointment = async (req, res, next) => {
         appointmentStart.getTime() + duration * 60 * 1000
       );
       updateData.appointmentDateTime = appointmentStart; // Ensure it's updated in the database
+
+      // 🔥 Reset reminders when updating the appointment date
+      updateData.reminderLogs = [];
     }
 
     const updatedAppointment = await Appointment.findByIdAndUpdate(

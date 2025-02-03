@@ -78,3 +78,41 @@ export const updateAppointment = async (appointmentId, updatedData) => {
     throw error;
   }
 };
+
+// Fetch the entire waiting list
+export async function fetchWaitingList() {
+  const res = await fetch(`${API_BASE_URL}/waitingList`);
+  if (!res.ok) {
+    const error = await res.json();
+    throw new Error(error.error || "Failed to fetch the waiting list.");
+  }
+  return res.json();
+}
+
+// Add a customer to the waiting list
+export async function addToWaitingList(customerId) {
+  const response = await fetch(`${API_BASE_URL}/waitingList`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ customerId }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || "Failed to add to waiting list.");
+  }
+
+  return response.json();
+}
+
+// Remove a customer from the waiting list
+export async function removeFromWaitingList(id) {
+  const response = await fetch(`${API_BASE_URL}/waitingList/${id}`, {
+    method: "DELETE",
+  });
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || "Failed to remove from waiting list.");
+  }
+  return response.json();
+}

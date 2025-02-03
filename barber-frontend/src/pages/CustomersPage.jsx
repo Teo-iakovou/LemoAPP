@@ -171,32 +171,36 @@ const CustomersPage = () => {
               styles={{
                 control: (base) => ({
                   ...base,
-                  backgroundColor: "#1e293b",
-                  color: "white",
-                  borderColor: "#3b82f6",
-                  borderRadius: "8px",
+                  backgroundColor: "#1e293b", // Dark background
+                  borderColor: "#3b82f6", // Blue border
+                  color: "white", // Ensure text color is white
+                  borderRadius: "8px", // Rounded corners
                   padding: "5px",
                   fontSize: "14px",
                 }),
                 menu: (base) => ({
                   ...base,
-                  backgroundColor: "#1e293b",
-                  color: "white",
+                  backgroundColor: "#1e293b", // Dark dropdown menu background
+                  color: "white", // White text for options
                   borderRadius: "8px",
                 }),
                 option: (base, state) => ({
                   ...base,
-                  backgroundColor: state.isFocused ? "#3b82f6" : "#1e293b",
-                  color: "white",
+                  backgroundColor: state.isFocused ? "#3b82f6" : "#1e293b", // Blue on hover
+                  color: "white", // White text for options
                   padding: "10px",
                 }),
                 singleValue: (base) => ({
                   ...base,
-                  color: "white",
+                  color: "white", // White text for the selected value
                 }),
                 placeholder: (base) => ({
                   ...base,
-                  color: "#9ca3af",
+                  color: "#9ca3af", // Light gray placeholder
+                }),
+                input: (base) => ({
+                  ...base,
+                  color: "white", // White text while typing in the search bar
                 }),
               }}
             />

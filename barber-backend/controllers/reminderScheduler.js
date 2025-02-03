@@ -13,9 +13,9 @@ const getLastRunTimestamp = async () => {
 const saveLastRunTimestamp = async (timestamp) => {
   try {
     await LastRun.findOneAndUpdate(
-      { key: "sendReminders" }, // Filter by key
-      { $set: { timestamp } }, // Only update the timestamp field
-      { upsert: true, new: true } // Create if not exists
+      { key: "sendReminders" },
+      { $set: { timestamp } },
+      { upsert: true, new: true }
     );
     console.log(`Last run timestamp successfully updated to: ${timestamp}`);
   } catch (error) {
@@ -27,8 +27,8 @@ const saveLastRunTimestamp = async (timestamp) => {
 const acquireLock = async () => {
   const now = new Date();
   const lock = await LastRun.findOneAndUpdate(
-    { key: "sendRemindersLock", timestamp: { $lte: now } }, // Expired or no lock
-    { $set: { timestamp: now } }, // Set new lock timestamp
+    { key: "sendRemindersLock", timestamp: { $lte: now } },
+    { $set: { timestamp: now } },
     { upsert: true, new: true }
   );
   return !!lock;
@@ -38,7 +38,7 @@ const releaseLock = async () => {
   try {
     await LastRun.findOneAndUpdate(
       { key: "sendRemindersLock" },
-      { $set: { timestamp: new Date(0) } } // Reset lock
+      { $set: { timestamp: new Date(0) } }
     );
     console.log("Lock released.");
   } catch (error) {
@@ -55,29 +55,24 @@ const sendReminders = async () => {
 
   try {
     const now = moment().utc();
-
-    // Fetch the last run timestamp
     const lastRunTimestamp = await getLastRunTimestamp();
     console.log("Last run timestamp:", lastRunTimestamp);
-
-    // Save the current run timestamp
-    await saveLastRunTimestamp(now.toDate());
-
-    // Define the reminder windows
     const startOf24HourWindow = now.clone().add(24, "hours").startOf("minute");
     const startOf7DayWindow = now.clone().add(7, "days").startOf("minute");
     const cooldownPeriod = now.clone().subtract(10, "minutes").toDate();
+    await saveLastRunTimestamp(now.toDate());
 
     console.log("Checking reminders for:");
     console.log("24-hour window:", startOf24HourWindow.toDate());
     console.log("7-day window:", startOf7DayWindow.toDate());
 
-    // Query for daily appointments (exclude already sent reminders)
+    // Query for daily appointments (one-time reminders only)
     const dailyAppointments = await Appointment.find({
       appointmentDateTime: {
         $gte: startOf24HourWindow.toDate(),
         $lt: startOf24HourWindow.clone().add(1, "hour").toDate(),
       },
+      recurrence: { $exists: false },
       $and: [
         { "reminderLogs.type": { $ne: "24-hour" } },
         {
@@ -89,13 +84,13 @@ const sendReminders = async () => {
       ],
     });
 
-    // Query for recurring appointments (exclude already sent reminders)
+    // Query for recurring appointments (weekly/monthly reminders only)
     const recurringAppointments = await Appointment.find({
       appointmentDateTime: {
         $gte: startOf7DayWindow.toDate(),
         $lt: startOf7DayWindow.clone().add(1, "hour").toDate(),
       },
-      $or: [{ recurrence: "weekly" }, { recurrence: "monthly" }],
+      recurrence: { $in: ["weekly", "monthly"] },
       $and: [
         { "reminderLogs.type": { $ne: "7-day" } },
         {
@@ -115,36 +110,13 @@ const sendReminders = async () => {
       const message = `Υπενθύμιση για το ραντεβού σας αύριο στις ${appointmentDateTime} στο Lemo Barber Shop.`;
 
       try {
-        const updatedAppointment = await Appointment.findOneAndUpdate(
-          {
-            _id: appointment._id,
-            "reminderLogs.type": { $ne: "24-hour" },
-            $or: [
-              { "reminderLogs.timestamp": { $exists: false } },
-              { "reminderLogs.timestamp": { $lte: cooldownPeriod } },
-            ],
+        await sendSMS(appointment.phoneNumber, message);
+        await Appointment.findByIdAndUpdate(appointment._id, {
+          $push: {
+            reminderLogs: { type: "24-hour", timestamp: new Date() },
           },
-          {
-            $push: {
-              reminderLogs: {
-                type: "24-hour",
-                timestamp: new Date(),
-              },
-            },
-          },
-          { new: true }
-        );
-
-        if (updatedAppointment) {
-          await sendSMS(appointment.phoneNumber, message);
-          console.log(
-            `Reminder sent and logged for daily appointment ${appointment._id}.`
-          );
-        } else {
-          console.log(
-            `Skipping duplicate reminder for daily appointment ${appointment._id}.`
-          );
-        }
+        });
+        console.log(`Reminder sent for daily appointment ${appointment._id}`);
       } catch (error) {
         console.error(
           `Failed to send daily reminder for ${appointment._id}:`,
@@ -161,36 +133,15 @@ const sendReminders = async () => {
       const message = `Επιβεβαιώνουμε το ραντεβού σας στο LEMO BARBER SHOP με τον ${appointment.barber} για τις ${appointmentDateTime}!`;
 
       try {
-        const updatedAppointment = await Appointment.findOneAndUpdate(
-          {
-            _id: appointment._id,
-            "reminderLogs.type": { $ne: "7-day" },
-            $or: [
-              { "reminderLogs.timestamp": { $exists: false } },
-              { "reminderLogs.timestamp": { $lte: cooldownPeriod } },
-            ],
+        await sendSMS(appointment.phoneNumber, message);
+        await Appointment.findByIdAndUpdate(appointment._id, {
+          $push: {
+            reminderLogs: { type: "7-day", timestamp: new Date() },
           },
-          {
-            $push: {
-              reminderLogs: {
-                type: "7-day",
-                timestamp: new Date(),
-              },
-            },
-          },
-          { new: true }
+        });
+        console.log(
+          `Reminder sent for recurring appointment ${appointment._id}`
         );
-
-        if (updatedAppointment) {
-          await sendSMS(appointment.phoneNumber, message);
-          console.log(
-            `Reminder sent and logged for recurring appointment ${appointment._id}.`
-          );
-        } else {
-          console.log(
-            `Skipping duplicate reminder for recurring appointment ${appointment._id}.`
-          );
-        }
       } catch (error) {
         console.error(
           `Failed to send recurring reminder for ${appointment._id}:`,

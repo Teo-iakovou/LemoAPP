@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import FolderList from "../_components/FolderList";
 import axios from "axios";
+import WaitingList from "../_components/WaitingList";
 
 const NotePage = () => {
   const [folders, setFolders] = useState([]);
@@ -100,26 +101,34 @@ const NotePage = () => {
   return (
     <div className="bg-gray-900 min-h-screen text-white p-6">
       {!selectedFolder ? (
-        <FolderList
-          folders={folders}
-          onFolderClick={handleFolderClick}
-          onAddFolder={(folderName) =>
-            axios
-              .post(`${API_BASE_URL}/folders`, { name: folderName })
-              .then((response) =>
-                setFolders((prev) => [...prev, response.data])
-              )
-          }
-          onDeleteFolder={(folderId) =>
-            axios
-              .delete(`${API_BASE_URL}/folders/${folderId}`)
-              .then(() =>
-                setFolders((prev) =>
-                  prev.filter((folder) => folder._id !== folderId)
+        <>
+          {/* Render Folder List */}
+          <FolderList
+            folders={folders}
+            onFolderClick={handleFolderClick}
+            onAddFolder={(folderName) =>
+              axios
+                .post(`${API_BASE_URL}/folders`, { name: folderName })
+                .then((response) =>
+                  setFolders((prev) => [...prev, response.data])
                 )
-              )
-          }
-        />
+            }
+            onDeleteFolder={(folderId) =>
+              axios
+                .delete(`${API_BASE_URL}/folders/${folderId}`)
+                .then(() =>
+                  setFolders((prev) =>
+                    prev.filter((folder) => folder._id !== folderId)
+                  )
+                )
+            }
+          />
+
+          {/* Render WaitingList Below Folder List */}
+          <div className="mt-6">
+            <WaitingList />
+          </div>
+        </>
       ) : (
         <div>
           <button

@@ -5,6 +5,7 @@ const connectDB = require("./utils/db");
 const cron = require("node-cron");
 const noteRoutes = require("./routes/noteRoutes");
 const folderRoutes = require("./routes/folderRoutes");
+const waitingListRoutes = require("./routes/waitingList");
 const adminRoutes = require("./routes/adminRoutes");
 const appointmentRoutes = require("./routes/appointmentRoutes");
 const { sendReminders } = require("./controllers/reminderScheduler");
@@ -70,6 +71,7 @@ app.use("/api/admin", adminRoutes);
 app.use("/api/appointments", appointmentRoutes);
 app.use("/api", CustomerCountsRoutes);
 app.use("/api/customers", customerRoutes);
+app.use("/api/waitingList", waitingListRoutes);
 app.use("/api/reminders", reminderSchedulerRoute);
 app.use("/api/auth", authRoutes);
 // Add this route for GET /api
