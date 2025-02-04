@@ -139,16 +139,21 @@ function AppointmentForm({
   };
 
   return (
-    <div className="fixed inset-0 bg-gray-800 bg-opacity-75 flex items-center justify-center">
-      <div ref={formRef} className="bg-white p-6 rounded-md w-full max-w-md">
-        <h2 className="text-xl font-bold mb-4">
+    <div className="fixed inset-0 bg-gray-800 bg-opacity-75 flex items-center justify-center p-4">
+      <div
+        ref={formRef}
+        className="bg-white p-6 rounded-lg w-full max-w-lg sm:max-w-md shadow-lg overflow-y-auto"
+      >
+        <h2 className="text-xl font-bold mb-4 text-center">
           {isEditing ? "ΕΠΕΞΕΡΓΑΣΙΑ ΡΑΝΤΕΒΟΥ" : "ΚΛΕΙΣΤΕ ΕΝΑ ΡΑΝΤΕΒΟΥ"}
         </h2>
+
         {error && (
           <div className="mb-4 p-2 bg-red-100 text-red-700 rounded">
             {error}
           </div>
         )}
+
         {showPasswordForm ? (
           <PasswordForm
             onPasswordSubmit={handlePasswordSubmit}
@@ -178,6 +183,7 @@ function AppointmentForm({
                   ))}
                 </datalist>
               </div>
+
               {/* Phone Number */}
               <div className="mb-4">
                 <label htmlFor="phoneNumber" className="block text-gray-700">
@@ -192,6 +198,7 @@ function AppointmentForm({
                   required
                 />
               </div>
+
               {/* Appointment Date and Time */}
               <div className="mb-4">
                 <label
@@ -212,6 +219,7 @@ function AppointmentForm({
                   className="mt-1 block w-full p-2 border border-gray-300 rounded"
                 />
               </div>
+
               {/* Barber Selection */}
               <div className="mb-4">
                 <label htmlFor="barber" className="block text-gray-700">
@@ -226,6 +234,7 @@ function AppointmentForm({
                   <option value="ΦΟΡΟΥ">ΦΟΡΟΥ</option>
                 </select>
               </div>
+
               {/* Recurrence */}
               <div className="mb-4">
                 <label htmlFor="recurrence" className="block text-gray-700">
@@ -241,21 +250,6 @@ function AppointmentForm({
                   <option value="weekly">ΕΒΔΟΜΑΔΙΑΙΟ</option>
                   <option value="monthly">ΜΗΝΙΑΙΟ</option>
                 </select>
-                {repeatOption === "Weekly" && (
-                  <>
-                    <label>ΕΠΑΝΑΛΗΨΗ ΓΙΑ ΠΟΣΕΣ ΕΒΔΟΜΑΔΕΣ:</label>
-                    <select
-                      value={weeksOption}
-                      onChange={(e) => setWeeksOption(e.target.value)}
-                    >
-                      <option value="1">1 ΕΒΔΟΜΑΔΑ</option>
-                      <option value="2">2 ΕΒΔΟΜΑΔΕΣ</option>
-                      <option value="3">3 ΕΒΔΟΜΑΔΕΣ</option>
-                      <option value="4">4 ΕΒΔΟΜΑΔΕΣ</option>
-                      <option value="5">5 ΕΒΔΟΜΑΔΕΣ</option>
-                    </select>
-                  </>
-                )}
                 {recurrence === "weekly" && (
                   <div className="mt-4">
                     <label className="block text-gray-700">
@@ -266,34 +260,16 @@ function AppointmentForm({
                       onChange={(e) => setWeeksOption(e.target.value)}
                       className="mt-1 block w-full p-2 border border-gray-300 rounded"
                     >
-                      <option value="1">1 ΕΒΔΟΜΑΔΑ</option>
-                      <option value="2">2 ΕΒΔΟΜΑΔΕΣ</option>
-                      <option value="3">3 ΕΒΔΟΜΑΔΕΣ</option>
-                      <option value="4">4 ΕΒΔΟΜΑΔΕΣ</option>
-                      <option value="5">5 ΕΒΔΟΜΑΔΕΣ</option>
-                    </select>
-                  </div>
-                )}
-                {recurrence === "monthly" && (
-                  <div className="mt-4">
-                    <label className="block text-gray-700">
-                      ΕΠΑΝΑΛΗΨΗ ΓΙΑ ΠΟΣΟΥΣ ΜΗΝΕΣ:
-                    </label>
-                    <select
-                      value={monthsOption}
-                      onChange={(e) => setMonthsOption(e.target.value)}
-                      className="mt-1 block w-full p-2 border border-gray-300 rounded"
-                    >
-                      <option value="1">1 ΜΗΝΑΣ</option>
-                      <option value="2">2 ΜΗΝΕΣ</option>
-                      <option value="3">3 ΜΗΝΕΣ</option>
-                      <option value="4">4 ΜΗΝΕΣ</option>
-                      <option value="5">5 ΜΗΝΕΣ</option>
-                      <option value="6">6 ΜΗΝΕΣ</option>
+                      {[1, 2, 3, 4, 5].map((week) => (
+                        <option key={week} value={week}>
+                          {week} ΕΒΔΟΜΑΔΕΣ
+                        </option>
+                      ))}
                     </select>
                   </div>
                 )}
               </div>
+
               <button
                 type="submit"
                 className="w-full bg-green-500 text-white py-2 rounded"
@@ -301,6 +277,7 @@ function AppointmentForm({
                 {isEditing ? "ΕΝΗΜΕΡΩΣΗ ΡΑΝΤΕΒΟΥ" : "ΠΡΟΣΘΗΚΗ ΡΑΝΤΕΒΟΥ"}
               </button>
             </form>
+
             {isEditing && (
               <button
                 className="mt-4 w-full bg-red-500 text-white py-2 rounded"
@@ -309,6 +286,7 @@ function AppointmentForm({
                 ΔΙΑΓΡΑΦΗ ΡΑΝΤΕΒΟΥ
               </button>
             )}
+
             <button
               className="mt-4 w-full bg-gray-500 text-white py-2 rounded"
               onClick={onClose}

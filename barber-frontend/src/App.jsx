@@ -31,14 +31,12 @@ const App = () => {
 
   return (
     <Router>
-      <div className="h-screen flex flex-col bg-gray-900  transition-colors duration-300">
-        {/* Navbar Section */}
-        <header className="h-16">
-          <Navbar isAuth={isAuth} onLogout={handleLogout} />
-        </header>
+      <div className="h-screen flex bg-gray-900 transition-colors duration-300">
+        {/* Sidebar Navbar - Fixed Left */}
+        <Navbar isAuth={isAuth} onLogout={handleLogout} />
 
         {/* Main Content */}
-        <main className="flex-1 overflow-hidden p-6">
+        <div className="flex-1 ml-20 overflow-hidden p-6">
           <Suspense fallback={<div>Loading...</div>}>
             {isAuth ? (
               <Routes>
@@ -60,7 +58,7 @@ const App = () => {
               </Routes>
             )}
           </Suspense>
-        </main>
+        </div>
       </div>
     </Router>
   );
