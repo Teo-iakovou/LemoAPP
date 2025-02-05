@@ -38,8 +38,7 @@ export default function WaitingList() {
     setIsFetchingList(true);
     try {
       const data = await fetchWaitingList();
-      // Only update the state if it is not already updated optimistically
-      setWaitingList(data);
+      setWaitingList(data.map((entry) => ({ ...entry, note: "" }))); // Add note field
     } catch (error) {
       console.error("Failed to fetch waiting list:", error);
     } finally {
@@ -55,40 +54,31 @@ export default function WaitingList() {
 
     setIsAdding(true);
     try {
-      // Optimistic update with temporary data
       const tempEntry = {
         _id: Date.now().toString(), // Temporary ID
         customerId: {
           _id: selectedCustomer.value,
-          name:
-            customers
-              .find((c) => c.value === selectedCustomer.value)
-              ?.label.split(" - ")[0] || "Unknown",
-          phoneNumber:
-            customers
-              .find((c) => c.value === selectedCustomer.value)
-              ?.label.split(" - ")[1] || "N/A",
+          name: selectedCustomer.label.split(" - ")[0],
+          phoneNumber: selectedCustomer.label.split(" - ")[1],
         },
+        note: "", // Initial empty note
       };
 
       setWaitingList((prev) => [...prev, tempEntry]);
 
-      // Add customer to the backend
       const addedCustomer = await addToWaitingList(selectedCustomer.value);
 
-      // Replace the temporary entry with the actual server data
       setWaitingList((prev) =>
         prev.map((entry) =>
-          entry._id === tempEntry._id ? addedCustomer : entry
+          entry._id === tempEntry._id ? { ...addedCustomer, note: "" } : entry
         )
       );
 
-      setSelectedCustomer(null); // Clear the selection
+      setSelectedCustomer(null);
     } catch (error) {
       console.error("Failed to add to waiting list:", error);
       alert("Failed to add customer to the waiting list. Please try again.");
 
-      // Rollback optimistic update if API call fails
       setWaitingList((prev) =>
         prev.filter((entry) => entry._id !== tempEntry._id)
       );
@@ -100,25 +90,23 @@ export default function WaitingList() {
   async function handleRemoveFromWaitingList(id) {
     setIsDeleting(true);
     try {
-      // Optimistic update: Remove the entry from the waiting list immediately
       const removedEntry = waitingList.find((entry) => entry._id === id);
       setWaitingList((prev) => prev.filter((entry) => entry._id !== id));
-
-      // Send request to remove the customer
       await removeFromWaitingList(id);
-
-      // Ensure backend is consistent with the local state
     } catch (error) {
       console.error("Failed to remove from waiting list:", error);
       alert(
         "Failed to remove customer from the waiting list. Please try again."
       );
-
-      // Rollback optimistic update if the API call fails
-      setWaitingList((prev) => [...prev, removedEntry]);
     } finally {
       setIsDeleting(false);
     }
+  }
+
+  function handleNoteChange(id, note) {
+    setWaitingList((prev) =>
+      prev.map((entry) => (entry._id === id ? { ...entry, note } : entry))
+    );
   }
 
   return (
@@ -199,7 +187,7 @@ export default function WaitingList() {
         <div
           className="space-y-4 overflow-y-auto"
           style={{
-            maxHeight: "300px", // Set the maximum height for the list
+            maxHeight: "300px",
           }}
         >
           <ul className="space-y-4">
@@ -208,11 +196,23 @@ export default function WaitingList() {
                 key={entry._id}
                 className="p-4 bg-gray-800 rounded flex justify-between items-center"
               >
-                <div>
-                  <p className="font-semibold">{entry.customerId.name}</p>
-                  <p className="text-sm text-gray-400">
-                    {entry.customerId.phoneNumber}
-                  </p>
+                <div className="flex items-center space-x-4">
+                  <div>
+                    <p className="font-semibold">{entry.customerId.name}</p>
+                    <p className="text-sm text-gray-400">
+                      {entry.customerId.phoneNumber}
+                    </p>
+                  </div>
+                  {/* Note Input */}
+                  <input
+                    type="text"
+                    value={entry.note}
+                    onChange={(e) =>
+                      handleNoteChange(entry._id, e.target.value)
+                    }
+                    placeholder="Προσθέστε σημείωση..."
+                    className="p-2 rounded bg-gray-700 text-white"
+                  />
                 </div>
                 <button
                   onClick={() => handleRemoveFromWaitingList(entry._id)}
