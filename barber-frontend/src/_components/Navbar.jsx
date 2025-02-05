@@ -8,16 +8,17 @@ import {
   FaClipboard,
   FaBars,
   FaSms,
-} from "react-icons/fa"; // Import icons
+} from "react-icons/fa";
 import Swal from "sweetalert2";
 import withReactContent from "sweetalert2-react-content";
 import LemoLogo from "../assets/LemoLogo.png";
 
 const Navbar = ({ isAuth, onLogout }) => {
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false); // Dropdown inside logo
-  const dropdownRef = useRef(null); // Ref for dropdown
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const dropdownRef = useRef(null);
   const navigate = useNavigate();
   const MySwal = withReactContent(Swal);
+
   const toggleDropdown = () => {
     setIsDropdownOpen(!isDropdownOpen);
   };
@@ -47,10 +48,10 @@ const Navbar = ({ isAuth, onLogout }) => {
       cancelButtonText: "Cancel",
     }).then((result) => {
       if (result.isConfirmed) {
-        localStorage.removeItem("token"); // Clear token
-        navigate("/"); // Redirect to login page
-        onLogout(); // Notify parent
-        setIsDropdownOpen(false); // Close dropdown
+        localStorage.removeItem("token");
+        navigate("/");
+        onLogout();
+        setIsDropdownOpen(false);
         MySwal.fire({
           title: "Logged Out",
           text: "You have successfully logged out.",
@@ -63,11 +64,11 @@ const Navbar = ({ isAuth, onLogout }) => {
   };
 
   const handleRedirectToSmsTo = () => {
-    window.open("https://app.sms.to/app#/", "_blank"); // Open in new tab
+    window.open("https://app.sms.to/app#/", "_blank");
   };
 
   return (
-    <nav className="fixed top-0 left-0 h-full w-20 z-10 bg-purple-950 flex flex-col items-center py-6 shadow-md">
+    <nav className="w-full bg-purple-950 flex items-center justify-between px-6 py-3 shadow-md">
       {/* Logo */}
       <div>
         <Link to="/">
@@ -81,7 +82,7 @@ const Navbar = ({ isAuth, onLogout }) => {
 
       {/* Navigation Icons - Render only if authenticated */}
       {isAuth && (
-        <ul className="flex flex-col space-y-6 text-white text-xl mt-10">
+        <ul className="flex space-x-6 text-white text-xl">
           <li>
             <Link
               to="/"
@@ -135,7 +136,7 @@ const Navbar = ({ isAuth, onLogout }) => {
 
       {/* Profile Dropdown - Render only if authenticated */}
       {isAuth && (
-        <div className="relative mt-auto" ref={dropdownRef}>
+        <div className="relative" ref={dropdownRef}>
           <button
             className="menu-button text-white text-2xl hover:text-blue-500 transition-colors duration-300"
             onClick={toggleDropdown}
@@ -143,7 +144,7 @@ const Navbar = ({ isAuth, onLogout }) => {
             <FaBars />
           </button>
           {isDropdownOpen && (
-            <div className="absolute bottom-12 left-0 bg-white shadow-lg rounded-3xl py-3 px-4 w-40 z-50 border border-gray-200">
+            <div className="absolute top-12 right-0 bg-white shadow-lg rounded-3xl py-3 px-4 w-40 z-50 border border-gray-200">
               <Link
                 to="/profile"
                 className="block px-4 py-2 text-gray-700 hover:bg-gray-100 rounded"

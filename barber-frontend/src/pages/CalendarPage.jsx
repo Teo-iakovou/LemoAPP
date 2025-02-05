@@ -191,7 +191,7 @@ const CalendarPage = () => {
   };
 
   return (
-    <div className=" flex flex-col relative bg-white rounded-3xl mt-0 min-h-[calc(100vh-64px)] p-4">
+    <div className=" relative bg-white rounded-3xl mt-[-18] min-h-[calc(100vh-64px)] p-4">
       <h1 className="text-xl font-bold mb-4 text-center sm:text-left">
         ΠΡΟΓΡΑΜΜΑ ΡΑΝΤΕΒΟΥ
       </h1>
