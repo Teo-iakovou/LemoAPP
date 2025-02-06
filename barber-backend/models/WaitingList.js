@@ -6,7 +6,8 @@ const waitingListSchema = new mongoose.Schema({
     ref: "Customer",
     required: true,
   },
-  addedAt: { type: Date, default: Date.now }, // Tracks when the customer was added
+  addedAt: { type: Date, default: Date.now },
+  note: { type: String, default: "" },
 });
 
 module.exports =

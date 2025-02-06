@@ -116,3 +116,22 @@ export async function removeFromWaitingList(id) {
   }
   return response.json();
 }
+export async function updateWaitingListNote(id, note) {
+  console.log("Updating note for ID:", id, "Note:", note);
+
+  const response = await fetch(`${API_BASE_URL}/waitingList/${id}/note`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(note),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    console.error("Failed to update note:", error);
+    throw new Error(error.error || "Failed to update note");
+  }
+
+  return response.json();
+}

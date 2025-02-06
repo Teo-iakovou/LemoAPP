@@ -28,7 +28,7 @@ const corsOptions = {
     "https://lemoapp.netlify.app", // Netlify frontend
     "http://localhost:5173", // Local development
   ],
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  methods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
   credentials: true, // Allow cookies and other credentials
 };

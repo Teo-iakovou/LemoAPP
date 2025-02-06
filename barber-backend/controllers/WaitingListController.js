@@ -57,3 +57,24 @@ exports.removeFromWaitingList = async (req, res) => {
     res.status(500).json({ error: "Error removing from waiting list" });
   }
 };
+// Update the note for a specific waiting list entry
+exports.updateWaitingListNote = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { note } = req.body;
+
+    const updatedEntry = await WaitingList.findByIdAndUpdate(
+      id,
+      { note },
+      { new: true }
+    );
+
+    if (!updatedEntry) {
+      return res.status(404).json({ error: "Waiting list entry not found" });
+    }
+
+    res.json(updatedEntry);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to update note" });
+  }
+};

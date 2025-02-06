@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import Select from "react-select";
 import Skeleton from "react-loading-skeleton";
 import "react-loading-skeleton/dist/skeleton.css";
@@ -7,46 +7,52 @@ import {
   fetchWaitingList,
   addToWaitingList,
   removeFromWaitingList,
+  updateWaitingListNote,
 } from "../utils/api";
 
 export default function WaitingList() {
   const [customers, setCustomers] = useState([]);
   const [waitingList, setWaitingList] = useState([]);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
-  const [isLoading, setIsLoading] = useState(true); // For loading customers
-  const [isFetchingList, setIsFetchingList] = useState(true); // For waiting list
-  const [isAdding, setIsAdding] = useState(false); // For adding operation
-  const [isDeleting, setIsDeleting] = useState(false); // For deleting operation
+  const [isLoading, setIsLoading] = useState(true);
+  const [isFetchingList, setIsFetchingList] = useState(true);
+  const [isAdding, setIsAdding] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     loadCustomers();
     loadWaitingList();
   }, []);
 
-  async function loadCustomers() {
+  const loadCustomers = async () => {
     setIsLoading(true);
-    const data = await fetchCustomers();
-    const formattedCustomers = data.map((customer) => ({
-      value: customer._id,
-      label: `${customer.name} - ${customer.phoneNumber}`,
-    }));
-    setCustomers(formattedCustomers);
-    setIsLoading(false);
-  }
+    try {
+      const data = await fetchCustomers();
+      const formattedCustomers = data.map((customer) => ({
+        value: customer._id,
+        label: `${customer.name} - ${customer.phoneNumber}`,
+      }));
+      setCustomers(formattedCustomers);
+    } catch (error) {
+      console.error("Failed to fetch customers:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-  async function loadWaitingList() {
+  const loadWaitingList = async () => {
     setIsFetchingList(true);
     try {
       const data = await fetchWaitingList();
-      setWaitingList(data.map((entry) => ({ ...entry, note: "" }))); // Add note field
+      setWaitingList(data);
     } catch (error) {
       console.error("Failed to fetch waiting list:", error);
     } finally {
       setIsFetchingList(false);
     }
-  }
+  };
 
-  async function handleAddToWaitingList() {
+  const handleAddToWaitingList = async () => {
     if (!selectedCustomer) {
       alert("Please select a customer.");
       return;
@@ -54,45 +60,22 @@ export default function WaitingList() {
 
     setIsAdding(true);
     try {
-      const tempEntry = {
-        _id: Date.now().toString(), // Temporary ID
-        customerId: {
-          _id: selectedCustomer.value,
-          name: selectedCustomer.label.split(" - ")[0],
-          phoneNumber: selectedCustomer.label.split(" - ")[1],
-        },
-        note: "", // Initial empty note
-      };
-
-      setWaitingList((prev) => [...prev, tempEntry]);
-
       const addedCustomer = await addToWaitingList(selectedCustomer.value);
-
-      setWaitingList((prev) =>
-        prev.map((entry) =>
-          entry._id === tempEntry._id ? { ...addedCustomer, note: "" } : entry
-        )
-      );
-
+      setWaitingList((prev) => [...prev, addedCustomer]);
       setSelectedCustomer(null);
     } catch (error) {
       console.error("Failed to add to waiting list:", error);
       alert("Failed to add customer to the waiting list. Please try again.");
-
-      setWaitingList((prev) =>
-        prev.filter((entry) => entry._id !== tempEntry._id)
-      );
     } finally {
       setIsAdding(false);
     }
-  }
+  };
 
-  async function handleRemoveFromWaitingList(id) {
+  const handleRemoveFromWaitingList = async (id) => {
     setIsDeleting(true);
     try {
-      const removedEntry = waitingList.find((entry) => entry._id === id);
-      setWaitingList((prev) => prev.filter((entry) => entry._id !== id));
       await removeFromWaitingList(id);
+      setWaitingList((prev) => prev.filter((entry) => entry._id !== id));
     } catch (error) {
       console.error("Failed to remove from waiting list:", error);
       alert(
@@ -101,13 +84,27 @@ export default function WaitingList() {
     } finally {
       setIsDeleting(false);
     }
-  }
+  };
 
-  function handleNoteChange(id, note) {
+  const handleNoteChange = (id, newNote) => {
     setWaitingList((prev) =>
-      prev.map((entry) => (entry._id === id ? { ...entry, note } : entry))
+      prev.map((entry) =>
+        entry._id === id ? { ...entry, note: newNote } : entry
+      )
     );
-  }
+  };
+
+  const handleNoteSave = async (id) => {
+    const noteToSave = waitingList.find((entry) => entry._id === id)?.note;
+    if (noteToSave === undefined) return;
+
+    try {
+      await updateWaitingListNote(id, { note: noteToSave });
+    } catch (error) {
+      console.error("Failed to save note:", error);
+      alert("Failed to save note. Please try again.");
+    }
+  };
 
   return (
     <div className="p-6 bg-gray-900 text-white rounded-lg shadow-md">
@@ -196,20 +193,20 @@ export default function WaitingList() {
                 key={entry._id}
                 className="p-4 bg-gray-800 rounded flex justify-between items-center"
               >
+                <div>
+                  <p className="font-semibold">{entry.customerId.name}</p>
+                  <p className="text-sm text-gray-400">
+                    {entry.customerId.phoneNumber}
+                  </p>
+                </div>
                 <div className="flex items-center space-x-4">
-                  <div>
-                    <p className="font-semibold">{entry.customerId.name}</p>
-                    <p className="text-sm text-gray-400">
-                      {entry.customerId.phoneNumber}
-                    </p>
-                  </div>
-                  {/* Note Input */}
                   <input
                     type="text"
-                    value={entry.note}
+                    value={entry.note || ""}
                     onChange={(e) =>
                       handleNoteChange(entry._id, e.target.value)
                     }
+                    onBlur={() => handleNoteSave(entry._id)} // Save note on blur
                     placeholder="Προσθέστε σημείωση..."
                     className="p-2 rounded bg-gray-700 text-white"
                   />
