@@ -68,7 +68,7 @@ const Navbar = ({ isAuth, onLogout }) => {
   };
 
   return (
-    <nav className="w-full bg-purple-950 flex items-center justify-between px-6 py-3 shadow-md">
+    <nav className="fixed top-0 left-0 w-full bg-purple-950 flex items-center justify-between px-6 py-3 shadow-md z-50">
       {/* Logo */}
       <div>
         <Link to="/">
