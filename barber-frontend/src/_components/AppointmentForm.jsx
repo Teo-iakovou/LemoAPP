@@ -16,13 +16,14 @@ function AppointmentForm({
 }) {
   const formRef = useRef(null);
   const flatpickrRef = useRef(null);
-  const { register, handleSubmit, reset, setValue } = useForm({
+  const { register, handleSubmit, reset, setValue, getValues } = useForm({
     defaultValues: {
       customerName: appointmentData?.customerName || "",
       phoneNumber: appointmentData?.phoneNumber || "",
-      barber: appointmentData?.barber || "ΛΕΜΟ", // Default barber is Lemo
+      barber: appointmentData?.barber || "ΛΕΜΟ", // Default barber is ΛΕΜΟ
     },
   });
+
   const defaultDate = new Date();
   defaultDate.setHours(7, 0, 0, 0); // Set time to 07:00
   const [appointmentDateTime, setAppointmentDateTime] = useState(
@@ -30,7 +31,6 @@ function AppointmentForm({
   );
   const [recurrence, setRecurrence] = useState("none");
   const [weeksOption, setWeeksOption] = useState("1");
-  const [monthsOption, setMonthsOption] = useState("1");
   const [error, setError] = useState(null);
   const [showPasswordForm, setShowPasswordForm] = useState(false);
   const [actionType, setActionType] = useState(null); // Tracks "edit" or "delete"
@@ -56,6 +56,17 @@ function AppointmentForm({
     };
   }, [onClose]);
 
+  useEffect(() => {
+    if (appointmentData) {
+      console.log(
+        "🛠 Updating Form State from appointmentData:",
+        appointmentData
+      );
+      setValue("customerName", appointmentData.customerName);
+      setValue("phoneNumber", appointmentData.phoneNumber);
+      setValue("barber", appointmentData.barber || "ΛΕΜΟ"); // ✅ Keep selected barber
+    }
+  }, [appointmentData, setValue]);
   const handleCustomerSelect = (e) => {
     const selectedName = e.target.value.trim(); // Remove leading/trailing spaces
 
@@ -84,12 +95,11 @@ function AppointmentForm({
       ...appointmentData, // Preserve existing data (e.g., `_id`) for editing
       customerName: data.customerName,
       phoneNumber: data.phoneNumber,
-      barber: data.barber,
+      barber: data.barber || appointmentData?.barber || "ΛΕΜΟ", // ✅ Ensure barber remains correct
       duration: 40, // Fixed duration
       appointmentDateTime: formattedAppointmentDateTime, // Ensure new date-time is sent
       recurrence: recurrence !== "none" ? recurrence : null,
       repeatWeeks: recurrence === "weekly" ? parseInt(weeksOption) : null,
-      repeatMonths: recurrence === "monthly" ? parseInt(monthsOption) : null,
       isPastDate,
     };
 
@@ -119,12 +129,23 @@ function AppointmentForm({
     }
 
     if (actionType === "edit") {
-      // Ensure all required fields are included for the update
+      const latestBarber = getValues("barber"); // ✅ Now correctly extracting barber from the form
+
+      console.log(
+        "🔍 Before Constructing Payload - appointmentData:",
+        appointmentData
+      );
+      console.log(
+        "🔍 Before Constructing Payload - Selected Barber from Form:",
+        latestBarber
+      );
+
       const appointmentDetails = {
-        ...appointmentData, // Preserve existing data
-        appointmentDateTime, // Use the current state value
+        ...appointmentData,
+        barber: latestBarber, // ✅ Use the correct barber selection
+        appointmentDateTime,
         recurrence: recurrence !== "none" ? recurrence : null,
-        password: enteredPassword, // Add the entered password
+        password: enteredPassword,
       };
 
       console.log(
@@ -142,7 +163,7 @@ function AppointmentForm({
     <div className="fixed inset-0 bg-gray-800 bg-opacity-75 flex items-center justify-center p-4">
       <div
         ref={formRef}
-        className="bg-white p-6 rounded-lg w-full max-w-lg sm:max-w-md shadow-lg overflow-y-auto"
+        className="bg-white p-6 rounded-lg w-full max-w-lg sm:max-w-md shadow-lg overflow-y-auto mt-14"
       >
         <h2 className="text-xl font-bold mb-4 text-center">
           {isEditing ? "ΕΠΕΞΕΡΓΑΣΙΑ ΡΑΝΤΕΒΟΥ" : "ΚΛΕΙΣΤΕ ΕΝΑ ΡΑΝΤΕΒΟΥ"}
@@ -228,6 +249,10 @@ function AppointmentForm({
                 <select
                   {...register("barber")}
                   id="barber"
+                  onChange={(e) => {
+                    setValue("barber", e.target.value); // ✅ Make sure barber updates correctly
+                    console.log("✏️ Barber Changed:", e.target.value); // Log barber changes
+                  }}
                   className="mt-1 block w-full p-2 border border-gray-300 rounded"
                 >
                   <option value="ΛΕΜΟ">ΛΕΜΟ</option>
@@ -248,7 +273,6 @@ function AppointmentForm({
                 >
                   <option value="none">ΚΑΝΕΝΑ</option>
                   <option value="weekly">ΕΒΔΟΜΑΔΙΑΙΟ</option>
-                  <option value="monthly">ΜΗΝΙΑΙΟ</option>
                 </select>
                 {recurrence === "weekly" && (
                   <div className="mt-4">

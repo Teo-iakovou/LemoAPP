@@ -96,53 +96,63 @@ const CalendarPage = () => {
 
   const handleFormSubmit = async (appointmentData) => {
     try {
-      let response;
+      console.log("🔄 Sending Updated Appointment Data:", appointmentData); // Debugging
 
+      let response;
       if (appointmentData._id) {
-        // Update existing appointment
         const updatedAppointmentData = {
           ...appointmentData,
-          currentPassword: "apoel", // Add password for authentication
+          barber: appointmentData.barber || "ΛΕΜΟ", // ✅ Ensure barber change is saved
+          currentPassword: "apoel",
         };
+
+        console.log(
+          "🚀 Final Payload Before API Request:",
+          updatedAppointmentData
+        ); // 🔥 Debugging
 
         response = await updateAppointment(
           appointmentData._id,
           updatedAppointmentData
         );
       } else {
-        // Create new appointment
         response = await createAppointment(appointmentData);
       }
+
+      console.log("✅ API Response:", response); // Log full API response
 
       if (response?.updatedAppointment || response?.initialAppointment) {
         const createdAppointments = [
           response.updatedAppointment || response.initialAppointment,
-          ...(response.recurringAppointments || []), // Include recurring appointments if any
+          ...(response.recurringAppointments || []),
         ];
 
-        const newEvents = createdAppointments.map((appointment) => {
-          const appointmentDate = new Date(appointment.appointmentDateTime);
-          const duration = 40;
-
-          return {
-            id: appointment._id, // Match with `id` in state
-            title: appointment.customerName,
-            start: appointmentDate,
-            end: new Date(appointmentDate.getTime() + duration * 60 * 1000),
-            barber: appointment.barber,
-          };
-        });
+        const newEvents = createdAppointments.map((appointment) => ({
+          id: appointment._id,
+          title: appointment.customerName,
+          start: new Date(appointment.appointmentDateTime),
+          end: new Date(
+            new Date(appointment.appointmentDateTime).getTime() + 40 * 60 * 1000
+          ),
+          barber: appointment.barber,
+          backgroundColor: appointment.barber === "ΛΕΜΟ" ? "#6B21A8" : "orange",
+        }));
 
         setAppointments((prevAppointments) => {
-          // Remove old events for updated appointments
           const updatedIds = createdAppointments.map((appt) => appt._id);
           const filteredAppointments = prevAppointments.filter(
             (appt) => !updatedIds.includes(appt.id)
           );
 
-          // Add new/updated events to the filtered list
+          console.log("🔄 Updated Appointments in State:", [
+            ...filteredAppointments,
+            ...newEvents,
+          ]);
+
           return [...filteredAppointments, ...newEvents];
         });
+
+        setTimeout(() => setAppointments((prev) => [...prev]), 100);
 
         toast.success(
           response.updatedAppointment

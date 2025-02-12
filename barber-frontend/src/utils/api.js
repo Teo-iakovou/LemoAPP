@@ -53,6 +53,8 @@ export const updateAppointment = async (appointmentId, updatedData) => {
     import.meta.env.VITE_API_BASE_URL || "http://localhost:5001/api";
 
   try {
+    console.log("🚀 Final Data Sent to Backend:", updatedData); // 🔥 Debugging
+
     const response = await fetch(
       `${API_BASE_URL}/appointments/${appointmentId}`,
       {
@@ -66,15 +68,16 @@ export const updateAppointment = async (appointmentId, updatedData) => {
 
     if (!response.ok) {
       const errorData = await response.json();
-      console.error("Error Response from API:", errorData);
+      console.error("❌ Error Response from API:", errorData);
       throw new Error(errorData.message || "Failed to update the appointment.");
     }
 
     const updatedAppointment = await response.json();
-    console.log("API Response:", updatedAppointment); // Debug API response
+    console.log("✅ API Response - Updated Appointment:", updatedAppointment); // 🔥 Debugging
+
     return updatedAppointment;
   } catch (error) {
-    console.error("Error updating appointment:", error.message);
+    console.error("❌ Error updating appointment:", error.message);
     throw error;
   }
 };

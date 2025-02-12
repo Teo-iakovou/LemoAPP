@@ -3,7 +3,6 @@ const Customer = require("../models/customer");
 const { sendSMS } = require("../utils/smsService");
 const moment = require("moment-timezone");
 // Create an appointment
-
 const createAppointment = async (req, res, next) => {
   try {
     console.log("Received Payload on Server:", req.body);
@@ -14,8 +13,7 @@ const createAppointment = async (req, res, next) => {
       appointmentDateTime,
       barber,
       recurrence,
-      repeatWeeks,
-      repeatMonths,
+      repeatWeeks, // Only keep weekly recurrence
     } = req.body;
 
     // Validate required fields
@@ -34,6 +32,7 @@ const createAppointment = async (req, res, next) => {
     if (isPastDate) {
       console.log("Appointment is in the past. Skipping SMS notification.");
     }
+
     // Convert to Athens time for logging
     const appointmentDateAthens = appointmentDateUTC
       .clone()
@@ -64,57 +63,58 @@ const createAppointment = async (req, res, next) => {
       appointmentDateTime: appointmentDateUTC.toDate(), // Store in UTC
       barber,
       duration,
+      appointmentStatus: "confirmed",
+
       endTime: endTimeUTC, // Store in UTC
-      recurrence: recurrence || "one-time", // Default to one-time if not specified
+      recurrence: recurrence === "weekly" ? "weekly" : "one-time", // Only keep weekly recurrence
+      repeatWeeks: recurrence === "weekly" ? parseInt(repeatWeeks) : null,
     });
+
     const savedAppointment = await newAppointment.save();
+
+    // Generate recurring appointments if applicable (Only Weekly)
+    let additionalAppointments = [];
+    if (recurrence === "weekly" && repeatWeeks) {
+      additionalAppointments = await generateRecurringAppointments({
+        customerName,
+        phoneNumber,
+        barber,
+        initialAppointmentDate: appointmentDateUTC,
+        duration,
+        recurrenceType: "weekly",
+        repeatCount: repeatWeeks,
+        interval: "week",
+      });
+    }
 
     // Send confirmation SMS only for future appointments
     if (!isPastDate) {
       try {
-        const formattedLocalTime =
-          appointmentDateAthens.format("DD/MM/YYYY HH:mm");
-        const message = `Επιβεβαιώνουμε το ραντεβού σας στο LEMO BARBER SHOP με τον ${barber} για τις ${formattedLocalTime}!`;
+        let message;
+
+        if (recurrence === "weekly" && repeatWeeks) {
+          // Generate a list of upcoming appointment dates
+          const allDates = [
+            appointmentDateAthens.format("DD/MM/YYYY HH:mm"), // Initial appointment
+            ...additionalAppointments.map((appt) =>
+              moment(appt.appointmentDateTime)
+                .tz("Europe/Athens")
+                .format("DD/MM/YYYY HH:mm")
+            ),
+          ].join(", ");
+
+          message = `Επιβεβαιώνουμε το ραντεβού σας στο LEMO BARBER SHOP με τον ${barber} για τις ημερομινίες: ${allDates}.`;
+        } else {
+          const formattedLocalTime =
+            appointmentDateAthens.format("DD/MM/YYYY HH:mm");
+          message = `Επιβεβαιώνουμε το ραντεβού σας στο LEMO BARBER SHOP με τον ${barber} για τις ${formattedLocalTime}!`;
+        }
+
         await sendSMS(phoneNumber, message);
-        console.log("Confirmation SMS sent successfully.");
+        console.log("Confirmation SMS sent.");
       } catch (smsError) {
         console.error("Failed to send confirmation SMS:", smsError.message);
       }
-    } else {
-      console.log(
-        "Appointment is in the past. SMS notification skipped for:",
-        phoneNumber
-      );
-    }
-
-    // Generate recurring appointments if applicable
-    const additionalAppointments = [];
-    if (recurrence === "weekly" && repeatWeeks) {
-      additionalAppointments.push(
-        ...(await generateRecurringAppointments({
-          customerName,
-          phoneNumber,
-          barber,
-          initialAppointmentDate: appointmentDateUTC,
-          duration,
-          recurrenceType: "weekly",
-          repeatCount: repeatWeeks,
-          interval: "week",
-        }))
-      );
-    } else if (recurrence === "monthly" && repeatMonths) {
-      additionalAppointments.push(
-        ...(await generateRecurringAppointments({
-          customerName,
-          phoneNumber,
-          barber,
-          initialAppointmentDate: appointmentDateUTC,
-          duration,
-          recurrenceType: "monthly",
-          repeatCount: repeatMonths,
-          interval: "month",
-        }))
-      );
     }
 
     res.status(201).json({
@@ -161,6 +161,7 @@ const generateRecurringAppointments = async ({
       endTime: recurringEndTimeUTC, // Store in UTC
       recurrence: recurrenceType,
     });
+
     const savedAppointment = await additionalAppointment.save();
     appointments.push(savedAppointment);
   }
@@ -188,11 +189,25 @@ const updateAppointment = async (req, res, next) => {
       appointmentDateTime,
       duration = 40,
       phoneNumber,
-      barber,
+      barber, // ✅ Ensure barber is extracted
       ...updateData
     } = req.body;
 
-    // Validate if the appointmentDateTime is in the future
+    console.log("🔥 Incoming Update Request:", req.body);
+
+    // Fetch the existing appointment
+    const existingAppointment = await Appointment.findById(id);
+    if (!existingAppointment) {
+      return res.status(404).json({ message: "Appointment not found" });
+    }
+
+    console.log("📅 Existing Appointment Before Update:", existingAppointment);
+
+    const oldFormattedDate = moment(existingAppointment.appointmentDateTime)
+      .tz("Europe/Athens")
+      .format("DD/MM/YYYY HH:mm");
+
+    // Validate if the new appointmentDateTime is in the future
     if (appointmentDateTime) {
       const appointmentStart = new Date(appointmentDateTime);
       if (appointmentStart <= new Date()) {
@@ -201,22 +216,26 @@ const updateAppointment = async (req, res, next) => {
           .json({ message: "Appointment date must be in the future" });
       }
 
-      // Recalculate endTime
       updateData.endTime = new Date(
         appointmentStart.getTime() + duration * 60 * 1000
       );
-      updateData.appointmentDateTime = appointmentStart; // Ensure it's updated in the database
-
-      // 🔥 Reset reminders when updating the appointment date
-      updateData.reminderLogs = [];
+      updateData.appointmentDateTime = appointmentStart;
+      updateData.reminderLogs = []; // Reset reminders
     }
+
+    // ✅ Ensure barber is updated correctly and not removed
+    if (barber) {
+      updateData.barber = barber;
+    }
+
+    console.log("🔄 Final Data Before Update:", updateData);
 
     const updatedAppointment = await Appointment.findByIdAndUpdate(
       id,
-      updateData,
+      { $set: updateData }, // ✅ Use $set to explicitly update fields
       {
-        new: true, // Return the updated document
-        runValidators: true, // Ensure validations are run
+        new: true,
+        runValidators: true,
       }
     );
 
@@ -224,17 +243,20 @@ const updateAppointment = async (req, res, next) => {
       return res.status(404).json({ message: "Appointment not found" });
     }
 
-    // Send SMS notification for the updated appointment
+    console.log("✅ Updated Appointment in DB:", updatedAppointment);
+
+    const newFormattedDate = moment(updatedAppointment.appointmentDateTime)
+      .tz("Europe/Athens")
+      .format("DD/MM/YYYY HH:mm");
+
+    // Send SMS notification
     try {
-      const formattedDateTime = moment(updatedAppointment.appointmentDateTime)
-        .tz("Europe/Athens")
-        .format("DD/MM/YYYY HH:mm");
-      const message = `Το ραντεβού σας στο LEMO BARBER SHOP έχει αλλάξει στις ${formattedDateTime}.`;
+      const message = `Το ραντεβού σας στο LEMO BARBER SHOP στις ${oldFormattedDate}, έχει αλλάξει για ${newFormattedDate}.`;
 
       await sendSMS(phoneNumber || updatedAppointment.phoneNumber, message);
-      console.log("Update SMS sent successfully");
+      console.log("📲 Update SMS sent successfully");
     } catch (smsError) {
-      console.error("Failed to send update SMS:", smsError.message);
+      console.error("❌ Failed to send update SMS:", smsError.message);
     }
 
     res.status(200).json({
@@ -243,7 +265,7 @@ const updateAppointment = async (req, res, next) => {
       updatedAppointment,
     });
   } catch (error) {
-    console.error("Error updating appointment:", error);
+    console.error("❌ Error updating appointment:", error);
     next(error);
   }
 };
