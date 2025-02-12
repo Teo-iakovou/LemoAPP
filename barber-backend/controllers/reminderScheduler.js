@@ -13,8 +13,8 @@ const sendReminders = async () => {
     // Find all confirmed appointments exactly 24 hours away
     const appointments = await Appointment.find({
       appointmentDateTime: {
-        $gte: reminderTime.toDate(), // 24 hours from now
-        $lt: reminderTime.clone().add(24, "hours").toDate(), // Up to 48 hours
+        $gte: reminderTime.toDate(), // Exactly 24 hours from now
+        $lt: reminderTime.clone().add(1, "hour").toDate(), // Only +1 hour range
       },
       appointmentStatus: "confirmed",
     });
