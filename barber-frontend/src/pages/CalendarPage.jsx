@@ -96,14 +96,14 @@ const CalendarPage = () => {
 
   const handleFormSubmit = async (appointmentData) => {
     try {
-      console.log("🔄 Sending Updated Appointment Data:", appointmentData); // Debugging
+      console.log("📤 Form Data Before Processing:", appointmentData); // 🔍 Debugging
 
       let response;
       if (appointmentData._id) {
         const updatedAppointmentData = {
           ...appointmentData,
           barber: appointmentData.barber || "ΛΕΜΟ", // ✅ Ensure barber change is saved
-          currentPassword: "apoel",
+          // currentPassword: "apoel",
         };
 
         console.log(
@@ -170,7 +170,36 @@ const CalendarPage = () => {
     }
   };
 
-  const handleDelete = async (appointmentId, password) => {
+  // const handleDelete = async (appointmentId, password) => {
+  //   console.log("Deleting appointment with ID:", appointmentId);
+
+  //   try {
+  //     const response = await fetch(
+  //       `${API_BASE_URL}/appointments/${appointmentId}`,
+  //       {
+  //         method: "DELETE",
+  //         headers: {
+  //           "Content-Type": "application/json",
+  //         },
+  //         body: JSON.stringify({ currentPassword: password }),
+  //       }
+  //     );
+
+  //     if (response.ok) {
+  //       setAppointments((prevAppointments) =>
+  //         prevAppointments.filter((appt) => appt.id !== appointmentId)
+  //       );
+  //       toast.success("Appointment deleted successfully!");
+  //     } else {
+  //       const errorData = await response.json();
+  //       toast.error("Failed to delete the appointment: " + errorData.message);
+  //     }
+  //   } catch (error) {
+  //     console.error("Error deleting appointment:", error);
+  //     toast.error("An error occurred while deleting the appointment.");
+  //   }
+  // };
+  const handleDelete = async (appointmentId) => {
     console.log("Deleting appointment with ID:", appointmentId);
 
     try {
@@ -181,7 +210,7 @@ const CalendarPage = () => {
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ currentPassword: password }),
+          // ❌ Do not send a request body for DELETE
         }
       );
 

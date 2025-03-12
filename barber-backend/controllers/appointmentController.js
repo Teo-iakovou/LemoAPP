@@ -194,7 +194,7 @@ const updateAppointment = async (req, res, next) => {
     } = req.body;
 
     console.log("🔥 Incoming Update Request:", req.body);
-
+    console.log("🔍 Appointment ID:", req.params.id);
     // Fetch the existing appointment
     const existingAppointment = await Appointment.findById(id);
     if (!existingAppointment) {

@@ -48,13 +48,13 @@ export const fetchAppointments = async () => {
   }
   return response.json();
 };
+
 export const updateAppointment = async (appointmentId, updatedData) => {
   const API_BASE_URL =
     import.meta.env.VITE_API_BASE_URL || "http://localhost:5001/api";
+  console.log("📤 API Request Sent with Data:", updatedData); // ✅ Debugging
 
   try {
-    console.log("🚀 Final Data Sent to Backend:", updatedData); // 🔥 Debugging
-
     const response = await fetch(
       `${API_BASE_URL}/appointments/${appointmentId}`,
       {
