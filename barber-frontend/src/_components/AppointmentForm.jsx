@@ -103,61 +103,67 @@ function AppointmentForm({
       isPastDate,
     };
 
-    console.log("Submitting Appointment Data:", appointmentDetails);
+    console.log(
+      "🟢 Prepared Appointment Data for Submission:",
+      appointmentDetails
+    );
 
     if (isEditing) {
-      setActionType("edit"); // Set action type to "edit"
-      setShowPasswordForm(true); // Show the password confirmation form
+      console.log("🟡 Editing Mode: Calling onSubmit...");
     } else {
-      // For new appointments, submit immediately
-      onSubmit(appointmentDetails);
-      reset(); // Clear the form fields
+      console.log("🔵 New Appointment: Calling onSubmit...");
     }
+
+    onSubmit(appointmentDetails);
+    reset(); // Clear the form fields
   };
 
+  // const handleDelete = () => {
+  //   setActionType("delete");
+  //   setShowPasswordForm(true);
+  // };
   const handleDelete = () => {
-    setActionType("delete");
-    setShowPasswordForm(true);
+    onDelete(appointmentData?._id); // ✅ Directly call delete
   };
 
-  const handlePasswordSubmit = async (enteredPassword) => {
-    setShowPasswordForm(false); // Hide the password form after submission
+  // const handlePasswordSubmit = async (enteredPassword) => {
+  //   setShowPasswordForm(false); // Hide the password form after submission
 
-    if (!enteredPassword || enteredPassword.trim() === "") {
-      console.error("Password is required for this action.");
-      return;
-    }
+  //   if (!enteredPassword || enteredPassword.trim() === "") {
+  //     console.error("Password is required for this action.");
+  //     return;
+  //   }
 
-    if (actionType === "edit") {
-      const latestBarber = getValues("barber"); // ✅ Now correctly extracting barber from the form
+  //   if (actionType === "edit") {
+  //     const latestBarber = getValues("barber"); // ✅ Now correctly extracting barber from the form
 
-      console.log(
-        "🔍 Before Constructing Payload - appointmentData:",
-        appointmentData
-      );
-      console.log(
-        "🔍 Before Constructing Payload - Selected Barber from Form:",
-        latestBarber
-      );
+  //     console.log(
+  //       "🔍 Before Constructing Payload - appointmentData:",
+  //       appointmentData
+  //     );
+  //     console.log(
+  //       "🔍 Before Constructing Payload - Selected Barber from Form:",
+  //       latestBarber
+  //     );
 
-      const appointmentDetails = {
-        ...appointmentData,
-        barber: latestBarber, // ✅ Use the correct barber selection
-        appointmentDateTime,
-        recurrence: recurrence !== "none" ? recurrence : null,
-        password: enteredPassword,
-      };
+  //     const appointmentDetails = {
+  //       ...appointmentData,
+  //       barber: latestBarber, // ✅ Use the correct barber selection
+  //       appointmentDateTime,
+  //       recurrence: recurrence !== "none" ? recurrence : null,
+  //       password: enteredPassword,
+  //     };
 
-      console.log(
-        "Submitting Payload for Edit with Password:",
-        appointmentDetails
-      );
-      onSubmit(appointmentDetails); // Send the updated data after password confirmation
-    } else if (actionType === "delete") {
-      // Pass the appointment ID and password for deletion
-      onDelete(appointmentData?._id, enteredPassword);
-    }
-  };
+  //     console.log(
+  //       "Submitting Payload for Edit with Password:",
+  //       appointmentDetails
+  //     );
+  //     onSubmit(appointmentDetails); // Send the updated data after password confirmation
+  //   } else if (actionType === "delete") {
+  //     // Pass the appointment ID and password for deletion
+  //     onDelete(appointmentData?._id, enteredPassword);
+  //   }
+  // };
 
   return (
     <div className="fixed inset-0 bg-gray-800 bg-opacity-75 flex items-center justify-center p-4">
@@ -175,150 +181,150 @@ function AppointmentForm({
           </div>
         )}
 
-        {showPasswordForm ? (
+        {/* {showPasswordForm ? (
           <PasswordForm
             onPasswordSubmit={handlePasswordSubmit}
             onCancel={() => setShowPasswordForm(false)}
           />
-        ) : (
-          <>
-            <form onSubmit={handleSubmit(submitForm)}>
-              {/* Customer Name */}
-              <div className="mb-4">
-                <label htmlFor="customerName" className="block text-gray-700">
-                  ΟΝΟΜΑ ΠΕΛΑΤΗ:
-                </label>
-                <input
-                  {...register("customerName")}
-                  list="customerNameList"
-                  onChange={handleCustomerSelect}
-                  type="text"
-                  id="customerName"
-                  placeholder="Όνομα πελάτη"
-                  className="mt-1 block w-full p-2 border border-gray-300 rounded"
-                  required
-                />
-                <datalist id="customerNameList">
-                  {customers.map((customer) => (
-                    <option key={customer.phoneNumber} value={customer.name} />
-                  ))}
-                </datalist>
-              </div>
+        ) : ( */}
+        <>
+          <form onSubmit={handleSubmit(submitForm)}>
+            {/* Customer Name */}
+            <div className="mb-4">
+              <label htmlFor="customerName" className="block text-gray-700">
+                ΟΝΟΜΑ ΠΕΛΑΤΗ:
+              </label>
+              <input
+                {...register("customerName")}
+                list="customerNameList"
+                onChange={handleCustomerSelect}
+                type="text"
+                id="customerName"
+                placeholder="Όνομα πελάτη"
+                className="mt-1 block w-full p-2 border border-gray-300 rounded"
+                required
+              />
+              <datalist id="customerNameList">
+                {customers.map((customer) => (
+                  <option key={customer.phoneNumber} value={customer.name} />
+                ))}
+              </datalist>
+            </div>
 
-              {/* Phone Number */}
-              <div className="mb-4">
-                <label htmlFor="phoneNumber" className="block text-gray-700">
-                  ΤΗΛΕΦΩΝΟ:
-                </label>
-                <input
-                  {...register("phoneNumber")}
-                  type="text"
-                  id="phoneNumber"
-                  placeholder="Τηλέφωνο πελάτη"
-                  className="mt-1 block w-full p-2 border border-gray-300 rounded"
-                  required
-                />
-              </div>
+            {/* Phone Number */}
+            <div className="mb-4">
+              <label htmlFor="phoneNumber" className="block text-gray-700">
+                ΤΗΛΕΦΩΝΟ:
+              </label>
+              <input
+                {...register("phoneNumber")}
+                type="text"
+                id="phoneNumber"
+                placeholder="Τηλέφωνο πελάτη"
+                className="mt-1 block w-full p-2 border border-gray-300 rounded"
+                required
+              />
+            </div>
 
-              {/* Appointment Date and Time */}
-              <div className="mb-4">
-                <label
-                  htmlFor="appointmentDateTime"
-                  className="block text-gray-700"
-                >
-                  ΗΜΕΡΑ ΚΑΙ ΩΡΑ ΡΑΝΤΕΒΟΥ:
-                </label>
-                <Flatpickr
-                  ref={flatpickrRef}
-                  value={appointmentDateTime}
-                  onChange={(date) => setAppointmentDateTime(date[0])}
-                  options={{
-                    enableTime: true,
-                    dateFormat: "d/m/Y H:i",
-                    time_24hr: true,
-                  }}
-                  className="mt-1 block w-full p-2 border border-gray-300 rounded"
-                />
-              </div>
-
-              {/* Barber Selection */}
-              <div className="mb-4">
-                <label htmlFor="barber" className="block text-gray-700">
-                  ΕΠΙΛΟΓΗ:
-                </label>
-                <select
-                  {...register("barber")}
-                  id="barber"
-                  onChange={(e) => {
-                    setValue("barber", e.target.value); // ✅ Make sure barber updates correctly
-                    console.log("✏️ Barber Changed:", e.target.value); // Log barber changes
-                  }}
-                  className="mt-1 block w-full p-2 border border-gray-300 rounded"
-                >
-                  <option value="ΛΕΜΟ">ΛΕΜΟ</option>
-                  <option value="ΦΟΡΟΥ">ΦΟΡΟΥ</option>
-                </select>
-              </div>
-
-              {/* Recurrence */}
-              <div className="mb-4">
-                <label htmlFor="recurrence" className="block text-gray-700">
-                  ΕΠΑΝΑΛΗΨΗ ΡΑΝΤΕΒΟΥ:
-                </label>
-                <select
-                  id="recurrence"
-                  value={recurrence}
-                  onChange={(e) => setRecurrence(e.target.value)}
-                  className="mt-1 block w-full p-2 border border-gray-300 rounded"
-                >
-                  <option value="none">ΚΑΝΕΝΑ</option>
-                  <option value="weekly">ΕΒΔΟΜΑΔΙΑΙΟ</option>
-                </select>
-                {recurrence === "weekly" && (
-                  <div className="mt-4">
-                    <label className="block text-gray-700">
-                      ΕΠΑΝΑΛΗΨΗ ΓΙΑ ΠΟΣΕΣ ΕΒΔΟΜΑΔΕΣ:
-                    </label>
-                    <select
-                      value={weeksOption}
-                      onChange={(e) => setWeeksOption(e.target.value)}
-                      className="mt-1 block w-full p-2 border border-gray-300 rounded"
-                    >
-                      {[1, 2, 3, 4, 5].map((week) => (
-                        <option key={week} value={week}>
-                          {week} ΕΒΔΟΜΑΔΕΣ
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-              </div>
-
-              <button
-                type="submit"
-                className="w-full bg-green-500 text-white py-2 rounded"
+            {/* Appointment Date and Time */}
+            <div className="mb-4">
+              <label
+                htmlFor="appointmentDateTime"
+                className="block text-gray-700"
               >
-                {isEditing ? "ΕΝΗΜΕΡΩΣΗ ΡΑΝΤΕΒΟΥ" : "ΠΡΟΣΘΗΚΗ ΡΑΝΤΕΒΟΥ"}
-              </button>
-            </form>
+                ΗΜΕΡΑ ΚΑΙ ΩΡΑ ΡΑΝΤΕΒΟΥ:
+              </label>
+              <Flatpickr
+                ref={flatpickrRef}
+                value={appointmentDateTime}
+                onChange={(date) => setAppointmentDateTime(date[0])}
+                options={{
+                  enableTime: true,
+                  dateFormat: "d/m/Y H:i",
+                  time_24hr: true,
+                }}
+                className="mt-1 block w-full p-2 border border-gray-300 rounded"
+              />
+            </div>
 
-            {isEditing && (
-              <button
-                className="mt-4 w-full bg-red-500 text-white py-2 rounded"
-                onClick={handleDelete}
+            {/* Barber Selection */}
+            <div className="mb-4">
+              <label htmlFor="barber" className="block text-gray-700">
+                ΕΠΙΛΟΓΗ:
+              </label>
+              <select
+                {...register("barber")}
+                id="barber"
+                onChange={(e) => {
+                  setValue("barber", e.target.value); // ✅ Make sure barber updates correctly
+                  console.log("✏️ Barber Changed:", e.target.value); // Log barber changes
+                }}
+                className="mt-1 block w-full p-2 border border-gray-300 rounded"
               >
-                ΔΙΑΓΡΑΦΗ ΡΑΝΤΕΒΟΥ
-              </button>
-            )}
+                <option value="ΛΕΜΟ">ΛΕΜΟ</option>
+                <option value="ΦΟΡΟΥ">ΦΟΡΟΥ</option>
+              </select>
+            </div>
+
+            {/* Recurrence */}
+            <div className="mb-4">
+              <label htmlFor="recurrence" className="block text-gray-700">
+                ΕΠΑΝΑΛΗΨΗ ΡΑΝΤΕΒΟΥ:
+              </label>
+              <select
+                id="recurrence"
+                value={recurrence}
+                onChange={(e) => setRecurrence(e.target.value)}
+                className="mt-1 block w-full p-2 border border-gray-300 rounded"
+              >
+                <option value="none">ΚΑΝΕΝΑ</option>
+                <option value="weekly">ΕΒΔΟΜΑΔΙΑΙΟ</option>
+              </select>
+              {recurrence === "weekly" && (
+                <div className="mt-4">
+                  <label className="block text-gray-700">
+                    ΕΠΑΝΑΛΗΨΗ ΓΙΑ ΠΟΣΕΣ ΕΒΔΟΜΑΔΕΣ:
+                  </label>
+                  <select
+                    value={weeksOption}
+                    onChange={(e) => setWeeksOption(e.target.value)}
+                    className="mt-1 block w-full p-2 border border-gray-300 rounded"
+                  >
+                    {[1, 2, 3, 4, 5].map((week) => (
+                      <option key={week} value={week}>
+                        {week} ΕΒΔΟΜΑΔΕΣ
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
 
             <button
-              className="mt-4 w-full bg-gray-500 text-white py-2 rounded"
-              onClick={onClose}
+              type="submit"
+              className="w-full bg-green-500 text-white py-2 rounded"
             >
-              ΑΚΥΡΩΣΗ
+              {isEditing ? "ΕΝΗΜΕΡΩΣΗ ΡΑΝΤΕΒΟΥ" : "ΠΡΟΣΘΗΚΗ ΡΑΝΤΕΒΟΥ"}
             </button>
-          </>
-        )}
+          </form>
+
+          {isEditing && (
+            <button
+              className="mt-4 w-full bg-red-500 text-white py-2 rounded"
+              onClick={handleDelete}
+            >
+              ΔΙΑΓΡΑΦΗ ΡΑΝΤΕΒΟΥ
+            </button>
+          )}
+
+          <button
+            className="mt-4 w-full bg-gray-500 text-white py-2 rounded"
+            onClick={onClose}
+          >
+            ΑΚΥΡΩΣΗ
+          </button>
+        </>
+        {/* )} */}
       </div>
     </div>
   );

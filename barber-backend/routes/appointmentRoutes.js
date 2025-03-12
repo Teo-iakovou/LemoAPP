@@ -5,13 +5,13 @@ const {
   updateAppointment,
   deleteAppointment,
 } = require("../controllers/appointmentController");
-const validatePassword = require("../middlewares/validatePassword");
+// const validatePassword = require("../middlewares/validatePassword");
 
 const router = express.Router();
 
 router.post("/", createAppointment);
 router.get("/", getAppointments);
-router.put("/:id", validatePassword, updateAppointment);
-router.delete("/:id", validatePassword, deleteAppointment); // Use password validation here
+router.put("/:id", updateAppointment); //, validatePassword it used to be here
+router.delete("/:id", deleteAppointment); //, validatePassword it used to be here
 
 module.exports = router;
