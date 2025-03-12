@@ -96,21 +96,19 @@ const CalendarPage = () => {
 
   const handleFormSubmit = async (appointmentData) => {
     try {
-      console.log("📤 Form Data Before Processing:", appointmentData); // 🔍 Debugging
+      console.log("📤 Form Data Before Processing:", appointmentData);
 
       let response;
       if (appointmentData._id) {
         const updatedAppointmentData = {
           ...appointmentData,
-          barber: appointmentData.barber || "ΛΕΜΟ", // ✅ Ensure barber change is saved
-          // currentPassword: "apoel",
+          barber: appointmentData.barber || "ΛΕΜΟ",
         };
 
         console.log(
           "🚀 Final Payload Before API Request:",
           updatedAppointmentData
-        ); // 🔥 Debugging
-
+        );
         response = await updateAppointment(
           appointmentData._id,
           updatedAppointmentData
@@ -119,7 +117,7 @@ const CalendarPage = () => {
         response = await createAppointment(appointmentData);
       }
 
-      console.log("✅ API Response:", response); // Log full API response
+      console.log("✅ API Response:", response);
 
       if (response?.updatedAppointment || response?.initialAppointment) {
         const createdAppointments = [
@@ -159,14 +157,15 @@ const CalendarPage = () => {
             ? "Appointment updated successfully!"
             : "Appointments created successfully!"
         );
+
+        // ✅ Close the form after a successful update
+        setShowForm(false);
       } else {
         toast.error("Failed to add/update the appointment.");
       }
     } catch (error) {
       console.error("Error submitting appointment data:", error);
       toast.error("An error occurred while processing the appointment.");
-    } finally {
-      setShowForm(false);
     }
   };
 
@@ -210,7 +209,6 @@ const CalendarPage = () => {
           headers: {
             "Content-Type": "application/json",
           },
-          // ❌ Do not send a request body for DELETE
         }
       );
 
@@ -219,6 +217,9 @@ const CalendarPage = () => {
           prevAppointments.filter((appt) => appt.id !== appointmentId)
         );
         toast.success("Appointment deleted successfully!");
+
+        // ✅ Close the form after successful deletion
+        setShowForm(false);
       } else {
         const errorData = await response.json();
         toast.error("Failed to delete the appointment: " + errorData.message);

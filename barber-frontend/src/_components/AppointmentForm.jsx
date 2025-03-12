@@ -90,14 +90,15 @@ function AppointmentForm({
     const formattedAppointmentDateTime = appointmentDateTime
       ? new Date(appointmentDateTime).toISOString()
       : null;
+
     const isPastDate = new Date(appointmentDateTime) < new Date();
     const appointmentDetails = {
-      ...appointmentData, // Preserve existing data (e.g., `_id`) for editing
+      ...appointmentData,
       customerName: data.customerName,
       phoneNumber: data.phoneNumber,
-      barber: data.barber || appointmentData?.barber || "ΛΕΜΟ", // ✅ Ensure barber remains correct
-      duration: 40, // Fixed duration
-      appointmentDateTime: formattedAppointmentDateTime, // Ensure new date-time is sent
+      barber: data.barber || appointmentData?.barber || "ΛΕΜΟ",
+      duration: 40,
+      appointmentDateTime: formattedAppointmentDateTime,
       recurrence: recurrence !== "none" ? recurrence : null,
       repeatWeeks: recurrence === "weekly" ? parseInt(weeksOption) : null,
       isPastDate,
@@ -108,14 +109,9 @@ function AppointmentForm({
       appointmentDetails
     );
 
-    if (isEditing) {
-      console.log("🟡 Editing Mode: Calling onSubmit...");
-    } else {
-      console.log("🔵 New Appointment: Calling onSubmit...");
-    }
-
     onSubmit(appointmentDetails);
-    reset(); // Clear the form fields
+    reset(); // ✅ Clear the form fields
+    onClose(); // ✅ Close the form after submission
   };
 
   // const handleDelete = () => {
@@ -123,9 +119,9 @@ function AppointmentForm({
   //   setShowPasswordForm(true);
   // };
   const handleDelete = () => {
-    onDelete(appointmentData?._id); // ✅ Directly call delete
+    onDelete(appointmentData?._id);
+    onClose(); // ✅ Close the form after deleting an appointment
   };
-
   // const handlePasswordSubmit = async (enteredPassword) => {
   //   setShowPasswordForm(false); // Hide the password form after submission
 
