@@ -32,6 +32,9 @@ function AppointmentForm({
   const [recurrence, setRecurrence] = useState("none");
   const [weeksOption, setWeeksOption] = useState("1");
   const [error, setError] = useState(null);
+  const [repeatInterval, setRepeatInterval] = useState(1); // Default: Every 1 week
+  const [repeatCount, setRepeatCount] = useState(1); // Default: 1 appointment
+
   const [showPasswordForm, setShowPasswordForm] = useState(false);
   const [actionType, setActionType] = useState(null); // Tracks "edit" or "delete"
 
@@ -100,7 +103,9 @@ function AppointmentForm({
       duration: 40,
       appointmentDateTime: formattedAppointmentDateTime,
       recurrence: recurrence !== "none" ? recurrence : null,
-      repeatWeeks: recurrence === "weekly" ? parseInt(weeksOption) : null,
+      repeatInterval: recurrence === "weekly" ? repeatInterval : null,
+      repeatCount: recurrence === "weekly" ? repeatCount : null,
+
       isPastDate,
     };
 
@@ -276,23 +281,45 @@ function AppointmentForm({
                 <option value="none">ΚΑΝΕΝΑ</option>
                 <option value="weekly">ΕΒΔΟΜΑΔΙΑΙΟ</option>
               </select>
+
               {recurrence === "weekly" && (
-                <div className="mt-4">
-                  <label className="block text-gray-700">
-                    ΕΠΑΝΑΛΗΨΗ ΓΙΑ ΠΟΣΕΣ ΕΒΔΟΜΑΔΕΣ:
-                  </label>
-                  <select
-                    value={weeksOption}
-                    onChange={(e) => setWeeksOption(e.target.value)}
-                    className="mt-1 block w-full p-2 border border-gray-300 rounded"
-                  >
-                    {[1, 2, 3, 4, 5].map((week) => (
-                      <option key={week} value={week}>
-                        {week} ΕΒΔΟΜΑΔΕΣ
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                <>
+                  <div className="mt-4">
+                    <label className="block text-gray-700">
+                      ΠΟΣΕΣ ΕΒΔΟΜΑΔΕΣ ΑΝΑΜΕΣΑ:
+                    </label>
+                    <select
+                      value={repeatInterval}
+                      onChange={(e) =>
+                        setRepeatInterval(parseInt(e.target.value))
+                      }
+                      className="mt-1 block w-full p-2 border border-gray-300 rounded"
+                    >
+                      {[1, 2, 3, 4, 5].map((interval) => (
+                        <option key={interval} value={interval}>
+                          {interval} ΕΒΔΟΜΑΔΕΣ
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="mt-4">
+                    <label className="block text-gray-700">
+                      ΣΥΝΟΛΙΚΑ ΡΑΝΤΕΒΟΥ:
+                    </label>
+                    <select
+                      value={repeatCount}
+                      onChange={(e) => setRepeatCount(parseInt(e.target.value))}
+                      className="mt-1 block w-full p-2 border border-gray-300 rounded"
+                    >
+                      {[1, 2, 3, 4, 5].map((count) => (
+                        <option key={count} value={count}>
+                          {count} ΡΑΝΤΕΒΟΥ
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </>
               )}
             </div>
 

@@ -5,7 +5,7 @@ const moment = require("moment-timezone");
 // Create an appointment
 const createAppointment = async (req, res, next) => {
   try {
-    console.log("Received Payload on Server:", req.body);
+    console.log("📥 Received Payload on Server:", req.body);
 
     const {
       customerName,
@@ -13,7 +13,8 @@ const createAppointment = async (req, res, next) => {
       appointmentDateTime,
       barber,
       recurrence,
-      repeatWeeks, // Only keep weekly recurrence
+      repeatInterval, // How many weeks between each appointment
+      repeatCount, // Total number of appointments
     } = req.body;
 
     // Validate required fields
@@ -21,24 +22,25 @@ const createAppointment = async (req, res, next) => {
       return res.status(400).json({ message: "All fields are required." });
     }
 
+    // Ensure repeatCount does not exceed 5
+    const maxRepeat = Math.min(parseInt(repeatCount, 10) || 1, 5);
+    const intervalWeeks = Math.min(parseInt(repeatInterval, 10) || 1, 5);
+
     // Validate appointment date
     const appointmentDateUTC = moment(appointmentDateTime).utc();
     if (!appointmentDateUTC.isValid()) {
       return res.status(400).json({ message: "Invalid appointment date." });
     }
 
-    // Check if the appointment is for a past date
+    // Check if appointment is in the past
     const isPastDate = appointmentDateUTC.isBefore(moment().utc());
-    if (isPastDate) {
-      console.log("Appointment is in the past. Skipping SMS notification.");
-    }
 
     // Convert to Athens time for logging
     const appointmentDateAthens = appointmentDateUTC
       .clone()
       .tz("Europe/Athens");
     console.log(
-      "Appointment Date (Athens Time):",
+      "📅 Appointment Date (Athens Time):",
       appointmentDateAthens.format()
     );
 
@@ -64,35 +66,34 @@ const createAppointment = async (req, res, next) => {
       barber,
       duration,
       appointmentStatus: "confirmed",
-
       endTime: endTimeUTC, // Store in UTC
-      recurrence: recurrence === "weekly" ? "weekly" : "one-time", // Only keep weekly recurrence
-      repeatWeeks: recurrence === "weekly" ? parseInt(repeatWeeks) : null,
+      recurrence: recurrence === "weekly" ? "weekly" : "one-time",
+      repeatInterval: recurrence === "weekly" ? intervalWeeks : null,
+      repeatCount: recurrence === "weekly" ? maxRepeat : null,
     });
 
     const savedAppointment = await newAppointment.save();
 
-    // Generate recurring appointments if applicable (Only Weekly)
+    // Generate recurring appointments if applicable
     let additionalAppointments = [];
-    if (recurrence === "weekly" && repeatWeeks) {
+    if (recurrence === "weekly" && maxRepeat > 1) {
       additionalAppointments = await generateRecurringAppointments({
         customerName,
         phoneNumber,
         barber,
         initialAppointmentDate: appointmentDateUTC,
         duration,
-        recurrenceType: "weekly",
-        repeatCount: repeatWeeks,
-        interval: "week",
+        intervalWeeks,
+        repeatCount: maxRepeat - 1, // Since the first appointment is already created
       });
     }
 
-    // Send confirmation SMS only for future appointments
+    // Send confirmation SMS for all appointments
     if (!isPastDate) {
       try {
         let message;
 
-        if (recurrence === "weekly" && repeatWeeks) {
+        if (recurrence === "weekly" && maxRepeat > 1) {
           // Generate a list of upcoming appointment dates
           const allDates = [
             appointmentDateAthens.format("DD/MM/YYYY HH:mm"), // Initial appointment
@@ -103,7 +104,7 @@ const createAppointment = async (req, res, next) => {
             ),
           ].join(", ");
 
-          message = `Επιβεβαιώνουμε το ραντεβού σας στο LEMO BARBER SHOP με τον ${barber} για τις ημερομινίες: ${allDates}.`;
+          message = `Επιβεβαιώνουμε τα ραντεβού σας στο LEMO BARBER SHOP με τον ${barber} για τις ημερομηνίες: ${allDates}.`;
         } else {
           const formattedLocalTime =
             appointmentDateAthens.format("DD/MM/YYYY HH:mm");
@@ -111,9 +112,9 @@ const createAppointment = async (req, res, next) => {
         }
 
         await sendSMS(phoneNumber, message);
-        console.log("Confirmation SMS sent.");
+        console.log("📲 Confirmation SMS sent.");
       } catch (smsError) {
-        console.error("Failed to send confirmation SMS:", smsError.message);
+        console.error("❌ Failed to send confirmation SMS:", smsError.message);
       }
     }
 
@@ -131,22 +132,21 @@ const createAppointment = async (req, res, next) => {
   }
 };
 
-// Helper function to generate recurring appointments
+// 🔄 Generate Recurring Appointments with Dynamic Week Intervals
 const generateRecurringAppointments = async ({
   customerName,
   phoneNumber,
   barber,
   initialAppointmentDate,
   duration,
-  recurrenceType,
+  intervalWeeks,
   repeatCount,
-  interval,
 }) => {
   const appointments = [];
   let currentDateUTC = initialAppointmentDate.clone();
 
   for (let i = 1; i <= repeatCount; i++) {
-    currentDateUTC.add(1, interval);
+    currentDateUTC.add(intervalWeeks, "weeks"); // Apply the interval dynamically
     const recurringEndTimeUTC = currentDateUTC
       .clone()
       .add(duration, "minutes")
@@ -155,11 +155,12 @@ const generateRecurringAppointments = async ({
     const additionalAppointment = new Appointment({
       customerName,
       phoneNumber,
-      appointmentDateTime: currentDateUTC.toDate(), // Store in UTC
+      appointmentDateTime: currentDateUTC.toDate(),
       barber,
       duration,
-      endTime: recurringEndTimeUTC, // Store in UTC
-      recurrence: recurrenceType,
+      endTime: recurringEndTimeUTC,
+      recurrence: "weekly",
+      appointmentStatus: "confirmed",
     });
 
     const savedAppointment = await additionalAppointment.save();
