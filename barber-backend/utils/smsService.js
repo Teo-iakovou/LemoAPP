@@ -17,7 +17,7 @@ const sendSMS = async (to, message) => {
       {
         to: formattedNumber, // Use the formatted number
         message,
-        sender_id: "LemoBarber",
+        sender_id: "Barber",
       },
       {
         headers: {
