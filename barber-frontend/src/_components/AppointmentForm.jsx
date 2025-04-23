@@ -3,6 +3,8 @@ import { useForm } from "react-hook-form";
 import Flatpickr from "react-flatpickr";
 import "flatpickr/dist/flatpickr.min.css";
 import PasswordForm from "./PasswordForm";
+import Swal from "sweetalert2";
+import withReactContent from "sweetalert2-react-content";
 
 function AppointmentForm({
   initialDate,
@@ -37,6 +39,7 @@ function AppointmentForm({
 
   const [showPasswordForm, setShowPasswordForm] = useState(false);
   const [actionType, setActionType] = useState(null); // Tracks "edit" or "delete"
+  const MySwal = withReactContent(Swal);
 
   // Handle click outside the form to close it
   useEffect(() => {
@@ -124,9 +127,30 @@ function AppointmentForm({
   //   setShowPasswordForm(true);
   // };
   const handleDelete = () => {
-    onDelete(appointmentData?._id);
-    onClose(); // ✅ Close the form after deleting an appointment
+    MySwal.fire({
+      title: "Είστε σίγουρος;",
+      text: "Αυτό θα διαγράψει το ραντεβού οριστικά.",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#d33",
+      cancelButtonColor: "#3085d6",
+      confirmButtonText: "Ναι, διαγραφή!",
+      cancelButtonText: "Ακύρωση",
+    }).then((result) => {
+      if (result.isConfirmed) {
+        onDelete(appointmentData?._id);
+        onClose();
+        MySwal.fire({
+          title: "✅ Διαγραφή",
+          text: "Το ραντεβού διαγράφηκε με επιτυχία.",
+          icon: "success",
+          timer: 1500,
+          showConfirmButton: false,
+        });
+      }
+    });
   };
+
   // const handlePasswordSubmit = async (enteredPassword) => {
   //   setShowPasswordForm(false); // Hide the password form after submission
 

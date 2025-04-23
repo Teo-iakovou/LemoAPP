@@ -26,8 +26,18 @@ const appointmentSchema = new mongoose.Schema({
   },
   reminders: [
     {
-      type: { type: String, required: true }, // e.g., "24-hour", "7-day"
+      type: { type: String, required: true }, // e.g. "24-hour"
       sentAt: { type: Date, required: true },
+      messageId: { type: String }, // <- NEW
+      messageText: { type: String },
+      senderId: { type: String }, // if you store it
+      status: {
+        type: String,
+        enum: ["sent", "delivered", "failed", "expired"],
+        default: "sent",
+      }, // <- NEW
+      retryCount: { type: Number, default: 0 }, // <- NEW
+      error: String,
     },
   ],
 });
@@ -61,8 +71,12 @@ appointmentSchema.methods.isReminderSent = function (type) {
  * Log a reminder as sent.
  * @param {String} type - Reminder type
  */
-appointmentSchema.methods.logReminder = function (type) {
-  this.reminders.push({ type, sentAt: new Date() });
+appointmentSchema.methods.logReminder = function (type, data = {}) {
+  this.reminders.push({
+    type,
+    sentAt: new Date(),
+    ...data, // includes messageId, status, etc.
+  });
   return this.save();
 };
 

@@ -8,6 +8,7 @@ import {
   FaClipboard,
   FaBars,
   FaSms,
+  FaTools,
 } from "react-icons/fa";
 import Swal from "sweetalert2";
 import withReactContent from "sweetalert2-react-content";
@@ -130,6 +131,15 @@ const Navbar = ({ isAuth, onLogout }) => {
             >
               <FaSms />
             </button>
+          </li>
+          <li>
+            <Link
+              to="/sms-status"
+              className="hover:text-blue-500 transition-colors duration-300"
+              title="SMS Delivery Status"
+            >
+              <FaTools />
+            </Link>
           </li>
         </ul>
       )}

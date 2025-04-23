@@ -94,9 +94,8 @@ const createAppointment = async (req, res, next) => {
         let message;
 
         if (recurrence === "weekly" && maxRepeat > 1) {
-          // Generate a list of upcoming appointment dates
           const allDates = [
-            appointmentDateAthens.format("DD/MM/YYYY HH:mm"), // Initial appointment
+            appointmentDateAthens.format("DD/MM/YYYY HH:mm"),
             ...additionalAppointments.map((appt) =>
               moment(appt.appointmentDateTime)
                 .tz("Europe/Athens")
@@ -111,8 +110,21 @@ const createAppointment = async (req, res, next) => {
           message = `Επιβεβαιώνουμε το ραντεβού σας στο LEMO BARBER SHOP με τον ${barber} για τις ${formattedLocalTime}!`;
         }
 
-        await sendSMS(phoneNumber, message);
+        const result = await sendSMS(phoneNumber, message);
         console.log("📲 Confirmation SMS sent.");
+        console.log("📦 SMS API Response:", result);
+
+        savedAppointment.reminders.push({
+          type: "24-hour",
+          sentAt: new Date(),
+          messageId: result?.message_id || result?.messageId || null,
+          status: result?.success ? "sent" : "failed",
+          messageText: message,
+          senderId: "Lemo Barber",
+          retryCount: 0,
+        });
+
+        await savedAppointment.save();
       } catch (smsError) {
         console.error("❌ Failed to send confirmation SMS:", smsError.message);
       }
@@ -190,6 +202,7 @@ const updateAppointment = async (req, res, next) => {
       appointmentDateTime,
       duration = 40,
       phoneNumber,
+
       barber, // ✅ Ensure barber is extracted
       ...updateData
     } = req.body;
@@ -254,7 +267,23 @@ const updateAppointment = async (req, res, next) => {
     try {
       const message = `Το ραντεβού σας στο LEMO BARBER SHOP στις ${oldFormattedDate}, έχει αλλάξει για ${newFormattedDate}.`;
 
-      await sendSMS(phoneNumber || updatedAppointment.phoneNumber, message);
+      const smsResponse = await sendSMS(
+        phoneNumber || updatedAppointment.phoneNumber,
+        message
+      );
+      const messageId = smsResponse.message_id;
+
+      updatedAppointment.reminders.push({
+        type: "update",
+        sentAt: new Date(),
+        messageId,
+        messageText: message,
+        senderId: "Lemo Barber",
+        status: "sent",
+        retryCount: 0,
+      });
+      await updatedAppointment.save();
+
       console.log("📲 Update SMS sent successfully");
     } catch (smsError) {
       console.error("❌ Failed to send update SMS:", smsError.message);

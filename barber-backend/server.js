@@ -4,6 +4,9 @@ const dotenv = require("dotenv");
 const connectDB = require("./utils/db");
 const cron = require("node-cron");
 const noteRoutes = require("./routes/noteRoutes");
+const { autoRetryFailedSMS } = require("./controllers/autoRetryFailedSMS");
+const smsStatusRoutes = require("./routes/smsStatusRoutes");
+const smsResendRoute = require("./routes/smsResendRoute");
 const folderRoutes = require("./routes/folderRoutes");
 const waitingListRoutes = require("./routes/waitingList");
 const adminRoutes = require("./routes/adminRoutes");
@@ -70,6 +73,9 @@ app.use("/api/folders", folderRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/appointments", appointmentRoutes);
 app.use("/api", CustomerCountsRoutes);
+app.use("/api", smsStatusRoutes);
+app.use("/api", smsResendRoute);
+
 app.use("/api/customers", customerRoutes);
 app.use("/api/waitingList", waitingListRoutes);
 app.use("/api/reminders", reminderSchedulerRoute);
@@ -78,6 +84,7 @@ app.use("/api/auth", authRoutes);
 app.get("/api", (req, res) => {
   res.status(200).json({ message: "API is working" });
 });
+
 // Schedule reminders every hour
 cron.schedule("0 * * * *", async () => {
   console.log("Running hourly reminder scheduler...");
@@ -88,5 +95,12 @@ cron.schedule("0 * * * *", async () => {
     console.error("Error while sending reminders:", error.message);
   }
 });
+
+// Run every 10 minutes (or adjust as you like)
+cron.schedule("*/10 * * * *", async () => {
+  console.log("🕐 Running auto-retry for failed SMS...");
+  await autoRetryFailedSMS();
+});
+
 app.use(errorHandler);
 app.listen(PORT, () => console.log(`Server is running on port ${PORT}`));

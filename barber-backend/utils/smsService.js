@@ -26,7 +26,10 @@ const sendSMS = async (to, message) => {
         },
       }
     );
-    console.log("SMS sent successfully:", response.data);
+    console.log(
+      "🚀 Raw SMS.to response:",
+      JSON.stringify(response.data, null, 2)
+    );
     return response.data;
   } catch (error) {
     console.error("Failed to send SMS:", error.response?.data || error.message);

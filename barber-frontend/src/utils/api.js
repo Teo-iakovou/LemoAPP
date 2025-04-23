@@ -138,3 +138,19 @@ export async function updateWaitingListNote(id, note) {
 
   return response.json();
 }
+export async function getSmsStatuses(date) {
+  const res = await fetch(`${API_BASE_URL}/sms-statuses?date=${date}`);
+  if (!res.ok) throw new Error("Failed to fetch SMS statuses");
+  return res.json();
+}
+
+export async function resendSMS(appointmentId) {
+  const res = await fetch(`${API_BASE_URL}/sms-resend/${appointmentId}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+  });
+
+  const result = await res.json();
+  if (!res.ok) throw new Error(result.error || "Resend failed");
+  return result;
+}
