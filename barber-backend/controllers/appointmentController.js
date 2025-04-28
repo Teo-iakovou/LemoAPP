@@ -217,24 +217,21 @@ const updateAppointment = async (req, res, next) => {
 
     console.log("📅 Existing Appointment Before Update:", existingAppointment);
 
+    // 📅 Format the old date (before update) for the SMS message
     const oldFormattedDate = moment(existingAppointment.appointmentDateTime)
       .tz("Europe/Athens")
       .format("DD/MM/YYYY HH:mm");
 
-    // Validate if the new appointmentDateTime is in the future
+    // ✅ Now parse and update the new appointment date
     if (appointmentDateTime) {
       const appointmentStart = new Date(appointmentDateTime);
-      if (appointmentStart <= new Date()) {
-        return res
-          .status(400)
-          .json({ message: "Appointment date must be in the future" });
-      }
 
       updateData.endTime = new Date(
         appointmentStart.getTime() + duration * 60 * 1000
       );
       updateData.appointmentDateTime = appointmentStart;
-      updateData.reminderLogs = []; // Reset reminders
+
+      updateData.reminderLogs = []; // If you still want to reset reminders on update
     }
 
     // ✅ Ensure barber is updated correctly and not removed
@@ -264,29 +261,38 @@ const updateAppointment = async (req, res, next) => {
       .format("DD/MM/YYYY HH:mm");
 
     // Send SMS notification
-    try {
-      const message = `Το ραντεβού σας στο LEMO BARBER SHOP στις ${oldFormattedDate}, έχει αλλάξει για ${newFormattedDate}.`;
+    const now = moment().utc();
+    const isPastAppointment = moment(
+      updatedAppointment.appointmentDateTime
+    ).isBefore(now);
 
-      const smsResponse = await sendSMS(
-        phoneNumber || updatedAppointment.phoneNumber,
-        message
-      );
-      const messageId = smsResponse.message_id;
+    if (!isPastAppointment) {
+      try {
+        const message = `Το ραντεβού σας στο LEMO BARBER SHOP στις ${oldFormattedDate}, έχει αλλάξει για ${newFormattedDate}.`;
 
-      updatedAppointment.reminders.push({
-        type: "update",
-        sentAt: new Date(),
-        messageId,
-        messageText: message,
-        senderId: "Lemo Barber",
-        status: "sent",
-        retryCount: 0,
-      });
-      await updatedAppointment.save();
+        const smsResponse = await sendSMS(
+          phoneNumber || updatedAppointment.phoneNumber,
+          message
+        );
+        const messageId = smsResponse.message_id;
 
-      console.log("📲 Update SMS sent successfully");
-    } catch (smsError) {
-      console.error("❌ Failed to send update SMS:", smsError.message);
+        updatedAppointment.reminders.push({
+          type: "update",
+          sentAt: new Date(),
+          messageId,
+          messageText: message,
+          senderId: "Lemo Barber",
+          status: "sent",
+          retryCount: 0,
+        });
+        await updatedAppointment.save();
+
+        console.log("📲 Update SMS sent successfully");
+      } catch (smsError) {
+        console.error("❌ Failed to send update SMS:", smsError.message);
+      }
+    } else {
+      console.log("📵 No Update SMS sent because appointment is in the past.");
     }
 
     res.status(200).json({
@@ -319,16 +325,29 @@ const deleteAppointment = async (req, res, next) => {
 
     if (deletedAppointment) {
       // Send SMS confirmation for deleted appointment
-      try {
-        const formattedDateTime = moment(deletedAppointment.appointmentDateTime)
-          .tz("Europe/Athens")
-          .format("DD/MM/YYYY HH:mm");
-        const message = `Θα θέλαμε να σας ενημερώσουμε ότι το ραντεβού σας για ${formattedDateTime} ακυρώνεται.`;
+      const now = moment().utc();
+      const isPastAppointment = moment(
+        deletedAppointment.appointmentDateTime
+      ).isBefore(now);
 
-        await sendSMS(deletedAppointment.phoneNumber, message);
-        console.log("Deletion SMS sent successfully");
-      } catch (smsError) {
-        console.error("Failed to send deletion SMS:", smsError.message);
+      if (!isPastAppointment) {
+        try {
+          const formattedDateTime = moment(
+            deletedAppointment.appointmentDateTime
+          )
+            .tz("Europe/Athens")
+            .format("DD/MM/YYYY HH:mm");
+          const message = `Θα θέλαμε να σας ενημερώσουμε ότι το ραντεβού σας για ${formattedDateTime} ακυρώνεται.`;
+
+          await sendSMS(deletedAppointment.phoneNumber, message);
+          console.log("📲 Deletion SMS sent successfully");
+        } catch (smsError) {
+          console.error("❌ Failed to send deletion SMS:", smsError.message);
+        }
+      } else {
+        console.log(
+          "📵 No Deletion SMS sent because appointment was in the past."
+        );
       }
 
       return res.status(200).json({
