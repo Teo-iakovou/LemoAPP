@@ -27,7 +27,8 @@ const PORT = process.env.PORT || 5001;
 
 const corsOptions = {
   origin: [
-    "https://lemoapp-production.up.railway.app", // Production frontend
+    "https://lemoapp-k4ob.onrender.com", // Production frontend
+    ,
     "https://lemoapp.netlify.app", // Netlify frontend
     "http://localhost:5173", // Local development
   ],
@@ -44,7 +45,7 @@ app.use(
     contentSecurityPolicy: {
       useDefaults: true,
       directives: {
-        "default-src": ["'self'", "https://lemoapp-production.up.railway.app"],
+        "default-src": ["'self'", "https://lemoapp-k4ob.onrender.com"],
         "style-src": ["'self'", "'unsafe-inline'"], // Allow inline styles
         "img-src": ["'self'", "data:", "https://*"], // Allow base64 and external images
         "script-src": [
@@ -56,7 +57,8 @@ app.use(
         "connect-src": [
           "'self'",
           "https://lemoapp.netlify.app",
-          "https://lemoapp-production.up.railway.app",
+          "https://lemoapp-k4ob.onrender.com",
+          ,
         ],
         "frame-src": ["'self'"], // Allow iframes from the same origin
         "font-src": ["'self'", "https://*"], // Allow fonts from external sources
