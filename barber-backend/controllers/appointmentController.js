@@ -115,7 +115,7 @@ const createAppointment = async (req, res, next) => {
         console.log("📦 SMS API Response:", result);
 
         savedAppointment.reminders.push({
-          type: "24-hour",
+          type: "confirmation",
           sentAt: new Date(),
           messageId: result?.message_id || result?.messageId || null,
           status: result?.success ? "sent" : "failed",

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { getSmsStatuses, resendSMS } from "../utils/api";
 import Flatpickr from "react-flatpickr";
 import "flatpickr/dist/flatpickr.min.css";
+import { RefreshCcw } from "lucide-react";
 
 const STATUS_COLOR = {
   delivered: "text-green-400",
@@ -19,12 +20,6 @@ const SmsStatusPage = () => {
   useEffect(() => {
     const formattedDate = selectedDate.toISOString().split("T")[0];
     fetchStatuses(formattedDate);
-
-    const interval = setInterval(() => {
-      fetchStatuses(formattedDate);
-    }, 30000);
-
-    return () => clearInterval(interval);
   }, [selectedDate]);
 
   const fetchStatuses = async (date) => {
@@ -77,7 +72,7 @@ const SmsStatusPage = () => {
       </h1>
 
       {/* Ημερομηνία */}
-      <div className="flex items-center justify-start mb-6">
+      <div className="flex items-center justify-between mb-6">
         <Flatpickr
           value={selectedDate}
           options={{
@@ -91,6 +86,15 @@ const SmsStatusPage = () => {
           }}
           className="px-3 py-2 rounded-lg text-black w-full sm:w-auto"
         />
+        <button
+          onClick={() =>
+            fetchStatuses(selectedDate.toISOString().split("T")[0])
+          }
+          className="mb-4 p-2 bg-purple-800 hover:bg-purple-700 text-white rounded-md shadow"
+          title="Επαναφόρτωση"
+        >
+          <RefreshCcw size={18} />
+        </button>
       </div>
 
       {/* Πίνακας */}
@@ -144,7 +148,7 @@ const SmsStatusPage = () => {
                     </td>
                     <td className="px-4 py-3">{latest?.senderId || "—"}</td>
                     <td className="px-4 py-3">
-                      {status === "failed" && (
+                      {["failed", "expired"].includes(status) && (
                         <button
                           disabled={resendingId === appt._id}
                           onClick={() => handleResend(appt._id)}
@@ -155,6 +159,9 @@ const SmsStatusPage = () => {
                             : "🔁 Επανάληψη"}
                         </button>
                       )}
+                      <div className="text-xs text-gray-400 mt-1">
+                        Προσπάθειες: {latest?.retryCount || 0}
+                      </div>
                     </td>
                   </tr>
                 );
