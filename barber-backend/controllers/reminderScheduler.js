@@ -41,26 +41,15 @@ const sendReminders = async () => {
 
         const messageId = result?.message_id || result?.messageId;
 
-        if (result?.success && messageId) {
-          await appointment.logReminder("24-hour", {
-            sentAt: new Date(),
-            messageId,
-            status: "sent",
-            messageText: message,
-            senderId: "Lemo Barber",
-            retryCount: 0,
-          });
+        await appointment.logReminder("24-hour", {
+          messageId: messageId || null,
+          status: result?.success ? "sent" : "failed",
+          messageText: message,
+          senderId: "Lemo Barber",
+          retryCount: 0,
+        });
 
-          console.log(`✅ Reminder sent and logged for ${appointment._id}`);
-        } else {
-          console.warn(
-            `⚠️ Reminder sent but no message_id received for ${appointment._id}`
-          );
-          await appointment.logReminder("24-hour", {
-            messageId: null,
-            status: "sent",
-          });
-        }
+        console.log(`✅ Reminder logged for ${appointment._id}`);
       } catch (error) {
         console.error(
           `❌ Failed to send reminder for ${appointment._id}:`,
@@ -68,7 +57,6 @@ const sendReminders = async () => {
         );
 
         await appointment.logReminder("24-hour", {
-          sentAt: new Date(),
           messageId: null,
           status: "failed",
           messageText: message,
