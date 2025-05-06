@@ -1,31 +1,79 @@
-const axios = require("axios");
+const mongoose = require("mongoose");
+const moment = require("moment-timezone");
+const Appointment = require("./models/appointment");
+const { sendSMS } = require("./utils/smsService");
+require("dotenv").config();
 
-const API_KEY =
-  "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwczovL2F1dGg6ODA4MC9hcGkvdjEvdXNlcnMvYXBpL2tleXMvZ2VuZXJhdGUiLCJpYXQiOjE3MzQ4NTk1ODUsIm5iZiI6MTczNDg1OTU4NSwianRpIjoiMTlXVERvQ2pvSGRnRmFYUyIsInN1YiI6NDcwNDc2LCJwcnYiOiIyM2JkNWM4OTQ5ZjYwMGFkYjM5ZTcwMWM0MDA4NzJkYjdhNTk3NmY3In0.mJMJF68czD32z22jjfIT66UySAB48UKhOsk7dVIPWHk";
-const MESSAGE_ID = "470476-1744726-d825-11f7-7e3005f1-80"; // Replace this with an actual message_id you want to test
+const MONGO_URI = process.env.MONGODB_URI || "mongodb://localhost:27017/lemo";
 
-const checkSMSStatus = async () => {
-  try {
-    const response = await axios.get(`https://api.sms.to/sms/${MESSAGE_ID}`, {
-      headers: {
-        Authorization: `Bearer ${API_KEY}`,
-        Accept: "application/json",
-      },
+async function resend24HourReminders() {
+  await mongoose.connect(MONGO_URI);
+  console.log("📡 Connected to MongoDB");
+
+  const tomorrowStart = moment()
+    .tz("Europe/Athens")
+    .add(1, "day")
+    .startOf("day")
+    .toDate();
+  const tomorrowEnd = moment(tomorrowStart).endOf("day").toDate();
+
+  const appointments = await Appointment.find({
+    appointmentDateTime: { $gte: tomorrowStart, $lte: tomorrowEnd },
+  });
+
+  console.log(`📋 Found ${appointments.length} appointments for tomorrow.`);
+
+  for (const appt of appointments) {
+    const alreadyReminded = (appt.reminders || []).some((r) => {
+      return (
+        r.type === "24-hour" &&
+        r.messageText?.startsWith("Υπενθύμιση") &&
+        moment(r.sentAt).isAfter(moment().subtract(12, "hours"))
+      );
     });
 
-    console.log("✅ SMS.to Status Response:");
-    console.log(response.data);
-  } catch (error) {
-    if (error.response) {
+    if (alreadyReminded) {
+      console.log(`✅ Skipping ${appt.customerName} — already reminded.`);
+      continue;
+    }
+
+    const formattedDate = moment(appt.appointmentDateTime)
+      .tz("Europe/Athens")
+      .format("DD/MM/YYYY HH:mm");
+
+    const reminderText = `Υπενθύμιση για το ραντεβού σας αύριο στις ${formattedDate} στο Lemo Barber Shop.`;
+
+    try {
+      const result = await sendSMS(appt.phoneNumber, reminderText);
+
+      if (result && result.message_id) {
+        const newReminder = {
+          type: "24-hour",
+          sentAt: new Date(),
+          messageId: result.message_id,
+          messageText: reminderText,
+          senderId: "Lemo Barber",
+          status: "sent",
+          retryCount: 0,
+        };
+
+        appt.reminders = [...(appt.reminders || []), newReminder];
+        await appt.save();
+
+        console.log(`📨 Reminder sent to ${appt.customerName}`);
+      } else {
+        console.warn(`❌ No message_id returned for ${appt.customerName}`);
+      }
+    } catch (err) {
       console.error(
-        "❌ Error Response:",
-        error.response.status,
-        error.response.data
+        `❌ Error sending SMS to ${appt.customerName}:`,
+        err.message
       );
-    } else {
-      console.error("❌ Error:", error.message);
     }
   }
-};
 
-checkSMSStatus();
+  await mongoose.disconnect();
+  console.log("✅ Done. DB connection closed.");
+}
+
+resend24HourReminders();

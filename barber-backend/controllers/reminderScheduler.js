@@ -19,10 +19,20 @@ const sendReminders = async () => {
       appointmentStatus: "confirmed",
     });
 
-    // Filter only those that have NOT been reminded yet
-    const appointments = allAppointments.filter(
-      (appt) => !appt.isReminderSent("24-hour")
-    );
+    // Generate the reminder message for each and avoid duplicates
+    const appointments = allAppointments.filter((appt) => {
+      const appointmentDateTime = moment(appt.appointmentDateTime)
+        .tz("Europe/Athens")
+        .format("DD/MM/YYYY HH:mm");
+
+      const expectedMessage = `Υπενθύμιση για το ραντεβού σας αύριο στις ${appointmentDateTime} στο Lemo Barber Shop.`;
+
+      const alreadySent = appt.reminders.some(
+        (r) => r.type === "24-hour" && r.messageText === expectedMessage
+      );
+
+      return !alreadySent;
+    });
 
     console.log(
       `📋 Found ${appointments.length} appointment(s) needing reminders.`

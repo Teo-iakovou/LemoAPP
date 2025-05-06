@@ -48,11 +48,6 @@ const SmsStatusPage = () => {
     }
   };
 
-  const getLatestReminder = (reminders) => {
-    if (!reminders || reminders.length === 0) return null;
-    return reminders[reminders.length - 1];
-  };
-
   const formatDateTime = (dateString) => {
     const date = new Date(dateString);
     return date.toLocaleString("el-GR", {
@@ -117,55 +112,66 @@ const SmsStatusPage = () => {
               </tr>
             </thead>
             <tbody>
-              {appointments.map((appt) => {
-                const latest = getLatestReminder(appt.reminders);
-                const status = latest?.status || "no status";
-                return (
-                  <tr
-                    key={appt._id}
-                    className="border-t border-gray-700 hover:bg-purple-900/30 transition duration-150"
-                  >
-                    <td className="px-4 py-3 font-medium">
-                      {appt.customerName}
-                    </td>
-                    <td className="px-4 py-3">{appt.phoneNumber}</td>
-                    <td className="px-4 py-3">
-                      {formatDateTime(appt.appointmentDateTime)}
-                    </td>
-                    <td
-                      className={`px-4 py-3 font-semibold ${
-                        STATUS_COLOR[status] || "text-gray-500"
-                      }`}
-                    >
-                      {status === "delivered" && "🟢 Παραδόθηκε"}
-                      {status === "failed" && "🔴 Απέτυχε"}
-                      {status === "sent" && "⚪ Εστάλη"}
-                      {status === "expired" && "🟡 Έληξε"}
-                      {status === "no status" && "–"}
-                    </td>
-                    <td className="px-4 py-3 max-w-xs whitespace-pre-wrap overflow-y-auto">
-                      {latest?.messageText || "—"}
-                    </td>
-                    <td className="px-4 py-3">{latest?.senderId || "—"}</td>
-                    <td className="px-4 py-3">
-                      {["failed", "expired"].includes(status) && (
-                        <button
-                          disabled={resendingId === appt._id}
-                          onClick={() => handleResend(appt._id)}
-                          className="text-blue-400 hover:text-blue-500 hover:underline transition disabled:opacity-50"
+              {appointments.flatMap((appt) =>
+                (appt.reminders || [])
+                  .filter((r) => {
+                    const sentDate = new Date(r.sentAt);
+                    const selected = new Date(selectedDate);
+                    return (
+                      sentDate.getFullYear() === selected.getFullYear() &&
+                      sentDate.getMonth() === selected.getMonth() &&
+                      sentDate.getDate() === selected.getDate()
+                    );
+                  })
+                  .map((reminder, index) => {
+                    const status = reminder?.status || "no status";
+                    return (
+                      <tr
+                        key={`${appt._id}-${index}`}
+                        className="border-t border-gray-700 hover:bg-purple-900/30 transition duration-150"
+                      >
+                        <td className="px-4 py-3">{appt.customerName}</td>
+                        <td className="px-4 py-3">{appt.phoneNumber}</td>
+                        <td className="px-4 py-3">
+                          {formatDateTime(appt.appointmentDateTime)}
+                        </td>
+                        <td
+                          className={`px-4 py-3 font-semibold ${
+                            STATUS_COLOR[status] || "text-gray-500"
+                          }`}
                         >
-                          {resendingId === appt._id
-                            ? "Επαναποστολή..."
-                            : "🔁 Επανάληψη"}
-                        </button>
-                      )}
-                      <div className="text-xs text-gray-400 mt-1">
-                        Προσπάθειες: {latest?.retryCount || 0}
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
+                          {status === "delivered" && "🟢 Παραδόθηκε"}
+                          {status === "failed" && "🔴 Απέτυχε"}
+                          {status === "sent" && "⚪ Εστάλη"}
+                          {status === "expired" && "🟡 Έληξε"}
+                          {status === "no status" && "–"}
+                        </td>
+                        <td className="px-4 py-3 whitespace-pre-wrap max-w-xs">
+                          {reminder?.messageText || "—"}
+                        </td>
+                        <td className="px-4 py-3">
+                          {reminder?.senderId || "—"}
+                        </td>
+                        <td className="px-4 py-3">
+                          {["failed", "expired"].includes(status) && (
+                            <button
+                              disabled={resendingId === appt._id}
+                              onClick={() => handleResend(appt._id)}
+                              className="text-blue-400 hover:text-blue-500 hover:underline transition disabled:opacity-50"
+                            >
+                              {resendingId === appt._id
+                                ? "Επαναποστολή..."
+                                : "🔁 Επανάληψη"}
+                            </button>
+                          )}
+                          <div className="text-xs text-gray-400 mt-1">
+                            Προσπάθειες: {reminder?.retryCount || 0}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+              )}
             </tbody>
           </table>
         </div>
