@@ -9,33 +9,32 @@ const sendReminders = async () => {
 
     console.log("📆 Checking reminders for:", reminderTime.toISOString());
 
-    // Format message text exactly like the one we would send
-    const formattedRangeStart = reminderTime
-      .clone()
-      .tz("Europe/Athens")
-      .format("DD/MM/YYYY HH:mm");
-    const expectedMessage = `Υπενθύμιση για το ραντεβού σας αύριο στις ${formattedRangeStart} στο Lemo Barber Shop.`;
-
-    // Query only appointments that do NOT already have this message
-    const appointments = await Appointment.find({
+    // 1️⃣ Get all confirmed appointments in the 24h window
+    const allAppointments = await Appointment.find({
       appointmentDateTime: {
         $gte: reminderTime.toDate(),
         $lt: reminderTime.clone().add(1, "hour").toDate(),
       },
       appointmentStatus: "confirmed",
-      reminders: {
-        $not: {
-          $elemMatch: {
-            type: "24-hour",
-            messageText: expectedMessage,
-          },
-        },
-      },
     });
 
-    console.log(`📋 ${appointments.length} reminder(s) will be sent.`);
+    // 2️⃣ Filter only the ones that haven't received this exact reminder message
+    const appointmentsToNotify = allAppointments.filter((appointment) => {
+      const formattedTime = moment(appointment.appointmentDateTime)
+        .tz("Europe/Athens")
+        .format("DD/MM/YYYY HH:mm");
 
-    for (const appointment of appointments) {
+      const message = `Υπενθύμιση για το ραντεβού σας αύριο στις ${formattedTime} στο Lemo Barber Shop.`;
+
+      return !appointment.reminders.some(
+        (r) => r.type === "24-hour" && r.messageText === message
+      );
+    });
+
+    console.log(`📋 ${appointmentsToNotify.length} reminder(s) will be sent.`);
+
+    // 3️⃣ Send reminders
+    for (const appointment of appointmentsToNotify) {
       const formattedTime = moment(appointment.appointmentDateTime)
         .tz("Europe/Athens")
         .format("DD/MM/YYYY HH:mm");

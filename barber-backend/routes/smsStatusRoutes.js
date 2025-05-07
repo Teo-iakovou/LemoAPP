@@ -1,46 +1,80 @@
 const express = require("express");
-const router = express.Router(); // ✅ THIS LINE WAS MISSING
 const axios = require("axios");
 const Appointment = require("../models/appointment");
+const router = express.Router();
 require("dotenv").config();
+
+const API_KEY = process.env.SMS_TO_API_KEY.trim();
 
 router.get("/sms-statuses", async (req, res) => {
   try {
-    const selectedDate = req.query.date;
-    if (!selectedDate) {
-      return res.status(400).json({ error: "Missing date parameter" });
-    }
-
-    const startOfDay = new Date(`${selectedDate}T00:00:00`);
-    const endOfDay = new Date(`${selectedDate}T23:59:59`);
-
-    // Find all appointments with at least one reminder on this date
+    // 📥 Find all appointments with at least one messageId
     const appointments = await Appointment.find({
-      "reminders.sentAt": { $gte: startOfDay, $lte: endOfDay },
+      "reminders.messageId": { $exists: true },
     });
 
-    const flattenedReminders = [];
+    for (const appointment of appointments) {
+      let updated = false;
 
-    for (const appt of appointments) {
-      const matchingReminders = appt.reminders.filter(
-        (r) => r.sentAt >= startOfDay && r.sentAt <= endOfDay
-      );
+      for (const reminder of appointment.reminders) {
+        const messageId = reminder.messageId;
 
-      for (const reminder of matchingReminders) {
-        flattenedReminders.push({
-          _id: appt._id,
-          customerName: appt.customerName,
-          phoneNumber: appt.phoneNumber,
-          appointmentDateTime: appt.appointmentDateTime,
-          reminder, // contains type, sentAt, messageId, status, etc.
-        });
+        // ⛔ Skip if message is already final
+        if (
+          !messageId ||
+          ["delivered", "failed", "expired"].includes(reminder.status)
+        )
+          continue;
+
+        try {
+          const { data } = await axios.get(
+            `https://api.sms.to/message/${messageId}`,
+            {
+              headers: {
+                Authorization: `Bearer ${API_KEY}`,
+                Accept: "application/json",
+              },
+            }
+          );
+
+          const smsStatus = data?.status?.toLowerCase();
+          if (smsStatus && smsStatus !== reminder.status) {
+            console.log(`🔄 Updated ${messageId} → ${smsStatus}`);
+            reminder.status = smsStatus;
+            updated = true;
+          }
+        } catch (err) {
+          console.warn(`❌ Failed to check SMS.to status for ${messageId}`);
+          console.error(err.response?.data || err.message);
+        }
+      }
+
+      if (updated) {
+        await appointment.save();
       }
     }
 
-    res.json(flattenedReminders);
+    // ✅ Flatten for frontend
+    const allReminders = appointments.flatMap((appt) =>
+      appt.reminders.map((reminder) => ({
+        _id: appt._id,
+        customerName: appt.customerName,
+        phoneNumber: appt.phoneNumber,
+        appointmentDateTime: appt.appointmentDateTime,
+        reminder,
+      }))
+    );
+
+    // Sort by most recent reminder
+    allReminders.sort(
+      (a, b) => new Date(b.reminder.sentAt) - new Date(a.reminder.sentAt)
+    );
+
+    res.json(allReminders);
   } catch (error) {
     console.error("❌ Error in /sms-statuses:", error.message);
     res.status(500).json({ error: "Failed to fetch SMS statuses" });
   }
 });
+
 module.exports = router;
