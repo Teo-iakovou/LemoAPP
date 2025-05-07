@@ -202,90 +202,62 @@ const updateAppointment = async (req, res, next) => {
       appointmentDateTime,
       duration = 40,
       phoneNumber,
-
-      barber, // ✅ Ensure barber is extracted
+      barber,
       ...updateData
     } = req.body;
 
     console.log("🔥 Incoming Update Request:", req.body);
-    console.log("🔍 Appointment ID:", req.params.id);
-    // Fetch the existing appointment
-    const existingAppointment = await Appointment.findById(id);
-    if (!existingAppointment) {
+    console.log("🔍 Appointment ID:", id);
+
+    const appointment = await Appointment.findById(id);
+    if (!appointment) {
       return res.status(404).json({ message: "Appointment not found" });
     }
 
-    console.log("📅 Existing Appointment Before Update:", existingAppointment);
+    console.log("📅 Existing Appointment Before Update:", appointment);
 
-    // 📅 Format the old date (before update) for the SMS message
-    const oldFormattedDate = moment(existingAppointment.appointmentDateTime)
+    const oldFormattedDate = moment(appointment.appointmentDateTime)
       .tz("Europe/Athens")
       .format("DD/MM/YYYY HH:mm");
 
-    // ✅ Now parse and update the new appointment date
     if (appointmentDateTime) {
-      const appointmentStart = new Date(appointmentDateTime);
-
-      updateData.endTime = new Date(
-        appointmentStart.getTime() + duration * 60 * 1000
-      );
-      updateData.appointmentDateTime = appointmentStart;
-
-      updateData.reminderLogs = []; // If you still want to reset reminders on update
+      const newDate = new Date(appointmentDateTime);
+      appointment.appointmentDateTime = newDate;
+      appointment.endTime = new Date(newDate.getTime() + duration * 60 * 1000);
     }
 
-    // ✅ Ensure barber is updated correctly and not removed
     if (barber) {
-      updateData.barber = barber;
+      appointment.barber = barber;
     }
 
-    console.log("🔄 Final Data Before Update:", updateData);
+    Object.assign(appointment, updateData);
 
-    const updatedAppointment = await Appointment.findByIdAndUpdate(
-      id,
-      { $set: updateData }, // ✅ Use $set to explicitly update fields
-      {
-        new: true,
-        runValidators: true,
-      }
-    );
-
-    if (!updatedAppointment) {
-      return res.status(404).json({ message: "Appointment not found" });
-    }
-
-    console.log("✅ Updated Appointment in DB:", updatedAppointment);
-
-    const newFormattedDate = moment(updatedAppointment.appointmentDateTime)
+    const newFormattedDate = moment(appointment.appointmentDateTime)
       .tz("Europe/Athens")
       .format("DD/MM/YYYY HH:mm");
 
-    // Send SMS notification
     const now = moment().utc();
-    const isPastAppointment = moment(
-      updatedAppointment.appointmentDateTime
-    ).isBefore(now);
+    const isPast = moment(appointment.appointmentDateTime).isBefore(now);
 
-    if (!isPastAppointment) {
+    if (!isPast) {
       try {
         const message = `Το ραντεβού σας στο LEMO BARBER SHOP στις ${oldFormattedDate}, έχει αλλάξει για ${newFormattedDate}.`;
-
         const smsResponse = await sendSMS(
-          phoneNumber || updatedAppointment.phoneNumber,
+          phoneNumber || appointment.phoneNumber,
           message
         );
-        const messageId = smsResponse.message_id;
 
-        updatedAppointment.reminders.push({
+        const messageId = smsResponse?.message_id || smsResponse?.messageId;
+
+        appointment.reminders.push({
           type: "update",
           sentAt: new Date(),
-          messageId,
+          messageId: messageId || null,
           messageText: message,
           senderId: "Lemo Barber",
-          status: "sent",
+          status: smsResponse?.success ? "sent" : "failed",
           retryCount: 0,
         });
-        await updatedAppointment.save();
 
         console.log("📲 Update SMS sent successfully");
       } catch (smsError) {
@@ -295,10 +267,12 @@ const updateAppointment = async (req, res, next) => {
       console.log("📵 No Update SMS sent because appointment is in the past.");
     }
 
+    await appointment.save();
+
     res.status(200).json({
       success: true,
       message: "Appointment updated successfully and SMS sent",
-      updatedAppointment,
+      updatedAppointment: appointment,
     });
   } catch (error) {
     console.error("❌ Error updating appointment:", error);
