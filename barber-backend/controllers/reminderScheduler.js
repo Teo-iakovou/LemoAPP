@@ -9,31 +9,33 @@ const sendReminders = async () => {
 
     console.log("📆 Checking reminders for:", reminderTime.toISOString());
 
-    // Get confirmed appointments 24h from now
-    const allAppointments = await Appointment.find({
+    // Format message text exactly like the one we would send
+    const formattedRangeStart = reminderTime
+      .clone()
+      .tz("Europe/Athens")
+      .format("DD/MM/YYYY HH:mm");
+    const expectedMessage = `Υπενθύμιση για το ραντεβού σας αύριο στις ${formattedRangeStart} στο Lemo Barber Shop.`;
+
+    // Query only appointments that do NOT already have this message
+    const appointments = await Appointment.find({
       appointmentDateTime: {
         $gte: reminderTime.toDate(),
         $lt: reminderTime.clone().add(1, "hour").toDate(),
       },
       appointmentStatus: "confirmed",
+      reminders: {
+        $not: {
+          $elemMatch: {
+            type: "24-hour",
+            messageText: expectedMessage,
+          },
+        },
+      },
     });
 
-    const appointmentsToNotify = allAppointments.filter((appt) => {
-      const existing24hReminder = appt.reminders.find((r) => {
-        if (r.type !== "24-hour") return false;
-        const reminderSent = moment(r.sentAt);
-        return reminderSent.isBetween(
-          reminderTime.clone().subtract(10, "minutes"),
-          reminderTime.clone().add(10, "minutes")
-        );
-      });
+    console.log(`📋 ${appointments.length} reminder(s) will be sent.`);
 
-      return !existing24hReminder;
-    });
-
-    console.log(`📋 ${appointmentsToNotify.length} reminder(s) will be sent.`);
-
-    for (const appointment of appointmentsToNotify) {
+    for (const appointment of appointments) {
       const formattedTime = moment(appointment.appointmentDateTime)
         .tz("Europe/Athens")
         .format("DD/MM/YYYY HH:mm");
@@ -54,10 +56,7 @@ const sendReminders = async () => {
 
         console.log(`✅ Reminder logged for ${appointment.customerName}`);
       } catch (error) {
-        console.error(
-          `❌ Failed to send reminder for ${appointment._id}:`,
-          error.message
-        );
+        console.error(`❌ SMS failed for ${appointment._id}:`, error.message);
 
         await appointment.logReminder("24-hour", {
           messageId: null,
