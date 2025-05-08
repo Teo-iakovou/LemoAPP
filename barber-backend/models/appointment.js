@@ -1,12 +1,22 @@
 const mongoose = require("mongoose");
 
 const appointmentSchema = new mongoose.Schema({
-  customerName: { type: String, required: true },
+  customerName: {
+    type: String,
+    required: function () {
+      return this.type !== "break";
+    },
+  },
   phoneNumber: {
     type: String,
-    required: true,
+    required: function () {
+      return this.type !== "break";
+    },
     validate: {
-      validator: (v) => v.length >= 6 && v.length <= 15,
+      validator: function (v) {
+        if (this.type === "break") return true;
+        return v.length >= 6 && v.length <= 15;
+      },
       message: "Phone number must be between 6 and 15 characters",
     },
   },
@@ -24,6 +34,12 @@ const appointmentSchema = new mongoose.Schema({
     enum: ["confirmed"],
     default: "confirmed",
   },
+  type: {
+    type: String,
+    enum: ["appointment", "break"],
+    default: "appointment",
+  }, // ✅ New field
+
   reminders: [
     {
       type: { type: String, required: true }, // e.g. "24-hour"

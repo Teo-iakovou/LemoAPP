@@ -16,6 +16,7 @@ const sendReminders = async () => {
         $lt: reminderTime.clone().add(1, "hour").toDate(),
       },
       appointmentStatus: "confirmed",
+      type: "appointment",
     });
 
     // 2️⃣ Filter only the ones that haven't received this exact reminder message

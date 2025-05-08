@@ -12,14 +12,21 @@ const createAppointment = async (req, res, next) => {
       phoneNumber,
       appointmentDateTime,
       barber,
+      type,
       recurrence,
       repeatInterval, // How many weeks between each appointment
       repeatCount, // Total number of appointments
     } = req.body;
 
     // Validate required fields
-    if (!customerName || !phoneNumber || !appointmentDateTime || !barber) {
-      return res.status(400).json({ message: "All fields are required." });
+    if (type !== "break" && (!customerName || !phoneNumber)) {
+      return res
+        .status(400)
+        .json({ error: "Customer name and phone number are required." });
+    }
+
+    if (!appointmentDateTime) {
+      return res.status(400).json({ error: "Appointment time is required." });
     }
 
     // Ensure repeatCount does not exceed 5
@@ -45,10 +52,14 @@ const createAppointment = async (req, res, next) => {
     );
 
     // Check if customer exists, otherwise create a new one
-    let customer = await Customer.findOne({ phoneNumber });
-    if (!customer) {
-      customer = new Customer({ name: customerName, phoneNumber });
-      await customer.save();
+    let customer = null;
+
+    if (type !== "break") {
+      customer = await Customer.findOne({ phoneNumber });
+      if (!customer) {
+        customer = new Customer({ name: customerName, phoneNumber });
+        await customer.save();
+      }
     }
 
     // Calculate end time in UTC
@@ -66,6 +77,8 @@ const createAppointment = async (req, res, next) => {
       barber,
       duration,
       appointmentStatus: "confirmed",
+      type: type || "appointment", // ✅ Fallback to default if missing
+
       endTime: endTimeUTC, // Store in UTC
       recurrence: recurrence === "weekly" ? "weekly" : "one-time",
       repeatInterval: recurrence === "weekly" ? intervalWeeks : null,
@@ -132,10 +145,12 @@ const createAppointment = async (req, res, next) => {
 
     res.status(201).json({
       message: "Appointments created successfully.",
-      customer: {
-        name: customer.name,
-        phoneNumber: customer.phoneNumber,
-      },
+      ...(customer && {
+        customer: {
+          name: customer.name,
+          phoneNumber: customer.phoneNumber,
+        },
+      }),
       initialAppointment: savedAppointment,
       recurringAppointments: additionalAppointments,
     });

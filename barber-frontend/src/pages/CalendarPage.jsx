@@ -30,10 +30,14 @@ const CalendarPage = () => {
 
           return {
             id: appointment._id,
-            title: appointment.customerName,
+            title:
+              appointment.type === "break"
+                ? "ΔΙΑΛΕΙΜΜΑ"
+                : appointment.customerName,
             start: appointmentDate,
-            end: new Date(appointmentDate.getTime() + duration * 60 * 1000), // Calculate dynamic end time
+            end: new Date(appointmentDate.getTime() + duration * 60 * 1000),
             barber: appointment.barber,
+            type: appointment.type || "appointment", // Important for styling
           };
         });
         setAppointments(events);
@@ -89,6 +93,7 @@ const CalendarPage = () => {
           ?.phoneNumber || "",
       barber: appointment.barber || "ΛΕΜΟ",
       appointmentDateTime: appointment.start,
+      type: appointment.type || "appointment",
     });
 
     setShowForm(true);
@@ -127,12 +132,16 @@ const CalendarPage = () => {
 
         const newEvents = createdAppointments.map((appointment) => ({
           id: appointment._id,
-          title: appointment.customerName,
+          title:
+            appointment.type === "break"
+              ? "ΔΙΑΛΕΙΜΜΑ"
+              : appointment.customerName,
           start: new Date(appointment.appointmentDateTime),
           end: new Date(
             new Date(appointment.appointmentDateTime).getTime() + 40 * 60 * 1000
           ),
           barber: appointment.barber,
+          type: appointment.type || "appointment",
           backgroundColor: appointment.barber === "ΛΕΜΟ" ? "#6B21A8" : "orange",
         }));
 

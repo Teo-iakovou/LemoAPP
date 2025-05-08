@@ -31,6 +31,10 @@ function AppointmentForm({
   const [appointmentDateTime, setAppointmentDateTime] = useState(
     appointmentData?.appointmentDateTime || initialDate || new Date()
   );
+  const [appointmentType, setAppointmentType] = useState(
+    appointmentData?.type || "appointment"
+  );
+
   const [recurrence, setRecurrence] = useState("none");
   const [weeksOption, setWeeksOption] = useState("1");
   const [error, setError] = useState(null);
@@ -93,22 +97,32 @@ function AppointmentForm({
   };
 
   const submitForm = (data) => {
+    const isBreak = data.type === "break";
+
+    // Validate required fields only if it's a real appointment
+    if (!isBreak && (!data.customerName || !data.phoneNumber)) {
+      setError("Πρέπει να συμπληρώσετε όνομα και τηλέφωνο για ραντεβού.");
+      return;
+    }
+
     const formattedAppointmentDateTime = appointmentDateTime
       ? new Date(appointmentDateTime).toISOString()
       : null;
 
     const isPastDate = new Date(appointmentDateTime) < new Date();
+
     const appointmentDetails = {
       ...appointmentData,
-      customerName: data.customerName,
-      phoneNumber: data.phoneNumber,
+      customerName: isBreak ? "" : data.customerName,
+      phoneNumber: isBreak ? "" : data.phoneNumber,
       barber: data.barber || appointmentData?.barber || "ΛΕΜΟ",
       duration: 40,
+      type: data.type || "appointment",
       appointmentDateTime: formattedAppointmentDateTime,
-      recurrence: recurrence !== "none" ? recurrence : null,
-      repeatInterval: recurrence === "weekly" ? repeatInterval : null,
-      repeatCount: recurrence === "weekly" ? repeatCount : null,
-
+      recurrence: !isBreak && recurrence !== "none" ? recurrence : null,
+      repeatInterval:
+        !isBreak && recurrence === "weekly" ? repeatInterval : null,
+      repeatCount: !isBreak && recurrence === "weekly" ? repeatCount : null,
       isPastDate,
     };
 
@@ -118,8 +132,8 @@ function AppointmentForm({
     );
 
     onSubmit(appointmentDetails);
-    reset(); // ✅ Clear the form fields
-    onClose(); // ✅ Close the form after submission
+    reset();
+    onClose();
   };
 
   // const handleDelete = () => {
@@ -215,41 +229,49 @@ function AppointmentForm({
         <>
           <form onSubmit={handleSubmit(submitForm)}>
             {/* Customer Name */}
-            <div className="mb-4">
-              <label htmlFor="customerName" className="block text-gray-700">
-                ΟΝΟΜΑ ΠΕΛΑΤΗ:
-              </label>
-              <input
-                {...register("customerName")}
-                list="customerNameList"
-                onChange={handleCustomerSelect}
-                type="text"
-                id="customerName"
-                placeholder="Όνομα πελάτη"
-                className="mt-1 block w-full p-2 border border-gray-300 rounded"
-                required
-              />
-              <datalist id="customerNameList">
-                {customers.map((customer) => (
-                  <option key={customer.phoneNumber} value={customer.name} />
-                ))}
-              </datalist>
-            </div>
+            {appointmentType !== "break" && (
+              <>
+                {/* Customer Name */}
+                <div className="mb-4">
+                  <label htmlFor="customerName" className="block text-gray-700">
+                    ΟΝΟΜΑ ΠΕΛΑΤΗ:
+                  </label>
+                  <input
+                    {...register("customerName")}
+                    list="customerNameList"
+                    onChange={handleCustomerSelect}
+                    type="text"
+                    id="customerName"
+                    placeholder="Όνομα πελάτη"
+                    className="mt-1 block w-full p-2 border border-gray-300 rounded"
+                    required={appointmentType !== "break"}
+                  />
+                  <datalist id="customerNameList">
+                    {customers.map((customer) => (
+                      <option
+                        key={customer.phoneNumber}
+                        value={customer.name}
+                      />
+                    ))}
+                  </datalist>
+                </div>
 
-            {/* Phone Number */}
-            <div className="mb-4">
-              <label htmlFor="phoneNumber" className="block text-gray-700">
-                ΤΗΛΕΦΩΝΟ:
-              </label>
-              <input
-                {...register("phoneNumber")}
-                type="text"
-                id="phoneNumber"
-                placeholder="Τηλέφωνο πελάτη"
-                className="mt-1 block w-full p-2 border border-gray-300 rounded"
-                required
-              />
-            </div>
+                {/* Phone Number */}
+                <div className="mb-4">
+                  <label htmlFor="phoneNumber" className="block text-gray-700">
+                    ΤΗΛΕΦΩΝΟ:
+                  </label>
+                  <input
+                    {...register("phoneNumber")}
+                    type="text"
+                    id="phoneNumber"
+                    placeholder="Τηλέφωνο πελάτη"
+                    className="mt-1 block w-full p-2 border border-gray-300 rounded"
+                    required={appointmentType !== "break"}
+                  />
+                </div>
+              </>
+            )}
 
             {/* Appointment Date and Time */}
             <div className="mb-4">
@@ -290,7 +312,22 @@ function AppointmentForm({
                 <option value="ΦΟΡΟΥ">ΦΟΡΟΥ</option>
               </select>
             </div>
-
+            {/* Type Selection */}
+            <div className="mb-4">
+              <label htmlFor="type" className="block text-gray-700">
+                ΤΥΠΟΣ ΚΑΤΑΧΩΡΗΣΗΣ:
+              </label>
+              <select
+                {...register("type")}
+                defaultValue={appointmentData?.type || "appointment"}
+                id="type"
+                onChange={(e) => setAppointmentType(e.target.value)}
+                className="mt-1 block w-full p-2 border border-gray-300 rounded"
+              >
+                <option value="appointment">ΡΑΝΤΕΒΟΥ</option>
+                <option value="break">ΔΙΑΛΕΙΜΜΑ</option>
+              </select>
+            </div>
             {/* Recurrence */}
             <div className="mb-4">
               <label htmlFor="recurrence" className="block text-gray-700">
