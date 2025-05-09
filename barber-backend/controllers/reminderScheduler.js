@@ -9,7 +9,6 @@ const sendReminders = async () => {
 
     console.log("📆 Checking reminders for:", reminderTime.toISOString());
 
-    // 1️⃣ Get all confirmed appointments in the 24h window
     const allAppointments = await Appointment.find({
       appointmentDateTime: {
         $gte: reminderTime.toDate(),
@@ -19,32 +18,32 @@ const sendReminders = async () => {
       type: "appointment",
     });
 
-    // 2️⃣ Filter only the ones that haven't received this exact reminder message
-    const appointmentsToNotify = allAppointments.filter((appointment) => {
+    console.log(`📋 Found ${allAppointments.length} potential reminder(s)`);
+
+    for (const appointment of allAppointments) {
       const formattedTime = moment(appointment.appointmentDateTime)
         .tz("Europe/Athens")
         .format("DD/MM/YYYY HH:mm");
 
       const message = `Υπενθύμιση για το ραντεβού σας αύριο στις ${formattedTime} στο Lemo Barber Shop.`;
 
-      return !appointment.reminders.some(
-        (r) => r.type === "24-hour" && r.messageText === message
+      const fresh = await Appointment.findById(appointment._id);
+      console.log(
+        `🔍 Reminder types for ${fresh.customerName}:`,
+        fresh.reminders.map((r) => r.type)
       );
-    });
 
-    console.log(`📋 ${appointmentsToNotify.length} reminder(s) will be sent.`);
+      const alreadyExists = fresh.reminders.some((r) => r.type === "24-hour");
 
-    // 3️⃣ Send reminders
-    for (const appointment of appointmentsToNotify) {
-      const formattedTime = moment(appointment.appointmentDateTime)
-        .tz("Europe/Athens")
-        .format("DD/MM/YYYY HH:mm");
-
-      const message = `Υπενθύμιση για το ραντεβού σας αύριο στις ${formattedTime} στο Lemo Barber Shop.`;
+      if (alreadyExists) {
+        console.log(
+          `⛔ Reminder already sent to ${appointment.customerName}, skipping.`
+        );
+        continue;
+      }
 
       try {
         const result = await sendSMS(appointment.phoneNumber, message);
-        console.log("📦 SMS API Response:", result);
 
         await appointment.logReminder("24-hour", {
           messageId: result?.message_id || result?.messageId || null,
@@ -54,9 +53,12 @@ const sendReminders = async () => {
           retryCount: 0,
         });
 
-        console.log(`✅ Reminder logged for ${appointment.customerName}`);
+        console.log(`✅ 24-hour reminder sent to ${appointment.customerName}`);
       } catch (error) {
-        console.error(`❌ SMS failed for ${appointment._id}:`, error.message);
+        console.error(
+          `❌ SMS failed for ${appointment.customerName}:`,
+          error.message
+        );
 
         await appointment.logReminder("24-hour", {
           messageId: null,
@@ -67,8 +69,6 @@ const sendReminders = async () => {
         });
       }
     }
-
-    console.log("✅ All 24-hour reminders processed.");
   } catch (error) {
     console.error("❌ Reminder script failed:", error.message);
   }
