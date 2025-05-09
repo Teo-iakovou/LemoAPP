@@ -363,10 +363,15 @@ const deleteAppointment = async (req, res, next) => {
 
 const getUpcomingAppointments = async (req, res) => {
   try {
-    const today = new Date();
+    const startOfYesterday = moment()
+      .subtract(1, "day")
+      .startOf("day")
+      .toDate();
+
     const appointments = await Appointment.find({
-      appointmentDateTime: { $gte: today },
+      appointmentDateTime: { $gte: startOfYesterday },
     }).sort({ appointmentDateTime: 1 });
+
     res.json(appointments);
   } catch (error) {
     res.status(500).json({ error: "Failed to fetch upcoming appointments" });

@@ -31,16 +31,23 @@ const CalendarPage = () => {
 
         const events = upcomingAppointments.map((appointment) => {
           const appointmentDate = new Date(appointment.appointmentDateTime);
+          const isBreak = appointment.type === "break";
+          const isLemo = appointment.barber === "ΛΕΜΟ";
+
           return {
             id: appointment._id,
-            title:
-              appointment.type === "break"
-                ? "ΔΙΑΛΕΙΜΜΑ"
-                : appointment.customerName,
+            title: isBreak ? "ΔΙΑΛΕΙΜΜΑ" : appointment.customerName,
             start: appointmentDate,
             end: new Date(appointmentDate.getTime() + 40 * 60 * 1000),
             barber: appointment.barber,
             type: appointment.type || "appointment",
+            backgroundColor: isBreak
+              ? isLemo
+                ? "#34D399" // ✅ ΛΕΜΟ break: green
+                : "#0ea5e9" // ✅ ΦΟΡΟΥ break: light yellow
+              : isLemo
+              ? "#6B21A8" // ΛΕΜΟ normal
+              : "orange", // ΦΟΡΟΥ normal
           };
         });
 
@@ -252,16 +259,23 @@ const CalendarPage = () => {
 
       const pastEvents = pastAppointments.map((appointment) => {
         const appointmentDate = new Date(appointment.appointmentDateTime);
+        const isBreak = appointment.type === "break";
+        const isLemo = appointment.barber === "ΛΕΜΟ";
+
         return {
           id: appointment._id,
-          title:
-            appointment.type === "break"
-              ? "ΔΙΑΛΕΙΜΜΑ"
-              : appointment.customerName,
+          title: isBreak ? "ΔΙΑΛΕΙΜΜΑ" : appointment.customerName,
           start: appointmentDate,
           end: new Date(appointmentDate.getTime() + 40 * 60 * 1000),
           barber: appointment.barber,
           type: appointment.type || "appointment",
+          backgroundColor: isBreak
+            ? isLemo
+              ? "#34D399"
+              : "#0ea5e9"
+            : isLemo
+            ? "#6B21A8"
+            : "orange",
         };
       });
 
@@ -274,9 +288,16 @@ const CalendarPage = () => {
   };
   return (
     <div className="relative bg-white rounded-3xl mt-[-18] min-h-[calc(100vh-64px)] p-4">
-      <h1 className="text-xl font-bold mb-4 text-center sm:text-left">
+      {/* 🔄 Load Past Appointments Button - moved above the calendar */}
+      <h1 className="text-xl font-bold text-center sm:text-left mb-2 sm:mb-0">
         ΠΡΟΓΡΑΜΜΑ ΡΑΝΤΕΒΟΥ
       </h1>
+      <button
+        onClick={loadPastAppointments}
+        className="bg-gray-100 text-sm px-6 py-2 rounded-xl border border-gray-300 hover:bg-gray-200 transition"
+      >
+        Φόρτωσε Προηγούμενα
+      </button>
 
       <div className="overflow-x-auto">
         <CalendarComponent
@@ -284,16 +305,6 @@ const CalendarPage = () => {
           onSelectSlot={handleSelectSlot}
           onSelectEvent={handleSelectEvent}
         />
-      </div>
-
-      {/* 🔄 Load Past Appointments Button */}
-      <div className="flex justify-center mt-4">
-        <button
-          onClick={loadPastAppointments}
-          className="bg-gray-100 text-sm px-6 py-2 rounded-xl border border-gray-300 hover:bg-gray-200 transition"
-        >
-          Φόρτωσε Προηγούμενα
-        </button>
       </div>
 
       {showForm && (

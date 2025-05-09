@@ -39,12 +39,13 @@ const CalendarComponent = ({
   disabled,
 }) => {
   const eventStyleGetter = (event, start, end, isSelected) => {
-    const backgroundColor =
-      event.type === "break"
-        ? "#34D399" // 🟩 Light green for breaks
-        : event.barber === "ΛΕΜΟ"
-        ? "#6B21A8"
-        : "orange";
+    let backgroundColor;
+
+    if (event.type === "break") {
+      backgroundColor = event.barber === "ΛΕΜΟ" ? "#34D399" : "#0ea5e9"; // Green for ΛΕΜΟ, Light Yellow for ΦΟΡΟΥ
+    } else {
+      backgroundColor = event.barber === "ΛΕΜΟ" ? "#6B21A8" : "orange";
+    }
 
     return {
       style: {
