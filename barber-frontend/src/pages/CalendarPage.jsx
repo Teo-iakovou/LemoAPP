@@ -3,8 +3,14 @@ import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import CalendarComponent from "../_components/CalendarComponent";
 import AppointmentForm from "../_components/AppointmentForm";
-import { createAppointment } from "../utils/api";
-import { updateAppointment } from "../utils/api";
+import {
+  createAppointment,
+  updateAppointment,
+  fetchUpcomingAppointments,
+  fetchPastAppointments,
+  fetchCustomers,
+} from "../utils/api";
+
 // Base API URL
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:5001/api";
@@ -16,18 +22,15 @@ const CalendarPage = () => {
   const [selectedDate, setSelectedDate] = useState(null);
   const [selectedAppointment, setSelectedAppointment] = useState(null);
   const [showForm, setShowForm] = useState(false);
-
-  // Fetch appointments from the backend
+  const [pastPage, setPastPage] = useState(1);
+  // ✅ Fetch appointments
   useEffect(() => {
-    const fetchAppointments = async () => {
+    const fetchUpcoming = async () => {
       try {
-        const response = await fetch(`${API_BASE_URL}/appointments`);
-        const data = await response.json();
+        const upcomingAppointments = await fetchUpcomingAppointments(); // This returns an array
 
-        const events = data.map((appointment) => {
+        const events = upcomingAppointments.map((appointment) => {
           const appointmentDate = new Date(appointment.appointmentDateTime);
-          const duration = 40; // Dynamic duration
-
           return {
             id: appointment._id,
             title:
@@ -35,33 +38,34 @@ const CalendarPage = () => {
                 ? "ΔΙΑΛΕΙΜΜΑ"
                 : appointment.customerName,
             start: appointmentDate,
-            end: new Date(appointmentDate.getTime() + duration * 60 * 1000),
+            end: new Date(appointmentDate.getTime() + 40 * 60 * 1000),
             barber: appointment.barber,
-            type: appointment.type || "appointment", // Important for styling
+            type: appointment.type || "appointment",
           };
         });
+
         setAppointments(events);
       } catch (error) {
-        console.error("Error fetching appointments:", error);
+        console.error("Error fetching upcoming appointments:", error);
       }
     };
 
-    fetchAppointments();
+    fetchUpcoming();
   }, []);
 
-  // Fetch customers from the backend
+  // ✅ Fetch customers
   useEffect(() => {
-    const fetchCustomers = async () => {
+    const loadCustomers = async () => {
       try {
-        const response = await fetch(`${API_BASE_URL}/customers`);
-        const data = await response.json();
-        setCustomers(data); // Store customer data
+        const data = await fetchCustomers(1, 100); // returns { customers: [...] } or just [...]
+        const customerArray = data.customers || data;
+        setCustomers(customerArray);
       } catch (error) {
         console.error("Error fetching customers:", error);
       }
     };
 
-    fetchCustomers();
+    loadCustomers();
   }, []);
 
   useEffect(() => {
@@ -239,11 +243,41 @@ const CalendarPage = () => {
     }
   };
 
+  const loadPastAppointments = async () => {
+    try {
+      const { appointments: pastAppointments } = await fetchPastAppointments(
+        pastPage,
+        100
+      );
+
+      const pastEvents = pastAppointments.map((appointment) => {
+        const appointmentDate = new Date(appointment.appointmentDateTime);
+        return {
+          id: appointment._id,
+          title:
+            appointment.type === "break"
+              ? "ΔΙΑΛΕΙΜΜΑ"
+              : appointment.customerName,
+          start: appointmentDate,
+          end: new Date(appointmentDate.getTime() + 40 * 60 * 1000),
+          barber: appointment.barber,
+          type: appointment.type || "appointment",
+        };
+      });
+
+      setAppointments((prev) => [...prev, ...pastEvents]);
+      setPastPage((prev) => prev + 1);
+    } catch (error) {
+      console.error("Error loading past appointments:", error);
+      toast.error("Αποτυχία φόρτωσης προηγούμενων ραντεβού.");
+    }
+  };
   return (
-    <div className=" relative bg-white rounded-3xl mt-[-18] min-h-[calc(100vh-64px)] p-4">
+    <div className="relative bg-white rounded-3xl mt-[-18] min-h-[calc(100vh-64px)] p-4">
       <h1 className="text-xl font-bold mb-4 text-center sm:text-left">
         ΠΡΟΓΡΑΜΜΑ ΡΑΝΤΕΒΟΥ
       </h1>
+
       <div className="overflow-x-auto">
         <CalendarComponent
           events={filteredAppointments}
@@ -251,6 +285,17 @@ const CalendarPage = () => {
           onSelectEvent={handleSelectEvent}
         />
       </div>
+
+      {/* 🔄 Load Past Appointments Button */}
+      <div className="flex justify-center mt-4">
+        <button
+          onClick={loadPastAppointments}
+          className="bg-gray-100 text-sm px-6 py-2 rounded-xl border border-gray-300 hover:bg-gray-200 transition"
+        >
+          Φόρτωσε Προηγούμενα
+        </button>
+      </div>
+
       {showForm && (
         <AppointmentForm
           initialDate={selectedDate}
@@ -262,6 +307,7 @@ const CalendarPage = () => {
           customers={customers}
         />
       )}
+
       <ToastContainer position="top-right" autoClose={3000} hideProgressBar />
     </div>
   );

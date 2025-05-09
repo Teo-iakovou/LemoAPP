@@ -199,11 +199,23 @@ const generateRecurringAppointments = async ({
 
 // Get all appointments
 const getAppointments = async (req, res, next) => {
+  const page = parseInt(req.query.page) || 1;
+  const limit = parseInt(req.query.limit) || 100;
+
   try {
-    const appointments = await Appointment.find().sort({
-      appointmentDateTime: 1,
+    const appointments = await Appointment.find()
+      .sort({ appointmentDateTime: -1 }) // ✅ Newest first
+      .skip((page - 1) * limit)
+      .limit(limit);
+
+    const total = await Appointment.countDocuments();
+
+    res.json({
+      total,
+      page,
+      limit,
+      appointments,
     });
-    res.json(appointments);
   } catch (error) {
     next(error);
   }
@@ -349,9 +361,45 @@ const deleteAppointment = async (req, res, next) => {
   }
 };
 
+const getUpcomingAppointments = async (req, res) => {
+  try {
+    const today = new Date();
+    const appointments = await Appointment.find({
+      appointmentDateTime: { $gte: today },
+    }).sort({ appointmentDateTime: 1 });
+    res.json(appointments);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch upcoming appointments" });
+  }
+};
+
+const getPastAppointments = async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 100;
+    const today = new Date();
+
+    const appointments = await Appointment.find({
+      appointmentDateTime: { $lt: today },
+    })
+      .sort({ appointmentDateTime: -1 })
+      .skip((page - 1) * limit)
+      .limit(limit);
+
+    const total = await Appointment.countDocuments({
+      appointmentDateTime: { $lt: today },
+    });
+
+    res.json({ total, page, limit, appointments });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch past appointments" });
+  }
+};
 module.exports = {
   createAppointment,
   getAppointments,
   updateAppointment,
   deleteAppointment,
+  getUpcomingAppointments,
+  getPastAppointments,
 };

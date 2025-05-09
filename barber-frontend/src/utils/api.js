@@ -1,32 +1,5 @@
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:5001/api";
-export const createAppointment = async (appointmentData) => {
-  const response = await fetch(`${API_BASE_URL}/appointments`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(appointmentData),
-  });
-
-  if (!response.ok) {
-    throw new Error("Failed to create appointment.");
-  }
-
-  return response.json();
-};
-
-export const loginUser = async (credentials) => {
-  const response = await fetch(`${API_BASE_URL}/auth/signin`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(credentials),
-  });
-
-  if (!response.ok) {
-    throw new Error("Failed to login.");
-  }
-
-  return response.json(); // Returns the JWT token
-};
 
 export const fetchCustomers = async () => {
   try {
@@ -34,19 +7,54 @@ export const fetchCustomers = async () => {
     if (!response.ok) {
       throw new Error("Failed to fetch customers.");
     }
-    return await response.json();
+    return await response.json(); // Just an array
   } catch (error) {
     console.error("Error fetching customers:", error);
     return [];
   }
 };
 
-export const fetchAppointments = async () => {
-  const response = await fetch(`${API_BASE_URL}/appointments`);
-  if (!response.ok) {
-    throw new Error("Failed to fetch appointments.");
+export const fetchAppointments = async (page = 1, limit = 100) => {
+  try {
+    const response = await fetch(
+      `${API_BASE_URL}/appointments?page=${page}&limit=${limit}`
+    );
+    if (!response.ok) {
+      throw new Error("Failed to fetch appointments.");
+    }
+    return await response.json(); // includes appointments, total, page, limit
+  } catch (error) {
+    console.error("Error fetching appointments:", error);
+    return { appointments: [] }; // Fallback shape to avoid destructure errors
   }
-  return response.json();
+};
+
+export const fetchUpcomingAppointments = async () => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/appointments/upcoming`);
+    if (!response.ok) {
+      throw new Error("Failed to fetch upcoming appointments.");
+    }
+    return await response.json(); // returns just an array
+  } catch (error) {
+    console.error("Error fetching upcoming appointments:", error);
+    return []; // Fallback
+  }
+};
+
+export const fetchPastAppointments = async (page = 1, limit = 100) => {
+  try {
+    const response = await fetch(
+      `${API_BASE_URL}/appointments/past?page=${page}&limit=${limit}`
+    );
+    if (!response.ok) {
+      throw new Error("Failed to fetch past appointments.");
+    }
+    return await response.json(); // returns { appointments, total, page, limit }
+  } catch (error) {
+    console.error("Error fetching past appointments:", error);
+    return { appointments: [] }; // Fallback
+  }
 };
 
 export const updateAppointment = async (appointmentId, updatedData) => {
@@ -154,3 +162,29 @@ export async function resendSMS(appointmentId) {
   if (!res.ok) throw new Error(result.error || "Resend failed");
   return result;
 }
+export const loginUser = async (credentials) => {
+  const response = await fetch(`${API_BASE_URL}/auth/signin`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(credentials),
+  });
+
+  if (!response.ok) {
+    throw new Error("Failed to login.");
+  }
+
+  return response.json(); // Returns the JWT token
+};
+export const createAppointment = async (appointmentData) => {
+  const response = await fetch(`${API_BASE_URL}/appointments`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(appointmentData),
+  });
+
+  if (!response.ok) {
+    throw new Error("Failed to create appointment.");
+  }
+
+  return response.json();
+};

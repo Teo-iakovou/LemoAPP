@@ -77,7 +77,6 @@ app.use("/api/appointments", appointmentRoutes);
 app.use("/api", CustomerCountsRoutes);
 app.use("/api", smsStatusRoutes);
 app.use("/api", smsResendRoute);
-
 app.use("/api/customers", customerRoutes);
 app.use("/api/waitingList", waitingListRoutes);
 app.use("/api/reminders", reminderSchedulerRoute);
