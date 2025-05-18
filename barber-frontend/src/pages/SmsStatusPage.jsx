@@ -7,6 +7,7 @@ const STATUS_COLOR = {
   sent: "text-gray-400",
   failed: "text-red-500",
   expired: "text-yellow-500",
+  rejected: "text-pink-500",
 };
 
 const SmsStatusPage = () => {
@@ -110,6 +111,7 @@ const SmsStatusPage = () => {
                       {status === "failed" && "🔴 Απέτυχε"}
                       {status === "sent" && "⚪ Εστάλη"}
                       {status === "expired" && "🟡 Έληξε"}
+                      {status === "rejected" && "🔶 Απορρίφθηκε"}
                       {status === "no status" && "–"}
                     </td>
                     <td className="px-4 py-3">

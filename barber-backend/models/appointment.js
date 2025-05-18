@@ -49,7 +49,7 @@ const appointmentSchema = new mongoose.Schema({
       senderId: { type: String }, // if you store it
       status: {
         type: String,
-        enum: ["sent", "delivered", "failed", "expired"],
+        enum: ["sent", "delivered", "failed", "expired", "rejected"],
         default: "sent",
       }, // <- NEW
       retryCount: { type: Number, default: 0 }, // <- NEW
