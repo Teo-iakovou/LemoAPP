@@ -188,6 +188,7 @@ const generateRecurringAppointments = async ({
       endTime: recurringEndTimeUTC,
       recurrence: "weekly",
       appointmentStatus: "confirmed",
+      type: "appointment",
     });
 
     const savedAppointment = await additionalAppointment.save();
@@ -258,6 +259,11 @@ const updateAppointment = async (req, res, next) => {
     }
 
     Object.assign(appointment, updateData);
+
+    // ✅ Ensure 'type' is present for reminder compatibility
+    if (!appointment.type) {
+      appointment.type = "appointment";
+    }
 
     const newFormattedDate = moment(appointment.appointmentDateTime)
       .tz("Europe/Athens")

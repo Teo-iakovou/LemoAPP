@@ -7,8 +7,6 @@ const sendReminders = async () => {
     const now = moment().utc();
     const reminderTime = now.clone().add(24, "hours").startOf("minute");
 
-    console.log("📆 Checking reminders for:", reminderTime.toISOString());
-
     const allAppointments = await Appointment.find({
       appointmentDateTime: {
         $gte: reminderTime.toDate(),
