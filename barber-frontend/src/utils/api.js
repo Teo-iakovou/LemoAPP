@@ -58,10 +58,6 @@ export const fetchPastAppointments = async (page = 1, limit = 100) => {
 };
 
 export const updateAppointment = async (appointmentId, updatedData) => {
-  const API_BASE_URL =
-    import.meta.env.VITE_API_BASE_URL || "http://localhost:5001/api";
-  console.log("📤 API Request Sent with Data:", updatedData); // ✅ Debugging
-
   try {
     const response = await fetch(
       `${API_BASE_URL}/appointments/${appointmentId}`,

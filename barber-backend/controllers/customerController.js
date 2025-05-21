@@ -117,40 +117,50 @@ const getWeeklyCustomerCounts = async (req, res, next) => {
 // Get all customers
 const getCustomers = async (req, res, next) => {
   try {
-    // Define barber colors
+    // 1. Get all latest appointments by phoneNumber
+    const latestAppointments = await Appointment.aggregate([
+      { $sort: { appointmentDateTime: -1 } },
+      { $match: { type: "appointment" } }, // Only normal appointments
+      {
+        $group: {
+          _id: "$phoneNumber",
+          customerName: { $first: "$customerName" },
+          barber: { $first: "$barber" },
+          appointmentDateTime: { $first: "$appointmentDateTime" },
+        },
+      },
+    ]);
+
+    // 2. Map by phone number for easy lookup
+    const latestBarberByPhone = {};
+    latestAppointments.forEach((a) => {
+      latestBarberByPhone[a._id] = {
+        barber: a.barber,
+        appointmentDateTime: a.appointmentDateTime,
+      };
+    });
+
+    // 3. Fetch all customers as before
+    const customers = await Customer.find().sort({ name: 1 }).lean();
+
+    // 4. Merge barber info in one pass (no per-customer query)
     const barberColors = {
       ΛΕΜΟ: "text-purple-600",
       ΦΟΡΟΥ: "text-orange-500",
     };
 
-    // Fetch all customers
-    const customers = await Customer.find().sort({ name: 1 }).lean();
+    const customersWithBarber = customers.map((customer) => {
+      const latest = latestBarberByPhone[customer.phoneNumber] || {};
+      const barber = latest.barber || customer.barber;
+      const color = barber ? barberColors[barber] : "text-white";
+      return {
+        ...customer,
+        barber,
+        barberColor: color,
+        lastAppointment: latest.appointmentDateTime,
+      };
+    });
 
-    // Fetch the latest barber information for each customer and calculate color
-    const customersWithBarber = await Promise.all(
-      customers.map(async (customer) => {
-        // Get the most recent appointment for this customer
-        const latestAppointment = await Appointment.findOne({
-          phoneNumber: customer.phoneNumber,
-        })
-          .sort({ appointmentDateTime: -1 }) // Sort by appointment date in descending order
-          .lean();
-
-        // Determine the barber and color
-        const barber = latestAppointment
-          ? latestAppointment.barber
-          : customer.barber;
-        const color = barber ? barberColors[barber] : "text-white"; // Default to white if no barber
-
-        return {
-          ...customer,
-          barber, // Use the barber from the latest appointment if available
-          barberColor: color, // Include the dynamically calculated color
-        };
-      })
-    );
-
-    // Respond with customers and their associated barber and color information
     res.status(200).json(customersWithBarber);
   } catch (error) {
     console.error("Error fetching customers with barber info:", error);

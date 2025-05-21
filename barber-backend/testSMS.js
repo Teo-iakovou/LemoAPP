@@ -18,7 +18,7 @@ mongoose
 
 const fixMissingReminders = async () => {
   try {
-    const targetDate = "2025-05-21"; // 📅 Tomorrow's date (adjust if needed)
+    const targetDate = "2025-05-22"; // 📅 Tomorrow's date (adjust if needed)
     const tz = "Europe/Athens";
 
     const startOfTargetDay = moment

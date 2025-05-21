@@ -204,10 +204,25 @@ const getAppointments = async (req, res, next) => {
   const limit = parseInt(req.query.limit) || 100;
 
   try {
-    const appointments = await Appointment.find()
-      .sort({ appointmentDateTime: -1 }) // ✅ Newest first
+    // Only fetch necessary fields; adjust as needed
+    const appointments = await Appointment.find(
+      {},
+      {
+        customerName: 1,
+        phoneNumber: 1,
+        appointmentDateTime: 1,
+        barber: 1,
+        type: 1,
+        appointmentStatus: 1,
+        duration: 1,
+        endTime: 1,
+        reminders: 1,
+      }
+    )
+      .sort({ appointmentDateTime: -1 })
       .skip((page - 1) * limit)
-      .limit(limit);
+      .limit(limit)
+      .lean(); // 🚀
 
     const total = await Appointment.countDocuments();
 
@@ -374,9 +389,25 @@ const getUpcomingAppointments = async (req, res) => {
       .startOf("day")
       .toDate();
 
-    const appointments = await Appointment.find({
-      appointmentDateTime: { $gte: startOfYesterday },
-    }).sort({ appointmentDateTime: 1 });
+    const appointments = await Appointment.find(
+      {
+        appointmentDateTime: { $gte: startOfYesterday },
+        appointmentStatus: "confirmed",
+        type: "appointment", // Only appointments, not breaks
+      },
+      {
+        customerName: 1,
+        phoneNumber: 1,
+        appointmentDateTime: 1,
+        barber: 1,
+        type: 1,
+        duration: 1,
+        endTime: 1,
+        _id: 1,
+      }
+    )
+      .sort({ appointmentDateTime: 1 })
+      .lean();
 
     res.json(appointments);
   } catch (error) {

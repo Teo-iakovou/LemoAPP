@@ -69,8 +69,12 @@ appointmentSchema.pre("save", function (next) {
 });
 
 // Add indexes for optimized queries
-appointmentSchema.index({ appointmentStatus: 1 });
-appointmentSchema.index({ appointmentDateTime: 1 });
+// Add a compound index for your common queries
+appointmentSchema.index({
+  appointmentDateTime: 1,
+  appointmentStatus: 1,
+  type: 1,
+});
 
 /**
  * Check if a reminder has already been sent for the given type.
