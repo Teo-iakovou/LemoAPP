@@ -1,62 +1,13 @@
 const express = require("express");
-const axios = require("axios");
 const Appointment = require("../models/appointment");
 const router = express.Router();
-require("dotenv").config();
-
-const API_KEY = process.env.SMS_TO_API_KEY.trim();
 
 router.get("/sms-statuses", async (req, res) => {
   try {
-    // 📥 Find all appointments with at least one messageId
-    const appointmentsToUpdate = await Appointment.find({
-      "reminders.messageId": { $exists: true },
-    });
-
-    for (const appointment of appointmentsToUpdate) {
-      let updated = false;
-
-      for (const reminder of appointment.reminders) {
-        const messageId = reminder.messageId;
-
-        // ⛔ Skip if message is already final
-        if (
-          !messageId ||
-          ["delivered", "failed", "expired"].includes(reminder.status)
-        )
-          continue;
-
-        try {
-          const { data } = await axios.get(
-            `https://api.sms.to/message/${messageId}`,
-            {
-              headers: {
-                Authorization: `Bearer ${API_KEY}`,
-                Accept: "application/json",
-              },
-            }
-          );
-
-          const smsStatus = data?.status?.toLowerCase();
-          if (smsStatus && smsStatus !== reminder.status) {
-            console.log(`🔄 Updated ${messageId} → ${smsStatus}`);
-            reminder.status = smsStatus;
-            updated = true;
-          }
-        } catch (err) {
-          console.warn(`❌ Failed to check SMS.to status for ${messageId}`);
-          console.error(err.response?.data || err.message);
-        }
-      }
-
-      if (updated) {
-        await appointment.save();
-      }
-    }
-    // 2. Fetch all reminders for frontend with .lean()
+    // 🚀 Just return current DB data instantly
     const appointments = await Appointment.find({
       "reminders.messageId": { $exists: true },
-    }).lean(); // <-- lean makes this FAST
+    }).lean();
 
     const allReminders = appointments.flatMap((appt) =>
       appt.reminders.map((reminder) => ({
@@ -68,6 +19,7 @@ router.get("/sms-statuses", async (req, res) => {
       }))
     );
 
+    // Sort by most recent reminder
     allReminders.sort(
       (a, b) => new Date(b.reminder.sentAt) - new Date(a.reminder.sentAt)
     );
