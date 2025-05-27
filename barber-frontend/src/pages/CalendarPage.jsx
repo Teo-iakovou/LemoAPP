@@ -279,7 +279,14 @@ const CalendarPage = () => {
         };
       });
 
-      setAppointments((prev) => [...prev, ...pastEvents]);
+      setAppointments((prev) => {
+        const merged = [...prev, ...pastEvents];
+        // Remove duplicates by id
+        const deduped = Array.from(
+          new Map(merged.map((item) => [item.id, item])).values()
+        );
+        return deduped;
+      });
       setPastPage((prev) => prev + 1);
     } catch (error) {
       console.error("Error loading past appointments:", error);

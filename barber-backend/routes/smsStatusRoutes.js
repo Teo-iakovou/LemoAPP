@@ -9,11 +9,11 @@ const API_KEY = process.env.SMS_TO_API_KEY.trim();
 router.get("/sms-statuses", async (req, res) => {
   try {
     // 📥 Find all appointments with at least one messageId
-    const appointments = await Appointment.find({
+    const appointmentsToUpdate = await Appointment.find({
       "reminders.messageId": { $exists: true },
     });
 
-    for (const appointment of appointments) {
+    for (const appointment of appointmentsToUpdate) {
       let updated = false;
 
       for (const reminder of appointment.reminders) {
@@ -53,8 +53,11 @@ router.get("/sms-statuses", async (req, res) => {
         await appointment.save();
       }
     }
+    // 2. Fetch all reminders for frontend with .lean()
+    const appointments = await Appointment.find({
+      "reminders.messageId": { $exists: true },
+    }).lean(); // <-- lean makes this FAST
 
-    // ✅ Flatten for frontend
     const allReminders = appointments.flatMap((appt) =>
       appt.reminders.map((reminder) => ({
         _id: appt._id,
@@ -65,7 +68,6 @@ router.get("/sms-statuses", async (req, res) => {
       }))
     );
 
-    // Sort by most recent reminder
     allReminders.sort(
       (a, b) => new Date(b.reminder.sentAt) - new Date(a.reminder.sentAt)
     );

@@ -393,7 +393,7 @@ const getUpcomingAppointments = async (req, res) => {
       {
         appointmentDateTime: { $gte: startOfYesterday },
         appointmentStatus: "confirmed",
-        type: "appointment", // Only appointments, not breaks
+        type: { $in: ["appointment", "break"] },
       },
       {
         customerName: 1,
