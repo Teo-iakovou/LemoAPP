@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
-import axios from "axios";
 import { Bar } from "react-chartjs-2";
+import { fetchCustomerCounts, fetchWeeklyCustomerCounts, loginUser } from "../utils/api";
 import {
   Chart as ChartJS,
   BarElement,
@@ -87,8 +87,6 @@ const CustomerCounts = () => {
     }
   }, [isAuthenticated, month, year]);
 
-  const API_BASE_URL =
-    import.meta.env.VITE_API_BASE_URL || "http://localhost:5001/api";
 
   const months = [
     "Ιανουάριος",
@@ -122,31 +120,25 @@ const CustomerCounts = () => {
   const fetchCounts = async () => {
     try {
       const token = localStorage.getItem("token");
-      const response = await axios.get(`${API_BASE_URL}/CustomerCounts`, {
-        params: { month, year },
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      setCounts(response.data.counts);
+      const data = await fetchCustomerCounts(month, year, token);
+      setCounts(data.counts); // If your util returns the whole response, else just setCounts(data)
     } catch (err) {
       console.error("Error fetching customer counts:", err);
       setError("Failed to fetch customer counts.");
     }
   };
-
+  
   const fetchWeeklyCounts = async () => {
     try {
       const token = localStorage.getItem("token");
-      const response = await axios.get(`${API_BASE_URL}/WeeklyCustomerCounts`, {
-        params: { week, year },
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      setWeeklyCounts(response.data.weeklyCounts);
+      const data = await fetchWeeklyCustomerCounts(week, year, token);
+      setWeeklyCounts(data.weeklyCounts); // If your util returns the whole response, else just setWeeklyCounts(data)
     } catch (err) {
       console.error("Error fetching weekly customer counts:", err);
       setError("Failed to fetch weekly customer counts.");
     }
   };
-
+  
   useEffect(() => {
     if (isAuthenticated) {
       const weeksInMonth = getWeeksInMonth(month, year);
@@ -237,20 +229,18 @@ const CustomerCounts = () => {
   const handleLogin = async (e) => {
     e.preventDefault();
     try {
-      const response = await axios.post(`${API_BASE_URL}/auth/signin`, {
-        username,
-        password,
-      });
-      localStorage.setItem("token", response.data.token);
+      const data = await loginUser({ username, password });
+      localStorage.setItem("token", data.token);
       setIsAuthenticated(true);
       setAuthError("");
     } catch (err) {
       console.error("Authentication failed:", err);
       setAuthError(
-        err.response?.data?.message || "An unexpected error occurred."
+        err.message || "An unexpected error occurred."
       );
     }
   };
+  
   if (!isAuthenticated) {
     return (
       <div className="fixed inset-0 flex items-center justify-center bg-gray-900">

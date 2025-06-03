@@ -2,6 +2,8 @@ const Customer = require("../models/customer");
 const Appointment = require("../models/appointment");
 const moment = require("moment");
 const jwt = require("jsonwebtoken");
+
+
 const getCustomerCounts = async (req, res, next) => {
   try {
     // Validate JWT token and extract user ID
@@ -33,6 +35,7 @@ const getCustomerCounts = async (req, res, next) => {
 
     const lemoCount = await Appointment.countDocuments({
       barber: "ΛΕΜΟ",
+      type: "appointment", 
       appointmentDateTime: {
         $gte: startOfMonth.toDate(),
         $lte: endOfMonth.toDate(),
@@ -41,6 +44,7 @@ const getCustomerCounts = async (req, res, next) => {
 
     const forouCount = await Appointment.countDocuments({
       barber: "ΦΟΡΟΥ",
+      type: "appointment", 
       appointmentDateTime: {
         $gte: startOfMonth.toDate(),
         $lte: endOfMonth.toDate(),
@@ -59,6 +63,8 @@ const getCustomerCounts = async (req, res, next) => {
     next(error);
   }
 };
+
+
 const getWeeklyCustomerCounts = async (req, res, next) => {
   try {
     const authHeader = req.headers.authorization;
@@ -87,6 +93,7 @@ const getWeeklyCustomerCounts = async (req, res, next) => {
 
     const lemoWeeklyCount = await Appointment.countDocuments({
       barber: "ΛΕΜΟ",
+      type: "appointment", 
       appointmentDateTime: {
         $gte: startOfWeek.toDate(),
         $lte: endOfWeek.toDate(),
@@ -95,6 +102,7 @@ const getWeeklyCustomerCounts = async (req, res, next) => {
 
     const forouWeeklyCount = await Appointment.countDocuments({
       barber: "ΦΟΡΟΥ",
+      type: "appointment",
       appointmentDateTime: {
         $gte: startOfWeek.toDate(),
         $lte: endOfWeek.toDate(),
@@ -201,49 +209,71 @@ const deleteCustomer = async (req, res, next) => {
 };
 // Controller to update a customer
 const updateCustomer = async (req, res) => {
-  const { id } = req.params; // Extract customer ID from URL
-  const { name, phoneNumber, barber } = req.body; // Extract fields from request body
+  const { id } = req.params;
+  const { name, phoneNumber, barber, profilePicture, dateOfBirth } = req.body;
 
   try {
     // Validate input
     if (!name || !phoneNumber) {
-      return res
-        .status(400)
-        .json({ error: "Name and phone number are required." });
+      return res.status(400).json({ error: "Name and phone number are required." });
     }
-
-    // Validate barber field if provided
     if (barber && !["ΛΕΜΟ", "ΦΟΡΟΥ"].includes(barber)) {
-      return res
-        .status(400)
-        .json({ error: "Invalid barber value. Must be 'ΛΕΜΟ' or 'ΦΟΡΟΥ'." });
+      return res.status(400).json({ error: "Invalid barber value. Must be 'ΛΕΜΟ' or 'ΦΟΡΟΥ'." });
     }
 
-    // Define barber colors
-    const barberColors = {
-      ΛΕΜΟ: "#7C3AED", // Purple for ΛΕΜΟ
-      ΦΟΡΟΥ: "orange", // Orange for ΦΟΡΟΥ
-    };
+    // Build update object dynamically
+    const updateFields = { name, phoneNumber, barber };
+    if (profilePicture !== undefined) updateFields.profilePicture = profilePicture;
+    if (dateOfBirth !== undefined) updateFields.dateOfBirth = dateOfBirth;
 
-    // Assign color dynamically based on barber
-    const color = barber ? barberColors[barber] || "#ffffff" : "#ffffff";
-
-    // Find and update the customer, including the color
     const updatedCustomer = await Customer.findByIdAndUpdate(
       id,
-      { name, phoneNumber, barber, color }, // Include color in the update
-      { new: true, runValidators: true } // Return updated document and run validation
+      updateFields,
+      { new: true, runValidators: true }
     );
 
     if (!updatedCustomer) {
       return res.status(404).json({ error: "Customer not found." });
     }
 
-    res.status(200).json(updatedCustomer); // Send updated customer back to client
+    res.status(200).json(updatedCustomer);
   } catch (error) {
     console.error("Error updating customer:", error);
     res.status(500).json({ error: "Failed to update customer." });
   }
+};
+
+
+const getCustomerAppointments = async (req, res) => {
+  const { id } = req.params;
+  const { month, year } = req.query;
+
+  const customer = await Customer.findById(id);
+  if (!customer) {
+    return res.status(404).json({ error: "Customer not found." });
+  }
+
+  // Build query for appointments of this customer, exclude breaks
+  const query = {
+    phoneNumber: customer.phoneNumber,
+    type: "appointment",
+  };
+
+  if (month && year) {
+    const start = new Date(year, month, 1);
+    const end = new Date(year, parseInt(month) + 1, 0, 23, 59, 59, 999);
+    query.appointmentDateTime = { $gte: start, $lte: end };
+  }
+
+  const appointments = await Appointment.find(query).sort({ appointmentDateTime: -1 });
+  // Return only the info you want
+  res.json(
+    appointments.map(a => ({
+      customerName: a.customerName,
+      appointmentDateTime: a.appointmentDateTime,
+      barber: a.barber,
+    }))
+  );
 };
 
 module.exports = {
@@ -253,4 +283,5 @@ module.exports = {
   updateCustomer,
   getCustomerCounts,
   getWeeklyCustomerCounts,
+  getCustomerAppointments
 };

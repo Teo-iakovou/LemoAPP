@@ -11,7 +11,9 @@ const customerSchema = new mongoose.Schema({
       message: "Phone number must be between 6 and 15 characters",
     },
   },
-  barber: { type: String, enum: ["ΛΕΜΟ", "ΦΟΡΟΥ"], default: null }, // Add this field
+  barber: { type: String, enum: ["ΛΕΜΟ", "ΦΟΡΟΥ"], default: null },
+  profilePicture: { type: String, default: null }, // New, optional
+  dateOfBirth: { type: Date, default: null },      // New, optional
 });
 
 // ✅ Prevent model overwrite
