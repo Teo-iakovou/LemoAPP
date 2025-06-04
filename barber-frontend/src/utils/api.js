@@ -1,35 +1,45 @@
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:5001/api";
 
-
-
-
-  export const fetchCustomerCounts = async (month, year, token) => {
-    const response = await fetch(
-      `${API_BASE_URL}/CustomerCounts?month=${month}&year=${year}`,
-      {
-        headers: { Authorization: `Bearer ${token}` },
-      }
-    );
+export const fetchCustomer = async (customerId) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/customers/${customerId}`);
     if (!response.ok) {
-      throw new Error("Failed to fetch customer counts.");
+      throw new Error("Failed to fetch customer.");
     }
-    return response.json(); // Returns { counts: { ... } }
-  };
-  
-  export const fetchWeeklyCustomerCounts = async (week, year, token) => {
-    const response = await fetch(
-      `${API_BASE_URL}/WeeklyCustomerCounts?week=${week}&year=${year}`,
-      {
-        headers: { Authorization: `Bearer ${token}` },
-      }
-    );
-    if (!response.ok) {
-      throw new Error("Failed to fetch weekly customer counts.");
+    return await response.json(); // Single customer object
+  } catch (error) {
+    console.error("Error fetching customer:", error);
+    return null;
+  }
+};
+
+export const fetchCustomerCounts = async (month, year, token) => {
+  const response = await fetch(
+    `${API_BASE_URL}/CustomerCounts?month=${month}&year=${year}`,
+    {
+      headers: { Authorization: `Bearer ${token}` },
     }
-    return response.json(); // Returns { weeklyCounts: { ... } }
-  };
-  
+  );
+  if (!response.ok) {
+    throw new Error("Failed to fetch customer counts.");
+  }
+  return response.json(); // Returns { counts: { ... } }
+};
+
+export const fetchWeeklyCustomerCounts = async (week, year, token) => {
+  const response = await fetch(
+    `${API_BASE_URL}/WeeklyCustomerCounts?week=${week}&year=${year}`,
+    {
+      headers: { Authorization: `Bearer ${token}` },
+    }
+  );
+  if (!response.ok) {
+    throw new Error("Failed to fetch weekly customer counts.");
+  }
+  return response.json(); // Returns { weeklyCounts: { ... } }
+};
+
 export const fetchCustomers = async () => {
   try {
     const response = await fetch(`${API_BASE_URL}/customers`);

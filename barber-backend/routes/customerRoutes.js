@@ -6,9 +6,11 @@ const {
   deleteAllCustomers,
   deleteCustomer,
   updateCustomer,
+
   getCustomerCounts,
   getWeeklyCustomerCounts,
   getCustomerAppointments, // Add this if implementing
+  getCustomerById,
 } = require("../controllers/customerController");
 
 // Main customer data
@@ -16,6 +18,7 @@ router.get("/", getCustomers);
 router.delete("/", deleteAllCustomers);
 router.delete("/:id", deleteCustomer);
 router.put("/:id", updateCustomer);
+router.get("/:id", getCustomerById);
 
 // Customer analytics/statistics
 router.get("/CustomerCounts", getCustomerCounts);

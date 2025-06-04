@@ -1,16 +1,21 @@
-import React, { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef } from "react";
 import { fetchCustomers } from "../utils/api";
 import Select from "react-select";
-import { FaTrash, FaEdit } from "react-icons/fa";
+import CustomerDetailsDrawer from "../_components/CustomerDetailsDrawer";
+
+import { FaTrash, FaEdit, FaEye } from "react-icons/fa";
 import Skeleton from "react-loading-skeleton";
 import "react-loading-skeleton/dist/skeleton.css";
 
 // Base API URL
+
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:5001/api";
 
 const CustomersPage = () => {
   const [customers, setCustomers] = useState([]);
+  const [selectedCustomerId, setSelectedCustomerId] = useState(null);
+
   const [editMode, setEditMode] = useState(null); // Track the customer being edited
   const [editData, setEditData] = useState({
     name: "",
@@ -296,6 +301,14 @@ const CustomersPage = () => {
                     <FaEdit size={20} />
                   </button>
                   <button
+                    onClick={() => setSelectedCustomerId(customer._id)}
+                    className="text-cyan-400 hover:text-cyan-600"
+                    title="View Details"
+                  >
+                    <FaEye size={20} />
+                  </button>
+
+                  <button
                     onClick={() => deleteCustomer(customer._id)}
                     className="text-red-500 hover:text-red-700"
                   >
@@ -306,6 +319,12 @@ const CustomersPage = () => {
             ))}
           </ul>
         </div>
+      )}
+      {selectedCustomerId && (
+        <CustomerDetailsDrawer
+          customerId={selectedCustomerId}
+          onClose={() => setSelectedCustomerId(null)}
+        />
       )}
     </div>
   );
