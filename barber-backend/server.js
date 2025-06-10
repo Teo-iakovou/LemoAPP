@@ -30,7 +30,7 @@ const PORT = process.env.PORT || 5001;
 const corsOptions = {
   origin: [
     "https://lemoapp-k4ob.onrender.com", // Production frontend
-    ,
+
     "https://lemoapp.netlify.app", // Netlify frontend
     "http://localhost:5173", // Local development
   ],
