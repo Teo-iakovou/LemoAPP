@@ -5,6 +5,8 @@ const connectDB = require("./utils/db");
 const cron = require("node-cron");
 const noteRoutes = require("./routes/noteRoutes");
 const { autoRetryFailedSMS } = require("./controllers/autoRetryFailedSMS");
+const { sendBirthdaySMS } = require("./controllers/birthdaySms");
+
 const smsStatusRoutes = require("./routes/smsStatusRoutes");
 const smsResendRoute = require("./routes/smsResendRoute");
 const folderRoutes = require("./routes/folderRoutes");
@@ -18,6 +20,7 @@ const authRoutes = require("./routes/authRoutes");
 const errorHandler = require("./middlewares/errorHandler");
 const helmet = require("helmet");
 dotenv.config();
+
 connectDB();
 
 const app = express();
@@ -76,6 +79,7 @@ app.use("/api/appointments", appointmentRoutes);
 app.use("/api", smsStatusRoutes);
 app.use("/api", smsResendRoute);
 app.use("/api/customers", customerRoutes);
+
 app.use("/api/waitingList", waitingListRoutes);
 app.use("/api/reminders", reminderSchedulerRoute);
 app.use("/api/auth", authRoutes);
@@ -99,6 +103,17 @@ cron.schedule("0 * * * *", async () => {
 cron.schedule("*/10 * * * *", async () => {
   console.log("🕐 Running auto-retry for failed SMS...");
   await autoRetryFailedSMS();
+});
+
+// Run birthday SMS every day at 9:00 AM Athens time
+cron.schedule("0 9 * * *", async () => {
+  console.log("🎂 Running daily birthday SMS scheduler...");
+  try {
+    await sendBirthdaySMS();
+    console.log("Birthday SMS sent successfully.");
+  } catch (error) {
+    console.error("Error while sending birthday SMS:", error.message);
+  }
 });
 
 app.use(errorHandler);

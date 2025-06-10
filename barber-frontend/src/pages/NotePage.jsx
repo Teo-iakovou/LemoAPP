@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import FolderList from "../_components/FolderList";
 import axios from "axios";
 import WaitingList from "../_components/WaitingList";

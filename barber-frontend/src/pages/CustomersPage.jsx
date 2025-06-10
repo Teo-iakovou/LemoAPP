@@ -15,7 +15,7 @@ const API_BASE_URL =
 const CustomersPage = () => {
   const [customers, setCustomers] = useState([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState(null);
-
+  const [selectedCustomerOption, setSelectedCustomerOption] = useState(null);
   const [editMode, setEditMode] = useState(null); // Track the customer being edited
   const [editData, setEditData] = useState({
     name: "",
@@ -173,6 +173,11 @@ const CustomersPage = () => {
               placeholder="Αναζήτηση Πελάτη"
               isClearable
               isSearchable
+              value={selectedCustomerOption}
+              onChange={(option) => {
+                setSelectedCustomerOption(option);
+                setSelectedCustomerId(option ? option.value : null); // Open the drawer for this customer!
+              }}
               styles={{
                 control: (base) => ({
                   ...base,
@@ -323,7 +328,10 @@ const CustomersPage = () => {
       {selectedCustomerId && (
         <CustomerDetailsDrawer
           customerId={selectedCustomerId}
-          onClose={() => setSelectedCustomerId(null)}
+          onClose={() => {
+            setSelectedCustomerId(null);
+            setSelectedCustomerOption(null); // Clear the Select when closing drawer
+          }}
         />
       )}
     </div>

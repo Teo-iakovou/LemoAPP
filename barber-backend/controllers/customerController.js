@@ -294,6 +294,74 @@ const getCustomerAppointments = async (req, res) => {
   );
 };
 
+const uploadProfilePicture = async (req, res) => {
+  try {
+    console.log("req.file:", req.file); // <--- What does this show now?
+    console.log("req.params.id:", req.params.id);
+
+    if (!req.file || !req.file.path) {
+      return res.status(400).json({ error: "No file uploaded" });
+    }
+
+    const imageUrl = req.file.path;
+    const customer = await Customer.findByIdAndUpdate(
+      req.params.id,
+      { profilePicture: imageUrl },
+      { new: true }
+    );
+
+    if (!customer) {
+      return res.status(404).json({ error: "Customer not found." });
+    }
+
+    res.status(200).json(customer);
+  } catch (error) {
+    console.error("❌ FULL ERROR:", error); // <--- ADD THIS
+    res.status(500).json({
+      success: false,
+      message: error.message || "Internal Server Error",
+    });
+  }
+};
+
+// Fetch ALL appointment history for a customer
+const getAllCustomerAppointments = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Find customer
+    const customer = await Customer.findById(id);
+    if (!customer) {
+      return res.status(404).json({ error: "Customer not found." });
+    }
+
+    // Fetch all appointments for this customer's phone number (excluding breaks)
+    const appointments = await Appointment.find({
+      phoneNumber: customer.phoneNumber,
+      // Remove type: "appointment" filter for a moment to debug
+    }).sort({ appointmentDateTime: -1 });
+
+    // Optionally: print the earliest date
+    if (appointments.length) {
+      console.log(
+        "Earliest date:",
+        appointments[appointments.length - 1].appointmentDateTime
+      );
+    }
+
+    res.status(200).json(
+      appointments.map((a) => ({
+        customerName: a.customerName,
+        appointmentDateTime: a.appointmentDateTime,
+        barber: a.barber,
+      }))
+    );
+  } catch (error) {
+    console.error("Error fetching all appointment history:", error);
+    res.status(500).json({ error: "Failed to fetch appointment history." });
+  }
+};
+
 module.exports = {
   getCustomers,
   deleteAllCustomers,
@@ -303,4 +371,6 @@ module.exports = {
   getWeeklyCustomerCounts,
   getCustomerAppointments,
   getCustomerById,
+  uploadProfilePicture,
+  getAllCustomerAppointments,
 };

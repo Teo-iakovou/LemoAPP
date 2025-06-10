@@ -1,6 +1,37 @@
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:5001/api";
 
+export const fetchCustomerAppointments = async (customerId) => {
+  try {
+    const res = await fetch(
+      `${API_BASE_URL}/customers/${customerId}/appointments`
+    );
+    if (!res.ok) throw new Error("Failed to fetch appointment history.");
+    return await res.json(); // Array of appointments
+  } catch (error) {
+    console.error("Error fetching appointment history:", error);
+    return [];
+  }
+};
+
+export const uploadCustomerPhoto = async (customerId, file) => {
+  const formData = new FormData();
+  formData.append("profilePicture", file);
+
+  const response = await fetch(
+    `${API_BASE_URL}/customers/${customerId}/profile-picture`,
+    {
+      method: "POST",
+      body: formData,
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error("Failed to upload profile picture.");
+  }
+  return await response.json(); // returns the updated customer object
+};
+
 export const fetchCustomer = async (customerId) => {
   try {
     const response = await fetch(`${API_BASE_URL}/customers/${customerId}`);
@@ -222,4 +253,28 @@ export const createAppointment = async (appointmentData) => {
   }
 
   return response.json();
+};
+
+export const fetchAllCustomerAppointments = async (customerId) => {
+  try {
+    const res = await fetch(
+      `${API_BASE_URL}/customers/${customerId}/all-appointments`
+    );
+    if (!res.ok) throw new Error("Failed to fetch all appointment history.");
+    return await res.json();
+  } catch (error) {
+    console.error("Error fetching all appointment history:", error);
+    return [];
+  }
+};
+
+// PATCH single customer
+export const patchCustomer = async (id, data) => {
+  const res = await fetch(`${API_BASE_URL}/customers/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error("Failed to update customer");
+  return res.json();
 };

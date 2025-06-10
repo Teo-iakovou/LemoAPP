@@ -1,6 +1,7 @@
-import React, { useState, useEffect, lazy, Suspense } from "react";
+import { useState, useEffect, lazy, Suspense } from "react";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import Navbar from "./_components/Navbar";
+import { Toaster } from "react-hot-toast";
 import "./index.css";
 import UpdatePasswordForm from "./pages/UpdatePasswordForm";
 
@@ -33,6 +34,8 @@ const App = () => {
   return (
     <Router>
       <div className="h-screen flex flex-col bg-gray-900 transition-colors duration-300">
+        {/* Toasts show up globally */}
+        <Toaster position="top-center" reverseOrder={false} />
         {/* Navbar Section */}
         <header className="h-16 bg-purple-950">
           <Navbar isAuth={isAuth} onLogout={handleLogout} />

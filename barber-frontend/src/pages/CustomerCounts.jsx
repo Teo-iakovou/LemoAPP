@@ -1,6 +1,10 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { Bar } from "react-chartjs-2";
-import { fetchCustomerCounts, fetchWeeklyCustomerCounts, loginUser } from "../utils/api";
+import {
+  fetchCustomerCounts,
+  fetchWeeklyCustomerCounts,
+  loginUser,
+} from "../utils/api";
 import {
   Chart as ChartJS,
   BarElement,
@@ -87,7 +91,6 @@ const CustomerCounts = () => {
     }
   }, [isAuthenticated, month, year]);
 
-
   const months = [
     "Ιανουάριος",
     "Φεβρουάριος",
@@ -127,7 +130,7 @@ const CustomerCounts = () => {
       setError("Failed to fetch customer counts.");
     }
   };
-  
+
   const fetchWeeklyCounts = async () => {
     try {
       const token = localStorage.getItem("token");
@@ -138,7 +141,7 @@ const CustomerCounts = () => {
       setError("Failed to fetch weekly customer counts.");
     }
   };
-  
+
   useEffect(() => {
     if (isAuthenticated) {
       const weeksInMonth = getWeeksInMonth(month, year);
@@ -235,12 +238,10 @@ const CustomerCounts = () => {
       setAuthError("");
     } catch (err) {
       console.error("Authentication failed:", err);
-      setAuthError(
-        err.message || "An unexpected error occurred."
-      );
+      setAuthError(err.message || "An unexpected error occurred.");
     }
   };
-  
+
   if (!isAuthenticated) {
     return (
       <div className="fixed inset-0 flex items-center justify-center bg-gray-900">
