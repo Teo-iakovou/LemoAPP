@@ -95,6 +95,8 @@ const CustomerDetailsDrawer = ({ customerId, onClose }) => {
       setEditing(false);
     } catch (e) {
       toast.error("Failed to update.");
+    } finally {
+      setSaving(false); // <---- This is what was missing
     }
   };
 
