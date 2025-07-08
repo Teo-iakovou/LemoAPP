@@ -99,10 +99,15 @@ cron.schedule("0 * * * *", async () => {
   }
 });
 
-// Run every 10 minutes (or adjust as you like)
+// Schedule reminders every 10 minutes for accurate 24h-ahead delivery
 cron.schedule("*/10 * * * *", async () => {
-  console.log("🕐 Running auto-retry for failed SMS...");
-  await autoRetryFailedSMS();
+  console.log("⏰ Running 10-minute reminder scheduler...");
+  try {
+    await sendReminders();
+    console.log("Reminders sent successfully.");
+  } catch (error) {
+    console.error("Error while sending reminders:", error.message);
+  }
 });
 
 // Run birthday SMS every day at 9:00 AM Athens time

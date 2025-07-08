@@ -6,22 +6,26 @@ const sendReminders = async () => {
   try {
     const tz = "Europe/Athens";
     const nowAthens = moment().tz(tz);
-    const targetDate = nowAthens.clone().add(1, "day").format("YYYY-MM-DD");
 
-    const startOfTargetDay = moment.tz(`${targetDate} 00:00`, tz);
-    const endOfTargetDay = startOfTargetDay.clone().endOf("day");
+    // --- NEW: Define tight window for 24 hours ahead (10-minute window) ---
+    const windowStart = nowAthens.clone().add(24, "hours");
+    const windowEnd = windowStart.clone().add(10, "minutes");
 
     const appointments = await Appointment.find({
       appointmentDateTime: {
-        $gte: startOfTargetDay.toDate(),
-        $lte: endOfTargetDay.toDate(),
+        $gte: windowStart.toDate(),
+        $lt: windowEnd.toDate(),
       },
       appointmentStatus: "confirmed",
       type: "appointment",
     });
 
     console.log(
-      `📋 Found ${appointments.length} appointments for ${targetDate}`
+      `📋 Found ${
+        appointments.length
+      } appointments for reminders between ${windowStart.format(
+        "YYYY-MM-DD HH:mm"
+      )} and ${windowEnd.format("YYYY-MM-DD HH:mm")}`
     );
 
     for (const appointment of appointments) {
@@ -31,6 +35,7 @@ const sendReminders = async () => {
 
       const message = `Υπενθύμιση για το ραντεβού σας αύριο στις ${formattedTime} στο Lemo Barber Shop.`;
 
+      // Double-check to avoid duplicate reminders
       const fresh = await Appointment.findById(appointment._id);
       const alreadyExists = fresh.reminders?.some(
         (r) => r.type === "24-hour" && r.messageText === message
