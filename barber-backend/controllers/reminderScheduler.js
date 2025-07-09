@@ -4,16 +4,16 @@ const moment = require("moment-timezone");
 
 const sendReminders = async () => {
   try {
-    const tz = "Europe/Athens";
-    const nowAthens = moment().tz(tz);
+    // THE FIX: use UTC everywhere for window calculation
+    const nowUTC = moment.utc();
 
-    // --- NEW: Define tight window for 24 hours ahead (10-minute window) ---
-    const windowStart = nowAthens.clone().add(24, "hours");
+    // 24h window ahead in UTC
+    const windowStart = nowUTC.clone().add(24, "hours");
     const windowEnd = windowStart.clone().add(10, "minutes");
 
     const appointments = await Appointment.find({
       appointmentDateTime: {
-        $gte: windowStart.toDate(),
+        $gte: windowStart.toDate(), // window in UTC!
         $lt: windowEnd.toDate(),
       },
       appointmentStatus: "confirmed",
@@ -25,10 +25,12 @@ const sendReminders = async () => {
         appointments.length
       } appointments for reminders between ${windowStart.format(
         "YYYY-MM-DD HH:mm"
-      )} and ${windowEnd.format("YYYY-MM-DD HH:mm")}`
+      )} and ${windowEnd.format("YYYY-MM-DD HH:mm")} UTC`
     );
 
     for (const appointment of appointments) {
+      // Always display Athens time in the SMS
+      const tz = "Europe/Athens";
       const formattedTime = moment(appointment.appointmentDateTime)
         .tz(tz)
         .format("DD/MM/YYYY HH:mm");

@@ -88,17 +88,6 @@ app.get("/api", (req, res) => {
   res.status(200).json({ message: "API is working" });
 });
 
-// Schedule reminders every hour
-cron.schedule("0 * * * *", async () => {
-  console.log("Running hourly reminder scheduler...");
-  try {
-    await sendReminders();
-    console.log("Reminders sent successfully.");
-  } catch (error) {
-    console.error("Error while sending reminders:", error.message);
-  }
-});
-
 // Schedule reminders every 10 minutes for accurate 24h-ahead delivery
 cron.schedule("*/10 * * * *", async () => {
   console.log("⏰ Running 10-minute reminder scheduler...");
