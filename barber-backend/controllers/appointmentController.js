@@ -63,23 +63,22 @@ const createAppointment = async (req, res, next) => {
     }
 
     // Calculate end time in UTC
-    const duration = 40; // Fixed duration of 40 minutes
+    // Accept duration from req.body or fallback to default
+    const duration = Number(req.body.duration) || 40;
     const endTimeUTC = appointmentDateUTC
       .clone()
       .add(duration, "minutes")
       .toDate();
 
-    // Create the initial appointment
     const newAppointment = new Appointment({
       customerName,
       phoneNumber,
-      appointmentDateTime: appointmentDateUTC.toDate(), // Store in UTC
+      appointmentDateTime: appointmentDateUTC.toDate(),
       barber,
       duration,
       appointmentStatus: "confirmed",
-      type: type || "appointment", // ✅ Fallback to default if missing
-
-      endTime: endTimeUTC, // Store in UTC
+      type: type || "appointment",
+      endTime: endTimeUTC,
       recurrence: recurrence === "weekly" ? "weekly" : "one-time",
       repeatInterval: recurrence === "weekly" ? intervalWeeks : null,
       repeatCount: recurrence === "weekly" ? maxRepeat : null,

@@ -4,17 +4,25 @@ const moment = require("moment-timezone");
 
 const sendReminders = async () => {
   try {
-    // THE FIX: use UTC everywhere for window calculation
-    const nowUTC = moment.utc();
+    // -- Χρησιμοποίησε Athens time για clarity --
+    const tz = "Europe/Athens";
+    const nowAthens = moment().tz(tz);
 
-    // 24h window ahead in UTC
-    const windowStart = nowUTC.clone().add(24, "hours");
-    const windowEnd = windowStart.clone().add(10, "minutes");
+    // --- [ WINDOW: 24h ± 10min από τώρα (Athens time) ] ---
+    const windowStart = nowAthens
+      .clone()
+      .add(24, "hours")
+      .subtract(10, "minutes");
+    const windowEnd = nowAthens.clone().add(24, "hours").add(10, "minutes");
+
+    // Convert window to UTC for MongoDB
+    const windowStartUTC = windowStart.clone().utc().toDate();
+    const windowEndUTC = windowEnd.clone().utc().toDate();
 
     const appointments = await Appointment.find({
       appointmentDateTime: {
-        $gte: windowStart.toDate(), // window in UTC!
-        $lt: windowEnd.toDate(),
+        $gte: windowStartUTC,
+        $lt: windowEndUTC,
       },
       appointmentStatus: "confirmed",
       type: "appointment",
@@ -25,24 +33,19 @@ const sendReminders = async () => {
         appointments.length
       } appointments for reminders between ${windowStart.format(
         "YYYY-MM-DD HH:mm"
-      )} and ${windowEnd.format("YYYY-MM-DD HH:mm")} UTC`
+      )} and ${windowEnd.format("YYYY-MM-DD HH:mm")} Athens`
     );
 
     for (const appointment of appointments) {
-      // Always display Athens time in the SMS
-      const tz = "Europe/Athens";
-      const formattedTime = moment(appointment.appointmentDateTime)
+      const appointmentTimeAthens = moment(appointment.appointmentDateTime)
         .tz(tz)
         .format("DD/MM/YYYY HH:mm");
+      const message = `Υπενθύμιση για το ραντεβού σας αύριο στις ${appointmentTimeAthens} στο Lemo Barber Shop.`;
 
-      const message = `Υπενθύμιση για το ραντεβού σας αύριο στις ${formattedTime} στο Lemo Barber Shop.`;
-
-      // Double-check to avoid duplicate reminders
-      const fresh = await Appointment.findById(appointment._id);
-      const alreadyExists = fresh.reminders?.some(
+      // Avoid duplicate reminders
+      const alreadyExists = appointment.reminders?.some(
         (r) => r.type === "24-hour" && r.messageText === message
       );
-
       if (alreadyExists) {
         console.log(
           `⛔ Reminder already sent to ${appointment.customerName}, skipping.`
@@ -53,13 +56,16 @@ const sendReminders = async () => {
       try {
         const result = await sendSMS(appointment.phoneNumber, message);
 
-        await appointment.logReminder("24-hour", {
+        appointment.reminders.push({
+          type: "24-hour",
+          sentAt: new Date(),
           messageId: result?.message_id || result?.messageId || null,
           status: result?.success ? "sent" : result?.status || "failed",
           messageText: message,
           senderId: "Lemo Barber",
           retryCount: 0,
         });
+        await appointment.save();
 
         console.log(`✅ Reminder sent to ${appointment.customerName}`);
       } catch (err) {
@@ -67,14 +73,16 @@ const sendReminders = async () => {
           `❌ SMS failed for ${appointment.customerName}:`,
           err.message
         );
-
-        await appointment.logReminder("24-hour", {
+        appointment.reminders.push({
+          type: "24-hour",
+          sentAt: new Date(),
           messageId: null,
           status: "failed",
           messageText: message,
           senderId: "Lemo Barber",
           retryCount: 0,
         });
+        await appointment.save();
       }
     }
   } catch (err) {

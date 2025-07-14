@@ -24,6 +24,21 @@ const appointmentSchema = new mongoose.Schema({
     type: Date,
     required: true,
   },
+  duration: {
+    type: Number,
+    required: function () {
+      return this.type !== "break";
+    },
+    min: 10, // or whatever minimum duration you want (e.g. 10 mins)
+    max: 600, // you can set a max if you want (e.g. 10 hours)
+    default: 40, // default to 40 if not provided
+  },
+  endTime: {
+    type: Date,
+    required: function () {
+      return this.type !== "break";
+    },
+  },
   barber: {
     type: String,
     enum: ["ΛΕΜΟ", "ΦΟΡΟΥ"],
@@ -38,66 +53,54 @@ const appointmentSchema = new mongoose.Schema({
     type: String,
     enum: ["appointment", "break"],
     default: "appointment",
-  }, // ✅ New field
+  },
 
   reminders: [
     {
-      type: { type: String, required: true }, // e.g. "24-hour"
+      type: { type: String, required: true },
       sentAt: { type: Date, required: true },
-      messageId: { type: String }, // <- NEW
+      messageId: { type: String },
       messageText: { type: String },
-      senderId: { type: String }, // if you store it
+      senderId: { type: String },
       status: {
         type: String,
         enum: ["sent", "delivered", "failed", "expired", "rejected"],
         default: "sent",
-      }, // <- NEW
-      retryCount: { type: Number, default: 0 }, // <- NEW
+      },
+      retryCount: { type: Number, default: 0 },
       error: String,
     },
   ],
 });
 
-// Middleware to calculate and set `endTime` before saving
+// --- PRE-SAVE: Automatically calculate endTime ---
 appointmentSchema.pre("save", function (next) {
-  if (this.isModified("appointmentDateTime")) {
+  if (this.type !== "break") {
+    // Always calculate endTime based on duration and appointmentDateTime
+    const durationToUse = this.duration || 40; // fallback to 40
     this.endTime = new Date(
-      new Date(this.appointmentDateTime).getTime() + 40 * 60 * 1000 // Default 40 minutes duration
+      new Date(this.appointmentDateTime).getTime() + durationToUse * 60 * 1000
     );
+  } else {
+    this.endTime = this.appointmentDateTime; // or handle breaks as you wish
   }
   next();
 });
 
 // Add indexes for optimized queries
-// Add a compound index for your common queries
 appointmentSchema.index({
   appointmentDateTime: 1,
   appointmentStatus: 1,
   type: 1,
 });
 
-/**
- * Check if a reminder has already been sent for the given type.
- * @param {String} type - Reminder type (e.g., "24-hour", "7-day")
- * @returns {Boolean} - True if reminder of this type was already sent.
- */
-appointmentSchema.methods.isReminderSent = function (type) {
-  return this.reminders.some(
-    (reminder) => reminder.type === type && reminder.sentAt
-  );
-};
-
-/**
- * Log a reminder as sent.
- * @param {String} type - Reminder type
- */
-appointmentSchema.methods.logReminder = function (type, data = {}) {
+// --- Log Reminder Utility (needed for reminders and scripts) ---
+appointmentSchema.methods.logReminder = async function (type, data = {}) {
   this.reminders.push({
     type,
     sentAt: new Date(),
-    ...data, // includes messageId, status, etc.
+    ...data,
   });
   return this.save();
 };
-
 module.exports = mongoose.model("Appointment", appointmentSchema);
