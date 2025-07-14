@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import CalendarComponent from "../_components/CalendarComponent";
@@ -34,20 +34,21 @@ const CalendarPage = () => {
           const isBreak = appointment.type === "break";
           const isLemo = appointment.barber === "ΛΕΜΟ";
 
+          const duration = appointment.duration || 40;
           return {
             id: appointment._id,
             title: isBreak ? "ΔΙΑΛΕΙΜΜΑ" : appointment.customerName,
             start: appointmentDate,
-            end: new Date(appointmentDate.getTime() + 40 * 60 * 1000),
+            end: new Date(appointmentDate.getTime() + duration * 60 * 1000),
             barber: appointment.barber,
             type: appointment.type || "appointment",
             backgroundColor: isBreak
               ? isLemo
-                ? "#34D399" // ✅ ΛΕΜΟ break: green
-                : "#0ea5e9" // ✅ ΦΟΡΟΥ break: light yellow
+                ? "#34D399"
+                : "#0ea5e9"
               : isLemo
-              ? "#6B21A8" // ΛΕΜΟ normal
-              : "orange", // ΦΟΡΟΥ normal
+              ? "#6B21A8"
+              : "orange",
           };
         });
 
@@ -105,6 +106,7 @@ const CalendarPage = () => {
       barber: appointment.barber || "ΛΕΜΟ",
       appointmentDateTime: appointment.start,
       type: appointment.type || "appointment",
+      duration: (appointment.end - appointment.start) / (60 * 1000), // for edit
     });
 
     setShowForm(true);
@@ -149,7 +151,8 @@ const CalendarPage = () => {
               : appointment.customerName,
           start: new Date(appointment.appointmentDateTime),
           end: new Date(
-            new Date(appointment.appointmentDateTime).getTime() + 40 * 60 * 1000
+            new Date(appointment.appointmentDateTime).getTime() +
+              (appointment.duration || 40) * 60 * 1000
           ),
           barber: appointment.barber,
           type: appointment.type || "appointment",
@@ -261,12 +264,12 @@ const CalendarPage = () => {
         const appointmentDate = new Date(appointment.appointmentDateTime);
         const isBreak = appointment.type === "break";
         const isLemo = appointment.barber === "ΛΕΜΟ";
-
+        const duration = appointment.duration || 40;
         return {
           id: appointment._id,
           title: isBreak ? "ΔΙΑΛΕΙΜΜΑ" : appointment.customerName,
           start: appointmentDate,
-          end: new Date(appointmentDate.getTime() + 40 * 60 * 1000),
+          end: new Date(appointmentDate.getTime() + duration * 60 * 1000),
           barber: appointment.barber,
           type: appointment.type || "appointment",
           backgroundColor: isBreak
@@ -293,6 +296,47 @@ const CalendarPage = () => {
       toast.error("Αποτυχία φόρτωσης προηγούμενων ραντεβού.");
     }
   };
+
+  const handleResizeAppointment = async (updatedEvent) => {
+    // Find the original appointment by id
+    const original = appointments.find((a) => a.id === updatedEvent.id);
+    if (!original) return;
+
+    // Calculate the new duration in minutes
+    const newDuration = Math.round(
+      (updatedEvent.end - updatedEvent.start) / 60000
+    );
+
+    // Prepare payload for backend
+    const payload = {
+      ...original,
+      appointmentDateTime: updatedEvent.start, // update start time
+      duration: newDuration, // update duration
+    };
+
+    try {
+      await updateAppointment(original.id, payload);
+
+      // Update frontend state (so UI updates instantly)
+      setAppointments((prev) =>
+        prev.map((a) =>
+          a.id === updatedEvent.id
+            ? {
+                ...a,
+                start: updatedEvent.start,
+                end: updatedEvent.end,
+                duration: newDuration,
+              }
+            : a
+        )
+      );
+      toast.success("Διάρκεια ραντεβού ενημερώθηκε!");
+    } catch (error) {
+      toast.error("Αποτυχία ενημέρωσης διάρκειας.");
+      console.error(error);
+    }
+  };
+
   return (
     <div className="relative bg-white rounded-3xl mt-[-18] min-h-[calc(100vh-64px)] p-4">
       {/* 🔄 Load Past Appointments Button - moved above the calendar */}
@@ -311,6 +355,7 @@ const CalendarPage = () => {
           events={filteredAppointments}
           onSelectSlot={handleSelectSlot}
           onSelectEvent={handleSelectEvent}
+          onUpdateAppointment={handleResizeAppointment} // <-- Add this prop!
         />
       </div>
 

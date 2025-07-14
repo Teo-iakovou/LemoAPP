@@ -149,3 +149,44 @@
 .birthday-link:hover {
   color: #ede9fe;
 }
+
+.react-datepicker__input-container input {
+  background: #181a23 !important;
+  color: #a78bfa !important;
+  border: 2px solid #a78bfa !important;
+  border-radius: 0.75rem !important;
+  font-weight: 500;
+}
+
+.react-datepicker {
+  background-color: #161a23 !important;
+  color: #ede9fe !important;
+  border-radius: 1rem !important;
+  border: 2px solid #a78bfa !important;
+}
+.react-datepicker__header {
+  background-color: #181c2b !important;
+  border-bottom: 1px solid #a78bfa !important;
+}
+.react-datepicker__current-month,
+.react-datepicker-time__header,
+.react-datepicker-year-header {
+  color: #a78bfa !important;
+}
+.react-datepicker__day--selected,
+.react-datepicker__day--keyboard-selected {
+  background: #a78bfa !important;
+  color: #181a23 !important;
+}
+.react-datepicker__day:hover {
+  background: #a78bfa55 !important;
+}
+.react-datepicker__time-list-item--selected,
+.react-datepicker__time-list-item--keyboard-selected {
+  background: #a78bfa !important;
+  color: #181a23 !important;
+}
+.react-datepicker__time-list-item {
+  background: #161a23 !important;
+  color: #ede9fe !important;
+}

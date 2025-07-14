@@ -1,11 +1,18 @@
-import React from "react";
-import { Calendar, momentLocalizer, Views } from "react-big-calendar";
 import moment from "moment";
-import "moment/locale/el"; // Import Greek locale
+import "moment/locale/el";
+import {
+  momentLocalizer,
+  Views,
+  Calendar as BigCalendar,
+} from "react-big-calendar";
+import withDragAndDrop from "react-big-calendar/lib/addons/dragAndDrop";
 import "react-big-calendar/lib/css/react-big-calendar.css";
+import "react-big-calendar/lib/addons/dragAndDrop/styles.css";
 
-moment.locale("el"); // Set moment to use Greek locale
+// Greek locale
+moment.locale("el");
 const localizer = momentLocalizer(moment);
+const DragAndDropCalendar = withDragAndDrop(BigCalendar);
 
 const greekMonths = [
   "Ιανουάριος",
@@ -21,7 +28,6 @@ const greekMonths = [
   "Νοέμβριος",
   "Δεκέμβριος",
 ];
-
 const greekDays = [
   "Κυριακή",
   "Δευτέρα",
@@ -36,33 +42,41 @@ const CalendarComponent = ({
   events,
   onSelectSlot,
   onSelectEvent,
+  onUpdateAppointment, // Call this to update on backend/state
   disabled,
 }) => {
+  // Style for each event
   const eventStyleGetter = (event, start, end, isSelected) => {
     let backgroundColor;
-
     if (event.type === "break") {
-      backgroundColor = event.barber === "ΛΕΜΟ" ? "#34D399" : "#0ea5e9"; // Green for ΛΕΜΟ, Light Yellow for ΦΟΡΟΥ
+      backgroundColor = event.barber === "ΛΕΜΟ" ? "#34D399" : "#0ea5e9";
     } else {
       backgroundColor = event.barber === "ΛΕΜΟ" ? "#6B21A8" : "orange";
     }
-
     return {
       style: {
         backgroundColor,
         color: "white",
         borderRadius: "5px",
         border: "none",
-        ...(isSelected && {
-          boxShadow: "0 0 5px 2px rgba(0, 0, 0, 0.3)",
-        }),
+        ...(isSelected && { boxShadow: "0 0 5px 2px rgba(0, 0, 0, 0.3)" }),
       },
     };
   };
 
+  // Handle resize
+  const handleEventResize = ({ event, start, end }) => {
+    // Call your backend or update state here
+    if (onUpdateAppointment) {
+      onUpdateAppointment({ ...event, start, end });
+    }
+    // For demo:
+    // console.log("Resized event:", { ...event, start, end });
+  };
+
   return (
     <div className="h-full w-full">
-      <Calendar
+      <DragAndDropCalendar
         localizer={localizer}
         events={events}
         startAccessor="start"
@@ -75,13 +89,15 @@ const CalendarComponent = ({
         className={`relative z-0 ${
           disabled ? "pointer-events-none opacity-50" : ""
         }`}
-        min={new Date(1970, 1, 1, 7, 0, 0)} // Start time: 7:00 AM
-        max={new Date(1970, 1, 1, 21, 0, 0)} // End time: 9:00 PM
-        step={40} // Time interval: 40 minutes after January 13th
-        timeslots={1} // Display one slot per step
-        defaultView={Views.WEEK} // Set default view to Week (Εβδομάδα)
+        min={new Date(1970, 1, 1, 7, 0, 0)}
+        max={new Date(1970, 1, 1, 21, 0, 0)}
+        step={40}
+        timeslots={1}
+        defaultView={Views.WEEK}
+        resizable
+        onEventResize={handleEventResize}
         formats={{
-          timeGutterFormat: "HH:mm", // 12-hour format
+          timeGutterFormat: "HH:mm",
           eventTimeRangeFormat: ({ start, end }) =>
             `${moment(start).format("HH:mm")} - ${moment(end).format("HH:mm")}`,
           agendaTimeRangeFormat: ({ start, end }) =>
@@ -89,21 +105,21 @@ const CalendarComponent = ({
           dayFormat: (date) =>
             `${greekDays[new Date(date).getDay()]} ${moment(date).format(
               "DD/MM"
-            )}`, // Greek day names with date
+            )}`,
           weekdayFormat: (date) =>
             `${greekDays[new Date(date).getDay()]} ${moment(date).format(
               "DD/MM"
-            )}`, // Greek day names for Week view
+            )}`,
           monthHeaderFormat: (date) =>
             `${greekMonths[new Date(date).getMonth()]} ${new Date(
               date
-            ).getFullYear()}`, // Greek month names
+            ).getFullYear()}`,
           dayHeaderFormat: (date) =>
             `${greekDays[new Date(date).getDay()]} ${moment(date).format(
               "DD/MM"
-            )}`, // Day view header
+            )}`,
           weekHeaderFormat: ({ start, end }) =>
-            `${moment(start).format("DD/MM")} - ${moment(end).format("DD/MM")}`, // Week header format
+            `${moment(start).format("DD/MM")} - ${moment(end).format("DD/MM")}`,
         }}
         messages={{
           today: "Σήμερα",

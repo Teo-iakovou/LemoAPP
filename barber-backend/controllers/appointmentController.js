@@ -268,6 +268,11 @@ const updateAppointment = async (req, res, next) => {
       appointment.endTime = new Date(newDate.getTime() + duration * 60 * 1000);
     }
 
+    // 👇 Add this! Explicitly update duration field in DB
+    if (duration) {
+      appointment.duration = duration;
+    }
+
     if (barber) {
       appointment.barber = barber;
     }
