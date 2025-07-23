@@ -88,27 +88,30 @@ app.get("/api", (req, res) => {
   res.status(200).json({ message: "API is working" });
 });
 
-// Schedule reminders every 1 minute for maximum coverage
-cron.schedule("* * * * *", async () => {
-  console.log("⏰ Running 1-minute reminder scheduler...");
-  try {
-    await sendReminders();
-    console.log("Reminders sent successfully.");
-  } catch (error) {
-    console.error("Error while sending reminders:", error.message);
-  }
-});
+// Run reminder cron only in production
+if (process.env.NODE_ENV === "production") {
+  cron.schedule("* * * * *", async () => {
+    console.log(`[${new Date().toISOString()}] ⏰ Running 1-minute reminder scheduler...`);
+    try {
+      await sendReminders();
+      console.log("✅ Reminders sent successfully.");
+    } catch (error) {
+      console.error("❌ Error while sending reminders:", error.message);
+    }
+  });
 
-// Run birthday SMS every day at 9:00 AM Athens time
-cron.schedule("0 9 * * *", async () => {
-  console.log("🎂 Running daily birthday SMS scheduler...");
-  try {
-    await sendBirthdaySMS();
-    console.log("Birthday SMS sent successfully.");
-  } catch (error) {
-    console.error("Error while sending birthday SMS:", error.message);
-  }
-});
+  // Run birthday SMS every day at 9:00 AM Athens time
+  cron.schedule("0 9 * * *", async () => {
+    console.log(`[${new Date().toISOString()}] 🎂 Running birthday SMS scheduler...`);
+    try {
+      await sendBirthdaySMS();
+      console.log("🎉 Birthday SMS sent successfully.");
+    } catch (error) {
+      console.error("❌ Error while sending birthday SMS:", error.message);
+    }
+  });
+}
+
 
 app.use(errorHandler);
 app.listen(PORT, () => console.log(`Server is running on port ${PORT}`));
