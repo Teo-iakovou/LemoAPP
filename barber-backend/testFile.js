@@ -2,36 +2,63 @@ const mongoose = require("mongoose");
 const dotenv = require("dotenv");
 const moment = require("moment-timezone");
 const Appointment = require("./models/appointment");
+const { sendSMS } = require("./utils/smsService");
 
 dotenv.config();
 
-const debugReminderWindow = async () => {
+const tz = "Europe/Athens";
+
+// ✅ Use hardcoded appointment IDs
+const appointmentIds = [
+  "68529841426d72ae0382b7e0", 
+"687e6ce6f15afac9173d3a18"];
+
+const sendManualReminders = async () => {
   await mongoose.connect(process.env.MONGODB_URI);
-  console.log("✅ Connected");
+  console.log("✅ Connected to MongoDB");
 
-  const tz = "Europe/Athens";
-  const apptTimeAthens = moment.tz("2025-07-24 09:40", tz);
-  const windowStart = apptTimeAthens.clone().subtract(24, "hours").subtract(10, "minutes").utc();
-  const windowEnd = apptTimeAthens.clone().subtract(24, "hours").add(10, "minutes").utc();
+  for (const id of appointmentIds) {
+    const appt = await Appointment.findById(id);
 
-  const marios = await Appointment.findOne({
-    customerName: "marios augousti",
-    appointmentDateTime: {
-      $gte: apptTimeAthens.clone().utc().startOf("minute").toDate(),
-      $lte: apptTimeAthens.clone().utc().endOf("minute").toDate(),
-    },
-  });
+    if (!appt) {
+      console.log(`❌ No appointment found with ID: ${id}`);
+      continue;
+    }
 
-  const reminder = marios?.reminders?.find(r => r.type === "24-hour");
+    const appointmentTimeAthens = moment(appt.appointmentDateTime).tz(tz).format("DD/MM/YYYY HH:mm");
+    const message = `Υπενθύμιση για το ραντεβού σας αύριο στις ${appointmentTimeAthens} στο Lemo Barber Shop.`;
 
-  console.log("🔍 Reminder window:", windowStart.toISOString(), "→", windowEnd.toISOString());
-  console.log("📅 Appt time (UTC):", marios?.appointmentDateTime);
-  console.log("📍 Appt time (Athens):", moment(marios?.appointmentDateTime).tz(tz).format("YYYY-MM-DD HH:mm"));
-  console.log("🔁 Already reminded:", reminder ? "✅ YES" : "❌ NO");
-  console.log("🧾 Reminder message text:", reminder?.messageText);
-  console.log("📅 Reminder sentAt:", reminder?.sentAt);
+    const alreadyReminded = appt.reminders?.some(
+      (r) => r.type === "24-hour" && r.messageText === message
+    );
+
+    if (alreadyReminded) {
+      console.log(`⛔ Already reminded: ${appt.customerName}`);
+      continue;
+    }
+
+    try {
+      const result = await sendSMS(appt.phoneNumber, message);
+
+      appt.reminders.push({
+        type: "24-hour",
+        sentAt: new Date(),
+        messageId: result?.message_id || result?.messageId || null,
+        status: result?.success ? "sent" : result?.status || "failed",
+        messageText: message,
+        senderId: "Lemo Barber",
+        retryCount: 0,
+      });
+
+      await appt.save();
+      console.log(`✅ Reminder manually sent to ${appt.customerName}`);
+    } catch (err) {
+      console.error(`❌ SMS failed for ${appt.customerName}: ${err.message}`);
+    }
+  }
 
   await mongoose.disconnect();
+  console.log("🔌 Disconnected from MongoDB");
 };
 
-debugReminderWindow();
+sendManualReminders();

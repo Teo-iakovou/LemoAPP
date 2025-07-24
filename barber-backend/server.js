@@ -87,6 +87,18 @@ app.use("/api/auth", authRoutes);
 app.get("/api", (req, res) => {
   res.status(200).json({ message: "API is working" });
 });
+app.head("/api/ping", (req, res) => {
+  res.status(200).end(); // No body needed for HEAD
+});
+
+app.get("/api/ping", (req, res) => {
+  const now = new Date().toLocaleString("en-GB", {
+    timeZone: "Europe/Athens",
+  });
+  console.log(`📡 Ping received from UptimeRobot at ${now}`);
+  res.status(200).json({ message: "Ping OK" });
+});
+
 
 // Run reminder cron only in production
 if (process.env.NODE_ENV === "production") {
