@@ -16,9 +16,11 @@ const {
   getCustomerAppointments, // Add this if implementing
   getCustomerById,
   getAllCustomerAppointments,
+  createCustomer, 
 } = require("../controllers/customerController");
 
 // Customer analytics/statistics
+
 router.get("/CustomerCounts", getCustomerCounts);
 router.get("/WeeklyCustomerCounts", getWeeklyCustomerCounts);
 // Main customer data
@@ -26,10 +28,11 @@ router.get("/", getCustomers);
 router.delete("/", deleteAllCustomers);
 router.delete("/:id", deleteCustomer);
 router.patch("/:id", updateCustomer);
-
+router.post("/", createCustomer); 
 router.put("/:id", updateCustomer);
 router.get("/:id", getCustomerById);
 router.get("/:id/all-appointments", getAllCustomerAppointments);
+
 
 
 

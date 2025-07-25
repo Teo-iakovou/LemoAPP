@@ -14,6 +14,22 @@ export const fetchCustomerAppointments = async (customerId) => {
   }
 };
 
+// ADD NEW CUSTOMER
+export const addCustomer = async (customerData) => {
+  const response = await fetch(`${API_BASE_URL}/customers`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(customerData),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || "Failed to add customer.");
+  }
+
+  return response.json(); // returns the created customer object
+};
+
 export const uploadCustomerPhoto = async (customerId, file) => {
   const formData = new FormData();
   formData.append("profilePicture", file);

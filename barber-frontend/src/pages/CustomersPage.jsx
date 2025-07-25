@@ -1,48 +1,64 @@
 import { useEffect, useState, useRef } from "react";
-import { fetchCustomers } from "../utils/api";
+import { fetchCustomers, addCustomer } from "../utils/api";
 import Select from "react-select";
-import CustomerDetailsDrawer from "../_components/CustomerDetailsDrawer";
+import DatePicker from "react-datepicker";
+import "react-datepicker/dist/react-datepicker.css";
+import { registerLocale } from "react-datepicker";
+import el from "date-fns/locale/el";
+import { toast, ToastContainer } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 
-import { FaTrash, FaEdit, FaEye } from "react-icons/fa";
+registerLocale("el", el);
+
+import CustomerDetailsDrawer from "../_components/CustomerDetailsDrawer";
+import { FaTrash, FaEdit, FaEye, FaPlus, FaTimes } from "react-icons/fa";
 import Skeleton from "react-loading-skeleton";
 import "react-loading-skeleton/dist/skeleton.css";
-
-// Base API URL
 
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:5001/api";
 
+const barberOptions = [
+  { value: "ΛΕΜΟ", label: "ΛΕΜΟ" },
+  { value: "ΦΟΡΟΥ", label: "ΦΟΡΟΥ" },
+];
+ const barberColors = {
+    ΛΕΜΟ: "text-purple-600",
+    ΦΟΡΟΥ: "text-orange-500",
+  };
 const CustomersPage = () => {
   const [customers, setCustomers] = useState([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState(null);
   const [selectedCustomerOption, setSelectedCustomerOption] = useState(null);
-  const [editMode, setEditMode] = useState(null); // Track the customer being edited
+  const [editMode, setEditMode] = useState(null);
   const [editData, setEditData] = useState({
     name: "",
     phoneNumber: "",
     barber: "",
+    dateOfBirth: "",
   });
-  const [isLoading, setIsLoading] = useState(true); // Loading state
-  const editRef = useRef(null); // Ref to track clicks outside the edit form
+  const [isLoading, setIsLoading] = useState(true);
+  const [addMode, setAddMode] = useState(false);
+  const [addData, setAddData] = useState({
+    name: "",
+    phoneNumber: "",
+    barber: "",
+    dateOfBirth: "",
+  });
+  const [adding, setAdding] = useState(false);
 
-  // Mapping barbers to their corresponding text colors
-  const barberColors = {
-    ΛΕΜΟ: "text-purple-600", // Barber ΛΕΜΟ gets purple text
-    ΦΟΡΟΥ: "text-orange-500", // Barber ΦΟΡΟΥ gets orange text
-  };
+  const editRef = useRef(null);
+ 
 
   // Fetch customers from backend
   useEffect(() => {
     const loadCustomers = async () => {
       try {
         const customerData = await fetchCustomers();
-
-        // Assign barberColor dynamically based on barber value
         const updatedCustomers = customerData.map((customer) => ({
           ...customer,
-          barberColor: barberColors[customer.barber] || "text-white", // Default to white if barber is not set
+          barberColor: barberColors[customer.barber] || "text-white",
         }));
-
         setCustomers(
           updatedCustomers.sort((a, b) => a.name.localeCompare(b.name))
         );
@@ -63,33 +79,31 @@ const CustomersPage = () => {
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
-
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
   }, []);
 
   // Delete customer
-  const deleteCustomer = async (id) => {
-    const confirmDelete = window.confirm(
-      "Are you sure you want to delete this customer? This action cannot be undone."
-    );
-    if (!confirmDelete) return;
+ const deleteCustomer = async (id) => {
+  const confirmDelete = window.confirm(
+    "Θέλετε σίγουρα να διαγράψετε τον πελάτη; Η ενέργεια δεν αναιρείται."
+  );
+  if (!confirmDelete) return;
 
-    try {
-      const response = await fetch(`${API_BASE_URL}/customers/${id}`, {
-        method: "DELETE",
-      });
-      if (!response.ok) {
-        throw new Error("Failed to delete customer");
-      }
-      setCustomers((prev) => prev.filter((customer) => customer._id !== id));
-      alert("Customer deleted successfully.");
-    } catch (error) {
-      console.error("Error deleting customer:", error);
-      alert("Failed to delete customer.");
-    }
-  };
+  try {
+    const response = await fetch(`${API_BASE_URL}/customers/${id}`, {
+      method: "DELETE",
+    });
+    if (!response.ok) throw new Error("Failed to delete customer");
+    setCustomers((prev) => prev.filter((customer) => customer._id !== id));
+    toast.success("Ο πελάτης διαγράφηκε!");
+  } catch (error) {
+    toast.error("Αποτυχία διαγραφής πελάτη.");
+    console.error("Error deleting customer:", error);
+  }
+};
+
 
   // Enable edit mode for a specific customer
   const handleEditClick = (customer) => {
@@ -98,6 +112,7 @@ const CustomersPage = () => {
       name: customer.name,
       phoneNumber: customer.phoneNumber,
       barber: customer.barber || "",
+      dateOfBirth: customer.dateOfBirth || "",
     });
   };
 
@@ -110,56 +125,215 @@ const CustomersPage = () => {
     setEditData((prev) => ({ ...prev, barber: selectedOption.value }));
   };
 
-  // Submit the edited customer data
-  const handleEditSubmit = async (id) => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/customers/${id}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(editData),
-      });
+ const handleEditSubmit = async (id) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/customers/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(editData),
+    });
 
-      if (!response.ok) {
-        throw new Error("Failed to update customer");
+    if (!response.ok) {
+      // 409 = Duplicate phone number (if handled in backend)
+      if (response.status === 409) {
+        toast.error("Υπάρχει ήδη πελάτης με αυτό το τηλέφωνο.");
+      } else {
+        toast.error("Αποτυχία ενημέρωσης πελάτη.");
       }
-
-      const updatedCustomer = await response.json();
-
-      // Assign the correct barberColor dynamically based on the updated barber
-      const updatedCustomerWithColor = {
-        ...updatedCustomer,
-        barberColor: barberColors[updatedCustomer.barber] || "text-white",
-      };
-
-      setCustomers((prev) =>
-        prev.map((customer) =>
-          customer._id === id ? updatedCustomerWithColor : customer
-        )
-      );
-
-      setEditMode(null); // Exit edit mode
-      alert("Customer updated successfully.");
-    } catch (error) {
-      console.error("Error updating customer:", error);
-      alert("Failed to update customer.");
+      return;
     }
+
+    const updatedCustomer = await response.json();
+    const updatedCustomerWithColor = {
+      ...updatedCustomer,
+      barberColor: barberColors[updatedCustomer.barber] || "text-white",
+    };
+
+    setCustomers((prev) =>
+      prev.map((customer) =>
+        customer._id === id ? updatedCustomerWithColor : customer
+      )
+    );
+    setEditMode(null);
+    toast.success("Επιτυχής ενημέρωση πελάτη!");
+  } catch (er) {
+    toast.error("Αποτυχία ενημέρωσης πελάτη.");
+    console.error("Error updating customer:", er);
+
+  }
+};
+
+
+
+  // ADD CUSTOMER
+  const handleAddChange = (e) => {
+    const { name, value } = e.target;
+    setAddData((prev) => ({ ...prev, [name]: value }));
   };
+
+  const handleAddBarberChange = (selectedOption) => {
+    setAddData((prev) => ({ ...prev, barber: selectedOption.value }));
+  };
+
+ const handleAddSubmit = async (e) => {
+  e.preventDefault();
+  if (!addData.name || !addData.phoneNumber) {
+    toast.error("Το όνομα και το τηλέφωνο είναι υποχρεωτικά πεδία.");
+    return;
+  }
+  setAdding(true);
+  try {
+    const newCustomer = await addCustomer(addData); // Use your util
+   setCustomers((prev) =>
+  [...prev, {
+    ...newCustomer,
+    barberColor: barberColors[newCustomer.barber] || "text-white",
+  }].sort((a, b) => a.name.localeCompare(b.name))
+);
+
+    setAddMode(false);
+    setAddData({
+      name: "",
+      phoneNumber: "",
+      barber: "",
+      dateOfBirth: "",
+    });
+    toast.success("Ο πελάτης προστέθηκε!");
+  } catch (err) {
+    // 👇 Add this check for duplicate phone number (from backend)
+    if (err && err.message && err.message.includes("already exists")) {
+      toast.error("Υπάρχει ήδη πελάτης με αυτό το τηλέφωνο.");
+    } else {
+      toast.error("Αποτυχία προσθήκης πελάτη.");
+    }
+    console.error("Error adding customer:", err);
+  } finally {
+    setAdding(false);
+  }
+};
+
+
+
 
   const customerOptions = customers.map((customer) => ({
     value: customer._id,
     label: `${customer.name} - ${customer.phoneNumber}`,
   }));
 
-  const barberOptions = [
-    { value: "ΛΕΜΟ", label: "ΛΕΜΟ" },
-    { value: "ΦΟΡΟΥ", label: "ΦΟΡΟΥ" },
-  ];
-
+  // -----
   return (
     <div className="p-6 relative">
-      <h1 className="text-2xl font-bold mb-4 text-white">ΠΕΛΑΤΕΣ</h1>
+      <div className="flex justify-between items-center mb-4">
+        <h1 className="text-2xl font-bold text-white">ΠΕΛΑΤΕΣ</h1>
+        <button
+          className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded flex items-center gap-2 shadow font-semibold"
+          onClick={() => setAddMode((prev) => !prev)}
+        >
+          <FaPlus /> Προσθήκη Πελάτη
+        </button>
+      </div>
+      {addMode && (
+     <form
+  onSubmit={handleAddSubmit}
+  className="flex flex-wrap items-end gap-4 bg-[#1e293b] border border-[#3b82f6] p-4 rounded-xl mb-6"
+>
+  <input
+    type="text"
+    name="name"
+    placeholder="Όνομα"
+    value={addData.name}
+    onChange={handleAddChange}
+className="w-44 bg-[#181c2b] text-[#ede9fe] border border-[#a78bfa] px-3 py-2 rounded focus:outline-none focus:ring-2 focus:ring-[#a78bfa]"
+    autoFocus
+  />
+  <input
+    type="text"
+    name="phoneNumber"
+    placeholder="Τηλέφωνο"
+    value={addData.phoneNumber}
+    onChange={handleAddChange}
+className="w-44 bg-[#181c2b] text-[#ede9fe] border border-[#a78bfa] px-3 py-2 rounded focus:outline-none focus:ring-2 focus:ring-[#a78bfa]"
+  />
+  <Select
+    options={barberOptions}
+    placeholder="Επιλέξτε Barber"
+    value={barberOptions.find((option) => option.value === addData.barber)}
+    onChange={handleAddBarberChange}
+    className="w-44"
+    styles={{
+      control: (base, state) => ({
+        ...base,
+        backgroundColor: "#181c2b",
+        borderColor: "#a78bfa",
+        color: "#ede9fe",
+        borderRadius: "8px",
+        padding: "2px 0px",
+        fontSize: "15px",
+        boxShadow: state.isFocused ? "0 0 0 2px #a78bfa55" : undefined,
+      }),
+      menu: (base) => ({
+        ...base,
+        backgroundColor: "#161a23",
+        color: "#ede9fe",
+        borderRadius: "8px",
+      }),
+      option: (base, state) => ({
+        ...base,
+        backgroundColor: state.isFocused ? "#3b82f6" : "#161a23",
+        color: "#ede9fe",
+        padding: "10px",
+      }),
+      singleValue: (base) => ({
+        ...base,
+        color: "#ede9fe",
+      }),
+      placeholder: (base) => ({
+        ...base,
+        color: "#9ca3af",
+      }),
+      input: (base) => ({
+        ...base,
+        color: "#ede9fe",
+      }),
+    }}
+  />
+  <DatePicker
+    selected={addData.dateOfBirth ? new Date(addData.dateOfBirth) : null}
+    onChange={(date) =>
+      setAddData((prev) => ({
+        ...prev,
+        dateOfBirth: date ? date.toISOString().slice(0, 10) : "",
+      }))
+    }
+    dateFormat="dd/MM/yyyy"
+    placeholderText="Ημερ. Γέννησης"
+className="w-44 bg-[#181c2b] text-[#ede9fe] border border-[#a78bfa] px-3 py-2 rounded focus:outline-none focus:ring-2 focus:ring-[#a78bfa]"
+    calendarClassName="!bg-[#161a23] !text-[#ede9fe]"
+    locale="el"
+    yearDropdownItemNumber={100}
+    showYearDropdown
+    scrollableYearDropdown
+    maxDate={new Date()}
+  />
+  <button
+    type="submit"
+    disabled={adding}
+    className="bg-[#a78bfa] hover:bg-[#ede9fe] hover:text-[#161a23] text-[#161a23] font-bold px-6 py-2 rounded-lg shadow transition"
+    style={{ height: "44px" }}
+  >
+    {adding ? "Προσθήκη..." : "Αποθήκευση"}
+  </button>
+  <button
+    type="button"
+    onClick={() => setAddMode(false)}
+    className="bg-red-500 text-white px-3 py-2 rounded shadow font-semibold"
+    style={{ height: "44px" }}
+  >
+    <FaTimes />
+  </button>
+</form>
+
+      )}
 
       {isLoading ? (
         <Skeleton count={5} height={30} className="mb-4" />
@@ -176,46 +350,45 @@ const CustomersPage = () => {
               value={selectedCustomerOption}
               onChange={(option) => {
                 setSelectedCustomerOption(option);
-                setSelectedCustomerId(option ? option.value : null); // Open the drawer for this customer!
+                setSelectedCustomerId(option ? option.value : null);
               }}
               styles={{
                 control: (base) => ({
                   ...base,
-                  backgroundColor: "#1e293b", // Dark background
-                  borderColor: "#3b82f6", // Blue border
-                  color: "white", // Ensure text color is white
-                  borderRadius: "8px", // Rounded corners
+                  backgroundColor: "#1e293b",
+                  borderColor: "#3b82f6",
+                  color: "white",
+                  borderRadius: "8px",
                   padding: "5px",
                   fontSize: "14px",
                 }),
                 menu: (base) => ({
                   ...base,
-                  backgroundColor: "#1e293b", // Dark dropdown menu background
-                  color: "white", // White text for options
+                  backgroundColor: "#1e293b",
+                  color: "white",
                   borderRadius: "8px",
                 }),
                 option: (base, state) => ({
                   ...base,
-                  backgroundColor: state.isFocused ? "#3b82f6" : "#1e293b", // Blue on hover
-                  color: "white", // White text for options
+                  backgroundColor: state.isFocused ? "#3b82f6" : "#1e293b",
+                  color: "white",
                   padding: "10px",
                 }),
                 singleValue: (base) => ({
                   ...base,
-                  color: "white", // White text for the selected value
+                  color: "white",
                 }),
                 placeholder: (base) => ({
                   ...base,
-                  color: "#9ca3af", // Light gray placeholder
+                  color: "#9ca3af",
                 }),
                 input: (base) => ({
                   ...base,
-                  color: "white", // White text while typing in the search bar
+                  color: "white",
                 }),
               }}
             />
           </div>
-
           <ul
             className="space-y-2 overflow-y-auto"
             style={{ maxHeight: "400px" }}
@@ -251,18 +424,18 @@ const CustomersPage = () => {
                       styles={{
                         control: (base) => ({
                           ...base,
-                          backgroundColor: "#1e293b", // Dark background
-                          color: "white", // White text for better contrast
-                          borderColor: "#3b82f6", // Blue border
-                          borderRadius: "8px", // Rounded corners
+                          backgroundColor: "#1e293b",
+                          color: "white",
+                          borderColor: "#3b82f6",
+                          borderRadius: "8px",
                           padding: "5px",
                           fontSize: "14px",
                           width: "200px",
                         }),
                         menu: (base) => ({
                           ...base,
-                          backgroundColor: "#1e293b", // Dark dropdown menu background
-                          color: "white", // White text
+                          backgroundColor: "#1e293b",
+                          color: "white",
                           borderRadius: "8px",
                           width: "200px",
                         }),
@@ -270,21 +443,44 @@ const CustomersPage = () => {
                           ...base,
                           backgroundColor: state.isFocused
                             ? "#3b82f6"
-                            : "#1e293b", // Blue on hover
-                          color: "white", // White text
+                            : "#1e293b",
+                          color: "white",
                           padding: "10px",
                         }),
                         singleValue: (base) => ({
                           ...base,
-                          color: "white", // White text for selected value
+                          color: "white",
                         }),
                         placeholder: (base) => ({
                           ...base,
-                          color: "#9ca3af", // Light gray for placeholder text
+                          color: "#9ca3af",
                         }),
                       }}
                     />
-
+                    <DatePicker
+                      selected={
+                        editData.dateOfBirth
+                          ? new Date(editData.dateOfBirth)
+                          : null
+                      }
+                      onChange={(date) =>
+                        setEditData((prev) => ({
+                          ...prev,
+                          dateOfBirth: date
+                            ? date.toISOString().slice(0, 10)
+                            : "",
+                        }))
+                      }
+                      dateFormat="dd/MM/yyyy"
+                      placeholderText="Ημερ. Γέννησης"
+                      className="w-44 bg-[#181c2b] text-[#ede9fe] border-b border-[#a78bfa] px-3 py-2 rounded"
+                      calendarClassName="!bg-[#161a23] !text-[#ede9fe]"
+                      locale="el"
+                      yearDropdownItemNumber={100}
+                      showYearDropdown
+                      scrollableYearDropdown
+                      maxDate={new Date()}
+                    />
                     <button
                       onClick={() => handleEditSubmit(customer._id)}
                       className="px-2 py-1 bg-green-500 text-white rounded"
@@ -312,7 +508,6 @@ const CustomersPage = () => {
                   >
                     <FaEye size={20} />
                   </button>
-
                   <button
                     onClick={() => deleteCustomer(customer._id)}
                     className="text-red-500 hover:text-red-700"
@@ -330,10 +525,12 @@ const CustomersPage = () => {
           customerId={selectedCustomerId}
           onClose={() => {
             setSelectedCustomerId(null);
-            setSelectedCustomerOption(null); // Clear the Select when closing drawer
+            setSelectedCustomerOption(null);
           }}
         />
       )}
+      <ToastContainer position="top-right" autoClose={2500} />
+
     </div>
   );
 };

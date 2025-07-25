@@ -3,6 +3,26 @@ const Appointment = require("../models/appointment");
 const moment = require("moment");
 const jwt = require("jsonwebtoken");
 
+
+// Create (Add) a new customer
+const createCustomer = async (req, res) => {
+  try {
+    const { name, phoneNumber, barber, dateOfBirth } = req.body;
+    // Validate input
+    if (!name || !phoneNumber) {
+      return res.status(400).json({ error: "Name and phone number are required." });
+    }
+   
+    // Create new customer
+    const customer = new Customer({ name, phoneNumber, barber, dateOfBirth });
+    await customer.save();
+    res.status(201).json(customer);
+  } catch (error) {
+    console.error("Error creating customer:", error);
+    res.status(500).json({ error: "Failed to create customer." });
+  }
+};
+
 const getCustomerCounts = async (req, res, next) => {
   try {
     // Validate JWT token and extract user ID
@@ -373,4 +393,5 @@ module.exports = {
   getCustomerById,
   uploadProfilePicture,
   getAllCustomerAppointments,
+  createCustomer,
 };

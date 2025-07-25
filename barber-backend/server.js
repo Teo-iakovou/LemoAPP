@@ -111,6 +111,8 @@ if (process.env.NODE_ENV === "production") {
       console.error("❌ Error while sending reminders:", error.message);
     }
   });
+  
+
 
   // Run birthday SMS every day at 9:00 AM Athens time
   cron.schedule("0 9 * * *", async () => {
@@ -124,6 +126,15 @@ if (process.env.NODE_ENV === "production") {
   });
 }
 
-
+// TEMPORARY TEST ROUTE for triggering birthday SMS
+app.get("/api/test-birthday-sms", async (req, res) => {
+  try {
+    await sendBirthdaySMS();
+    res.status(200).json({ message: "✅ Birthday SMS check triggered" });
+  } catch (err) {
+    console.error("❌ Error in test-birthday-sms:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
 app.use(errorHandler);
 app.listen(PORT, () => console.log(`Server is running on port ${PORT}`));

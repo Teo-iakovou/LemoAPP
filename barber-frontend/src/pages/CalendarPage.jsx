@@ -3,6 +3,7 @@ import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import CalendarComponent from "../_components/CalendarComponent";
 import AppointmentForm from "../_components/AppointmentForm";
+import Spinner from "../_components/Spinner";
 import {
   createAppointment,
   updateAppointment,
@@ -23,7 +24,7 @@ const CalendarPage = () => {
   const [selectedAppointment, setSelectedAppointment] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [pastPage, setPastPage] = useState(1);
-  // ✅ Fetch appointments
+const [isLoading, setIsLoading] = useState(true);  // ✅ Fetch appointments
   useEffect(() => {
     const fetchUpcoming = async () => {
       try {
@@ -55,7 +56,9 @@ const CalendarPage = () => {
         setAppointments(events);
       } catch (error) {
         console.error("Error fetching upcoming appointments:", error);
+       
       }
+      setIsLoading(false); 
     };
 
     fetchUpcoming();
@@ -350,27 +353,30 @@ const CalendarPage = () => {
         Φόρτωσε Προηγούμενα
       </button>
 
+       {isLoading ? (
+      <Spinner />
+    ) : (
       <div className="overflow-x-auto">
         <CalendarComponent
           events={filteredAppointments}
           onSelectSlot={handleSelectSlot}
           onSelectEvent={handleSelectEvent}
-          onUpdateAppointment={handleResizeAppointment} // <-- Add this prop!
+          onUpdateAppointment={handleResizeAppointment}
         />
       </div>
+    )}
 
-      {showForm && (
-        <AppointmentForm
-          initialDate={selectedDate}
-          isEditing={!!selectedAppointment}
-          appointmentData={selectedAppointment}
-          onClose={() => setShowForm(false)}
-          onSubmit={handleFormSubmit}
-          onDelete={handleDelete}
-          customers={customers}
-        />
-      )}
-
+    {showForm && !isLoading && (
+      <AppointmentForm
+        initialDate={selectedDate}
+        isEditing={!!selectedAppointment}
+        appointmentData={selectedAppointment}
+        onClose={() => setShowForm(false)}
+        onSubmit={handleFormSubmit}
+        onDelete={handleDelete}
+        customers={customers}
+      />
+    )}
       <ToastContainer position="top-right" autoClose={3000} hideProgressBar />
     </div>
   );
