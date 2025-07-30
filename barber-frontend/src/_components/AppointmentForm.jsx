@@ -93,13 +93,14 @@ function AppointmentForm({
 
   // Auto-fill phone number from customer pick
   const handleCustomerSelect = (e) => {
-    const selectedName = e.target.value.trim();
-    const selectedCustomer = customers.find(
-      (customer) => customer.name.toLowerCase() === selectedName.toLowerCase()
-    );
-    setValue("customerName", selectedName);
-    setValue("phoneNumber", selectedCustomer?.phoneNumber || "");
-  };
+  const rawName = e.target.value;
+  const selectedCustomer = customers.find(
+    (customer) => customer.name.toLowerCase() === rawName.toLowerCase()
+  );
+  setValue("customerName", rawName);
+  setValue("phoneNumber", selectedCustomer?.phoneNumber || "");
+};
+
 
   // Unified duration handler
   const handleDurationChange = (e) => {
@@ -138,7 +139,7 @@ function AppointmentForm({
 
     onSubmit({
       ...appointmentData,
-      customerName: appointmentType === "break" ? "" : data.customerName,
+    customerName: appointmentType === "break" ? "" : data.customerName.trim(), // trim here!
       phoneNumber: appointmentType === "break" ? "" : data.phoneNumber,
       barber: data.barber || "ΛΕΜΟ",
       duration: Number(durationCustom) || Number(duration),
