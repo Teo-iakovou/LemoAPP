@@ -1,16 +1,16 @@
 import { useState, useEffect, useRef } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, Controller } from "react-hook-form";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import { registerLocale } from "react-datepicker";
 import el from "date-fns/locale/el";
 registerLocale("el", el);
-
 import Swal from "sweetalert2";
 import withReactContent from "sweetalert2-react-content";
-import "react-datepicker/dist/react-datepicker.css";
-
 const DURATION_OPTIONS = [20, 30, 40, 60, 90, 120];
+
+
+
 
 function AppointmentForm({
   initialDate,
@@ -25,11 +25,12 @@ function AppointmentForm({
   const flatpickrRef = useRef(null);
   const MySwal = withReactContent(Swal);
 
-  const { register, handleSubmit, reset, setValue } = useForm({
+  const { register, handleSubmit, reset, setValue ,control} = useForm({
     defaultValues: {
       customerName: appointmentData?.customerName || "",
       phoneNumber: appointmentData?.phoneNumber || "",
       barber: appointmentData?.barber || "ΛΕΜΟ",
+      dateOfBirth: appointmentData?.dateOfBirth || "",
     },
   });
 
@@ -67,6 +68,7 @@ function AppointmentForm({
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [onClose]);
+
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (formRef.current && !formRef.current.contains(event.target)) {
@@ -88,6 +90,7 @@ function AppointmentForm({
       setDuration(appointmentData.duration || 40);
       if (!DURATION_OPTIONS.includes(appointmentData.duration))
         setDurationCustom(appointmentData.duration || "");
+
     }
   }, [appointmentData, setValue]);
 
@@ -145,6 +148,7 @@ function AppointmentForm({
       duration: Number(durationCustom) || Number(duration),
       type: appointmentType || "appointment",
       appointmentDateTime: new Date(appointmentDateTime).toISOString(),
+
       recurrence:
         appointmentType !== "break" && recurrence !== "none"
           ? recurrence
@@ -157,7 +161,7 @@ function AppointmentForm({
         appointmentType !== "break" && recurrence === "weekly"
           ? repeatCount
           : null,
-    });
+  dateOfBirth: data.dateOfBirth || "",     });
     reset();
     onClose();
   };
@@ -409,6 +413,59 @@ function AppointmentForm({
               )}
             </div>
           </div>
+{/* Date of Birth (optional) */}
+          {appointmentType !== "break" && (
+            <div>
+              <label className={labelClass}>ΗΜΕΡΟΜΗΝΙΑ ΓΕΝΝΗΣΗΣ (Προαιρετικό)</label>
+             <Controller
+  control={control}
+  name="dateOfBirth"
+  defaultValue=""
+  render={({ field }) => (
+    <DatePicker
+      selected={field.value ? new Date(field.value) : null}
+      onChange={(date) =>
+        field.onChange(date ? date.toISOString().slice(0, 10) : "")
+      }
+     onChangeRaw={(e) => {
+  let v = e.target.value.replace(/\D/g, ""); // remove non-numbers
+
+  // Auto-pad day
+  if (v.length === 1 && parseInt(v, 10) > 3) {
+    v = "0" + v; // e.g. 4 → 04
+  }
+
+  // Auto-pad month when user just finished typing day
+  if (v.length === 3 && parseInt(v[2], 10) > 1) {
+    v = v.slice(0, 2) + "0" + v[2];
+  }
+
+  // Insert slashes
+  if (v.length >= 5) {
+    v = v.replace(/(\d{2})(\d{2})(\d{0,4})/, "$1/$2/$3");
+  } else if (v.length >= 3) {
+    v = v.replace(/(\d{2})(\d{0,2})/, "$1/$2");
+  }
+
+  e.target.value = v;
+}}
+      dateFormat="dd/MM/yyyy"
+      placeholderText="ΗΗ/ΜΜ/ΧΧΧΧ"
+      className={fieldBase + " w-full !bg-[#181a23] !text-[#a78bfa]"}
+      calendarClassName="!bg-[#161a23] !text-[#ede9fe] !rounded-lg !border !border-[#a78bfa]"
+      locale="el"
+      showYearDropdown
+      scrollableYearDropdown
+      yearDropdownItemNumber={150}
+      maxDate={new Date()}
+      isClearable
+    />
+  )}
+/>
+            </div>
+          )}
+
+
 
           {/* Buttons */}
           <div className="flex gap-2 mt-4">

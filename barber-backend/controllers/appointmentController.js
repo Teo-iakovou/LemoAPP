@@ -16,7 +16,7 @@ const createAppointment = async (req, res, next) => {
       recurrence,
       repeatInterval, // How many weeks between each appointment
       repeatCount, // Total number of appointments
-    } = req.body;
+dateOfBirth,    } = req.body;
 
     // Validate required fields
     if (type !== "break" && (!customerName || !phoneNumber)) {
@@ -54,13 +54,21 @@ const createAppointment = async (req, res, next) => {
     // Check if customer exists, otherwise create a new one
     let customer = null;
 
-    if (type !== "break") {
-      customer = await Customer.findOne({ phoneNumber });
-      if (!customer) {
-        customer = new Customer({ name: customerName, phoneNumber });
-        await customer.save();
-      }
-    }
+   if (type !== "break") {
+  customer = await Customer.findOne({ phoneNumber });
+  if (!customer) {
+    customer = new Customer({
+      name: customerName,
+      phoneNumber,
+      dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
+    });
+    await customer.save();
+  } else if (dateOfBirth && (!customer.dateOfBirth || customer.dateOfBirth.toISOString().slice(0,10) !== dateOfBirth)) {
+    customer.dateOfBirth = new Date(dateOfBirth);
+    await customer.save();
+  }
+}
+
 
     // Calculate end time in UTC
     // Accept duration from req.body or fallback to default
