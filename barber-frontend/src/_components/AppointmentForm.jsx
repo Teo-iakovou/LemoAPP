@@ -85,6 +85,7 @@ function AppointmentForm({
       setValue("customerName", appointmentData.customerName);
       setValue("phoneNumber", appointmentData.phoneNumber);
       setValue("barber", appointmentData.barber || "ΛΕΜΟ");
+      setValue("dateOfBirth", appointmentData.dateOfBirth || "");
       setAppointmentDateTime(appointmentData.appointmentDateTime || new Date());
       setAppointmentType(appointmentData.type || "appointment");
       setDuration(appointmentData.duration || 40);
@@ -94,14 +95,31 @@ function AppointmentForm({
     }
   }, [appointmentData, setValue]);
 
-  // Auto-fill phone number from customer pick
-  const handleCustomerSelect = (e) => {
-  const rawName = e.target.value;
+const handleCustomerSelect = (e) => {
+  const rawName = e.target.value.trim();
   const selectedCustomer = customers.find(
-    (customer) => customer.name.toLowerCase() === rawName.toLowerCase()
+    (c) => c.name?.toLowerCase() === rawName.toLowerCase()
   );
+
   setValue("customerName", rawName);
   setValue("phoneNumber", selectedCustomer?.phoneNumber || "");
+
+  const dob = selectedCustomer?.dateOfBirth;
+  if (dob) {
+    let iso = "";
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dob)) {
+      iso = dob; // already YYYY-MM-DD
+    } else if (/^\d{2}\/\d{2}\/\d{4}$/.test(dob)) {
+      const [dd, mm, yyyy] = dob.split("/");
+      iso = `${yyyy}-${mm}-${dd}`; // dd/MM/yyyy -> YYYY-MM-DD
+    } else {
+      const d = new Date(dob);
+      if (!isNaN(d.getTime())) iso = d.toISOString().slice(0, 10);
+    }
+    setValue("dateOfBirth", iso || "");
+  } else {
+    setValue("dateOfBirth", "");
+  }
 };
 
 
