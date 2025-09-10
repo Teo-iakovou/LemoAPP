@@ -9,12 +9,14 @@ import {
   FaBars,
   FaSms,
   FaTools,
+  FaMoon,
+  FaSun,
 } from "react-icons/fa";
 import Swal from "sweetalert2";
 import withReactContent from "sweetalert2-react-content";
 import LemoLogo from "../assets/LemoLogo.png";
 
-const Navbar = ({ isAuth, onLogout }) => {
+const Navbar = ({ isAuth, onLogout, calendarDark, onToggleCalendarDark }) => {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef(null);
   const navigate = useNavigate();
@@ -83,7 +85,7 @@ const Navbar = ({ isAuth, onLogout }) => {
 
       {/* Navigation Icons - Render only if authenticated */}
       {isAuth && (
-        <ul className="flex space-x-6 text-white text-xl">
+        <ul className="flex items-center space-x-6 text-white text-xl">
           <li>
             <Link
               to="/"
@@ -140,6 +142,19 @@ const Navbar = ({ isAuth, onLogout }) => {
             >
               <FaTools />
             </Link>
+          </li>
+          {/* Calendar theme toggle */}
+          <li>
+            <button
+              onClick={onToggleCalendarDark}
+              className="flex items-center gap-2 text-sm bg-white/10 hover:bg-white/20 text-white px-3 py-1.5 rounded-lg border border-white/20 transition"
+              title={calendarDark ? "Switch calendar to light" : "Switch calendar to dark"}
+            >
+              {calendarDark ? <FaSun className="text-yellow-300" /> : <FaMoon className="text-blue-300" />}
+              <span className="hidden sm:inline">
+                {calendarDark ? "Light Calendar" : "Dark Calendar"}
+              </span>
+            </button>
           </li>
         </ul>
       )}

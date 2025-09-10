@@ -96,12 +96,13 @@ function AppointmentForm({
   }, [appointmentData, setValue]);
 
 const handleCustomerSelect = (e) => {
-  const rawName = e.target.value.trim();
+  const inputName = e.target.value; // keep user input as-is (allow spaces while typing)
+  const lookupName = inputName.trim().toLowerCase();
   const selectedCustomer = customers.find(
-    (c) => c.name?.toLowerCase() === rawName.toLowerCase()
+    (c) => c.name?.toLowerCase() === lookupName
   );
 
-  setValue("customerName", rawName);
+  setValue("customerName", inputName);
   setValue("phoneNumber", selectedCustomer?.phoneNumber || "");
 
   const dob = selectedCustomer?.dateOfBirth;

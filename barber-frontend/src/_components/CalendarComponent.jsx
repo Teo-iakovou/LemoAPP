@@ -8,6 +8,7 @@ import {
 import withDragAndDrop from "react-big-calendar/lib/addons/dragAndDrop";
 import "react-big-calendar/lib/css/react-big-calendar.css";
 import "react-big-calendar/lib/addons/dragAndDrop/styles.css";
+import "../styles/calendar-dark.css";
 
 // Greek locale
 moment.locale("el");
@@ -81,7 +82,7 @@ const CalendarComponent = ({
         events={events}
         startAccessor="start"
         endAccessor="end"
-        style={{ height: "77vh", width: "100%" }}
+        style={{ height: "100%", width: "100%" }}
         selectable={!disabled}
         onSelectSlot={onSelectSlot}
         onSelectEvent={onSelectEvent}

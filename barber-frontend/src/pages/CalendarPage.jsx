@@ -16,7 +16,7 @@ import {
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:5002/api";
 
-const CalendarPage = () => {
+const CalendarPage = ({ darkCalendar = false }) => {
   const [appointments, setAppointments] = useState([]);
   const [customers, setCustomers] = useState([]); // Add customers state
   const [filteredAppointments, setFilteredAppointments] = useState([]);
@@ -39,6 +39,7 @@ const [isLoading, setIsLoading] = useState(true);  // ✅ Fetch appointments
           return {
             id: appointment._id,
             title: isBreak ? "ΔΙΑΛΕΙΜΜΑ" : appointment.customerName,
+            phoneNumber: appointment.phoneNumber, // keep phone from backend
             start: appointmentDate,
             end: new Date(appointmentDate.getTime() + duration * 60 * 1000),
             barber: appointment.barber,
@@ -103,9 +104,7 @@ const [isLoading, setIsLoading] = useState(true);  // ✅ Fetch appointments
     setSelectedAppointment({
       _id: appointment.id,
       customerName: appointment.title,
-      phoneNumber:
-        customers.find((customer) => customer.name === appointment.title)
-          ?.phoneNumber || "",
+      phoneNumber: appointment.phoneNumber || "",
       barber: appointment.barber || "ΛΕΜΟ",
       appointmentDateTime: appointment.start,
       type: appointment.type || "appointment",
@@ -152,6 +151,7 @@ const [isLoading, setIsLoading] = useState(true);  // ✅ Fetch appointments
             appointment.type === "break"
               ? "ΔΙΑΛΕΙΜΜΑ"
               : appointment.customerName,
+          phoneNumber: appointment.phoneNumber,
           start: new Date(appointment.appointmentDateTime),
           end: new Date(
             new Date(appointment.appointmentDateTime).getTime() +
@@ -271,6 +271,7 @@ const [isLoading, setIsLoading] = useState(true);  // ✅ Fetch appointments
         return {
           id: appointment._id,
           title: isBreak ? "ΔΙΑΛΕΙΜΜΑ" : appointment.customerName,
+          phoneNumber: appointment.phoneNumber,
           start: appointmentDate,
           end: new Date(appointmentDate.getTime() + duration * 60 * 1000),
           barber: appointment.barber,
@@ -341,22 +342,34 @@ const [isLoading, setIsLoading] = useState(true);  // ✅ Fetch appointments
   };
 
   return (
-    <div className="relative bg-white rounded-3xl mt-[-18] min-h-[calc(100vh-64px)] p-4">
-      {/* 🔄 Load Past Appointments Button - moved above the calendar */}
-      <h1 className="text-xl font-bold text-center sm:text-left mb-2 sm:mb-0">
-        ΠΡΟΓΡΑΜΜΑ ΡΑΝΤΕΒΟΥ
-      </h1>
-      <button
-        onClick={loadPastAppointments}
-        className="bg-gray-100 text-sm px-6 py-2 rounded-xl border border-gray-300 hover:bg-gray-200 transition"
-      >
-        Φόρτωσε Προηγούμενα
-      </button>
+    <div
+      className={`relative ${
+        darkCalendar
+          ? "bg-[#0f172a] text-gray-100 border border-gray-700"
+          : "bg-white"
+      } rounded-none sm:rounded-3xl h-full p-3 sm:p-4 overflow-x-hidden flex flex-col`}
+    >
+      {/* Header + smaller load button aligned left */}
+      <div className="flex items-center gap-2 flex-wrap mb-2">
+        <h1 className="text-xl font-bold text-left">
+          ΠΡΟΓΡΑΜΜΑ ΡΑΝΤΕΒΟΥ
+        </h1>
+        <button
+          onClick={loadPastAppointments}
+          className={`${
+            darkCalendar
+              ? "bg-white/10 hover:bg-white/20 text-white border border-white/20"
+              : "bg-gray-100 hover:bg-gray-200 text-gray-800 border border-gray-300"
+          } text-xs sm:text-sm px-3 sm:px-4 py-1 rounded-lg transition`}
+        >
+          Φόρτωσε Προηγούμενα
+        </button>
+      </div>
 
        {isLoading ? (
       <Spinner />
     ) : (
-      <div className="overflow-x-auto">
+      <div className={`overflow-x-auto max-w-full flex-1 min-h-0 ${darkCalendar ? "calendar-dark" : ""}`}>
         <CalendarComponent
           events={filteredAppointments}
           onSelectSlot={handleSelectSlot}

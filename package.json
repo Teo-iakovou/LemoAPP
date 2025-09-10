@@ -1,0 +1,16 @@
+{
+  "name": "lemoapp",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Root scripts to run barber-frontend and barber-backend together",
+  "scripts": {
+    "dev": "npm run dev --prefix barber-backend & npm run dev --prefix barber-frontend",
+    "dev:backend": "npm run dev --prefix barber-backend",
+    "dev:frontend": "npm run dev --prefix barber-frontend",
+    "start": "npm run start --prefix barber-backend",
+    "build:frontend": "npm run build --prefix barber-frontend",
+    "preview:frontend": "npm run preview --prefix barber-frontend",
+    "lint:frontend": "npm run lint --prefix barber-frontend"
+  }
+}
+

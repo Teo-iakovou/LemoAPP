@@ -18,12 +18,25 @@ const CustomerCounts = lazy(() => import("./pages/CustomerCounts"));
 
 const App = () => {
   const [isAuth, setAuth] = useState(false); // Authentication state
+  const [calendarDark, setCalendarDark] = useState(() => {
+    try {
+      const saved = localStorage.getItem("calendarDark");
+      return saved ? JSON.parse(saved) : false;
+    } catch {
+      return false;
+    }
+  });
 
   // Check authentication on page load
   useEffect(() => {
     const token = localStorage.getItem("token");
     setAuth(!!token); // Set auth state based on token existence
   }, []);
+
+  // Persist calendar dark mode
+  useEffect(() => {
+    localStorage.setItem("calendarDark", JSON.stringify(calendarDark));
+  }, [calendarDark]);
 
   // Handle logout function
   const handleLogout = () => {
@@ -38,7 +51,12 @@ const App = () => {
         <Toaster position="top-center" reverseOrder={false} />
         {/* Navbar Section */}
         <header className="h-16 bg-purple-950">
-          <Navbar isAuth={isAuth} onLogout={handleLogout} />
+          <Navbar
+            isAuth={isAuth}
+            onLogout={handleLogout}
+            calendarDark={calendarDark}
+            onToggleCalendarDark={() => setCalendarDark((v) => !v)}
+          />
         </header>
 
         {/* Main Content */}
@@ -47,7 +65,10 @@ const App = () => {
             {isAuth ? (
               <Routes>
                 <Route path="/" element={<Home />} />
-                <Route path="/calendar" element={<CalendarPage />} />
+                <Route
+                  path="/calendar"
+                  element={<CalendarPage darkCalendar={calendarDark} />}
+                />
                 <Route path="/customers" element={<Customers />} />
                 <Route path="/CustomerCounts" element={<CustomerCounts />} />
                 <Route
