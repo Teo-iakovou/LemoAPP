@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useForm, Controller } from "react-hook-form";
 import DatePicker from "react-datepicker";
-import "react-datepicker/dist/react-datepicker.css";
+import "react-datepicker/dist/react-datepicker.css"; 
 import { registerLocale } from "react-datepicker";
 import el from "date-fns/locale/el";
 registerLocale("el", el);
@@ -96,13 +96,13 @@ function AppointmentForm({
   }, [appointmentData, setValue]);
 
 const handleCustomerSelect = (e) => {
-  const inputName = e.target.value; // keep user input as-is (allow spaces while typing)
-  const lookupName = inputName.trim().toLowerCase();
-  const selectedCustomer = customers.find(
-    (c) => c.name?.toLowerCase() === lookupName
+  const rawName = e.target.value.trim();
+  // Normalize both input and customer names to avoid issues with trailing spaces
+  const selectedCustomer = customers.find((c) =>
+    (c.name || "").trim().toLowerCase() === rawName.toLowerCase()
   );
 
-  setValue("customerName", inputName);
+  setValue("customerName", rawName);
   setValue("phoneNumber", selectedCustomer?.phoneNumber || "");
 
   const dob = selectedCustomer?.dateOfBirth;
