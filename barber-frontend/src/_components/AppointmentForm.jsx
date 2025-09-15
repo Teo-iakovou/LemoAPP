@@ -96,13 +96,13 @@ function AppointmentForm({
   }, [appointmentData, setValue]);
 
 const handleCustomerSelect = (e) => {
-  const rawName = e.target.value.trim();
-  // Normalize both input and customer names to avoid issues with trailing spaces
+  const displayName = e.target.value; // preserve user-entered spacing exactly as typed
+  const lookupName = displayName.trim(); // normalize only for matching
   const selectedCustomer = customers.find((c) =>
-    (c.name || "").trim().toLowerCase() === rawName.toLowerCase()
+    (c.name || "").trim().toLowerCase() === lookupName.toLowerCase()
   );
 
-  setValue("customerName", rawName);
+  setValue("customerName", displayName);
   setValue("phoneNumber", selectedCustomer?.phoneNumber || "");
 
   const dob = selectedCustomer?.dateOfBirth;
