@@ -50,11 +50,12 @@ router.get("/appointments/range", async (req, res, next) => {
 
     const match = {
       appointmentDateTime: { $gte: start, $lte: end },
-      // Treat both real appointments and breaks as blocking
-      type: { $in: ["appointment", "break"] },
-      appointmentStatus: "confirmed",
+      ...(barber ? { barber } : {}),
+      $or: [
+        { type: 'break' },
+        { type: 'appointment', appointmentStatus: 'confirmed' },
+      ],
     };
-    if (barber) match.barber = barber;
 
     const docs = await Appointment.find(match, {
       appointmentDateTime: 1,
@@ -69,6 +70,7 @@ router.get("/appointments/range", async (req, res, next) => {
       start: a.appointmentDateTime,
       duration: 40,
       barber: a.barber,
+      type: a.type || 'appointment',
     }));
     res.json(normalized);
   } catch (e) {
@@ -88,11 +90,12 @@ router.get("/availability/month", async (req, res, next) => {
 
     const match = {
       appointmentDateTime: { $gte: start, $lte: endOfDay },
-      // Count both appointments and breaks as occupied
-      type: { $in: ["appointment", "break"] },
-      appointmentStatus: "confirmed",
+      ...(barber ? { barber } : {}),
+      $or: [
+        { type: 'break' },
+        { type: 'appointment', appointmentStatus: 'confirmed' },
+      ],
     };
-    if (barber) match.barber = barber;
 
     const docs = await Appointment.find(match, {
       appointmentDateTime: 1,
@@ -114,6 +117,12 @@ router.get("/availability/month", async (req, res, next) => {
     for (let i = 0; i < days; i++) {
       const d = new Date(start.getTime() + i * 86400000);
       const ds = toLocalYMD(d);
+      // Do not color or expose availability for past days
+      if (ds < todayYMD) {
+        result[ds] = 0;
+        if (slotsMap) slotsMap[ds] = [];
+        continue;
+      }
       // If a break exists for this day, treat the whole day as unavailable
       const hasAllDayBreak = docs.some((x) => x.type === 'break' && toLocalYMD(new Date(x.appointmentDateTime)) === ds);
       if (hasAllDayBreak) { result[ds] = 0; if (slotsMap) slotsMap[ds] = []; continue; }
