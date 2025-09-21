@@ -52,22 +52,28 @@ const getCustomerCounts = async (req, res, next) => {
       .startOf("month");
     const endOfMonth = startOfMonth.clone().endOf("month");
 
+    const typeMatch = { $or: [
+      { type: "appointment" },
+      { type: { $exists: false } },
+      { type: null }
+    ] };
+
     const lemoCount = await Appointment.countDocuments({
       barber: "ΛΕΜΟ",
-      type: "appointment",
       appointmentDateTime: {
         $gte: startOfMonth.toDate(),
         $lte: endOfMonth.toDate(),
       },
+      ...typeMatch,
     });
 
     const forouCount = await Appointment.countDocuments({
       barber: "ΦΟΡΟΥ",
-      type: "appointment",
       appointmentDateTime: {
         $gte: startOfMonth.toDate(),
         $lte: endOfMonth.toDate(),
       },
+      ...typeMatch,
     });
 
     res.status(200).json({
@@ -109,22 +115,28 @@ const getWeeklyCustomerCounts = async (req, res, next) => {
       .startOf("week");
     const endOfWeek = startOfWeek.clone().endOf("week");
 
+    const weeklyTypeMatch = { $or: [
+      { type: "appointment" },
+      { type: { $exists: false } },
+      { type: null }
+    ] };
+
     const lemoWeeklyCount = await Appointment.countDocuments({
       barber: "ΛΕΜΟ",
-      type: "appointment",
       appointmentDateTime: {
         $gte: startOfWeek.toDate(),
         $lte: endOfWeek.toDate(),
       },
+      ...weeklyTypeMatch,
     });
 
     const forouWeeklyCount = await Appointment.countDocuments({
       barber: "ΦΟΡΟΥ",
-      type: "appointment",
       appointmentDateTime: {
         $gte: startOfWeek.toDate(),
         $lte: endOfWeek.toDate(),
       },
+      ...weeklyTypeMatch,
     });
 
     res.status(200).json({

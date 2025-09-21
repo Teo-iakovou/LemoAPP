@@ -94,6 +94,9 @@ appointmentSchema.index({
   type: 1,
 });
 
+// Compound index used by range/month availability lookups
+appointmentSchema.index({ appointmentDateTime: 1, barber: 1, type: 1, appointmentStatus: 1 });
+
 // --- Log Reminder Utility (needed for reminders and scripts) ---
 appointmentSchema.methods.logReminder = async function (type, data = {}) {
   this.reminders.push({

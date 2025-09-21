@@ -17,6 +17,7 @@ const { sendReminders } = require("./controllers/reminderScheduler");
 const customerRoutes = require("./routes/customerRoutes");
 const reminderSchedulerRoute = require("./routes/reminderSchedulerRoute");
 const authRoutes = require("./routes/authRoutes");
+const availabilityRoutes = require("./routes/availabilityRoutes");
 const errorHandler = require("./middlewares/errorHandler");
 const helmet = require("helmet");
 dotenv.config();
@@ -24,7 +25,7 @@ dotenv.config();
 connectDB();
 
 const app = express();
-const PORT = process.env.PORT || 5001;
+const PORT = process.env.PORT || 5002;
 // Add Helmet middleware
 
 const corsOptions = {
@@ -33,6 +34,7 @@ const corsOptions = {
 
     "https://lemoapp.netlify.app", // Netlify frontend
     "http://localhost:5173", // Local development
+    "http://localhost:3001",
   ],
   methods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
@@ -83,6 +85,7 @@ app.use("/api/customers", customerRoutes);
 app.use("/api/waitingList", waitingListRoutes);
 app.use("/api/reminders", reminderSchedulerRoute);
 app.use("/api/auth", authRoutes);
+app.use("/api", availabilityRoutes);
 // Add this route for GET /api
 app.get("/api", (req, res) => {
   res.status(200).json({ message: "API is working" });
