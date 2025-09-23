@@ -31,8 +31,9 @@ const PORT = process.env.PORT || 5002;
 const corsOptions = {
   origin: [
     "https://lemoapp-k4ob.onrender.com", // Production frontend
-
     "https://lemoapp.netlify.app", // Netlify frontend
+    "https://lemobarbershop.com",
+    "https://www.lemobarbershop.com",
     "http://localhost:5173", // Local development
     "http://localhost:3001",
   ],
@@ -62,7 +63,8 @@ app.use(
           "'self'",
           "https://lemoapp.netlify.app",
           "https://lemoapp-k4ob.onrender.com",
-          ,
+          "https://lemobarbershop.com",
+          "https://www.lemobarbershop.com",
         ],
         "frame-src": ["'self'"], // Allow iframes from the same origin
         "font-src": ["'self'", "https://*"], // Allow fonts from external sources

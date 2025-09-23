@@ -25,10 +25,9 @@ function generateSlots({ date, duration = 40, step = 40 }) {
   const win = businessWindow(date);
   if (!win) return [];
   const out = [];
-  const breakStart = 13 * 60, breakEnd = 14 * 60; // 13:00–14:00 break
   for (let t = win.open; t + duration <= win.close; t += step) {
-    const overlapsBreak = !(t + duration <= breakStart || breakEnd <= t);
-    if (overlapsBreak) continue;
+    // Exclude exactly the 13:00–13:40 slot daily
+    if (t === 13 * 60) { continue; }
     out.push(t);
   }
   return out;
