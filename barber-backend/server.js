@@ -88,6 +88,13 @@ app.use("/api/waitingList", waitingListRoutes);
 app.use("/api/reminders", reminderSchedulerRoute);
 app.use("/api/auth", authRoutes);
 app.use("/api", availabilityRoutes);
+// Minimal public services endpoint to support direct frontend calls
+app.get("/api/services", (req, res) => {
+  res.set("Cache-Control", "public, s-maxage=86400, stale-while-revalidate=86400");
+  res.json([
+    { id: "haircut", name: "Haircut", price: 15, duration: 40 },
+  ]);
+});
 // Add this route for GET /api
 app.get("/api", (req, res) => {
   res.status(200).json({ message: "API is working" });
