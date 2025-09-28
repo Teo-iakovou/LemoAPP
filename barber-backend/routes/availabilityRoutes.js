@@ -26,8 +26,7 @@ function generateSlots({ date, duration = 40, step = 40 }) {
   if (!win) return [];
   const out = [];
   for (let t = win.open; t + duration <= win.close; t += step) {
-    // Exclude exactly the 13:00–13:40 slot daily
-    if (t === 13 * 60) { continue; }
+    // Do not exclude lunch by default; treat breaks via overlap logic
     out.push(t);
   }
   return out;
@@ -45,10 +44,13 @@ async function buildMonthAvailability({ from, to, barber, includeSlots }) {
   const end = parseYMD(to);
   const endOfDay = new Date(end.getFullYear(), end.getMonth(), end.getDate(), 23, 59, 59, 999);
 
+  // Apply barber filter only to real appointments; include breaks regardless of barber
   const match = {
     appointmentDateTime: { $gte: start, $lte: endOfDay },
-    ...(barber ? { barber } : {}),
-    $or: [
+    $or: barber ? [
+      { type: 'break' },
+      { type: 'appointment', appointmentStatus: 'confirmed', barber },
+    ] : [
       { type: 'break' },
       { type: 'appointment', appointmentStatus: 'confirmed' },
     ],
@@ -64,7 +66,18 @@ async function buildMonthAvailability({ from, to, barber, includeSlots }) {
   }).lean();
 
   // Normalize
-  const appts = docs.map((a) => ({ start: new Date(a.appointmentDateTime), duration: 40, barber: a.barber }));
+  const appts = docs.map((a) => {
+    const start = new Date(a.appointmentDateTime);
+    let duration = 40;
+    if (typeof a.duration === 'number' && isFinite(a.duration) && a.duration > 0) {
+      duration = a.duration;
+    } else if (a.endTime) {
+      const end = new Date(a.endTime);
+      const diff = Math.max(1, Math.round((end - start) / 60000));
+      duration = diff;
+    }
+    return { start, duration, barber: a.barber, type: a.type || 'appointment' };
+  });
 
   // Build counts per day
   const result = {};
@@ -80,9 +93,6 @@ async function buildMonthAvailability({ from, to, barber, includeSlots }) {
       if (slotsMap) slotsMap[ds] = [];
       continue;
     }
-    // If a break exists for this day, treat the whole day as unavailable
-    const hasAllDayBreak = docs.some((x) => x.type === 'break' && toLocalYMD(new Date(x.appointmentDateTime)) === ds);
-    if (hasAllDayBreak) { result[ds] = 0; if (slotsMap) slotsMap[ds] = []; continue; }
     const slots = generateSlots({ date: d, duration: 40, step: 40 });
     if (!slots.length) { result[ds] = 0; if (slotsMap) slotsMap[ds] = []; continue; }
     const dayAppts = appts.filter((b) => toLocalYMD(b.start) === ds);
@@ -110,9 +120,6 @@ async function buildMonthAvailability({ from, to, barber, includeSlots }) {
     const ds = toLocalYMD(d);
     if (ds < todayYMD) continue; // only today and future
     if ((result[ds] || 0) > 0) {
-      // Skip days with break entirely
-      const hasAllDayBreak = docs.some((x) => x.type === 'break' && toLocalYMD(new Date(x.appointmentDateTime)) === ds);
-      if (hasAllDayBreak) { firstAvailable = null; break; }
       const slots = generateSlots({ date: d, duration: 40, step: 40 });
       const dayAppts = appts.filter((b) => toLocalYMD(b.start) === ds);
       const free = slots.filter((s) => !dayAppts.some((b) => {
@@ -141,14 +148,16 @@ router.get("/appointments/range", async (req, res, next) => {
     const start = new Date(`${from}T00:00:00`);
     const end = new Date(`${to}T23:59:59.999`);
 
-    const match = {
-      appointmentDateTime: { $gte: start, $lte: end },
-      ...(barber ? { barber } : {}),
-      $or: [
-        { type: 'break' },
-        { type: 'appointment', appointmentStatus: 'confirmed' },
-      ],
-    };
+  const match = {
+    appointmentDateTime: { $gte: start, $lte: end },
+    $or: barber ? [
+      { type: 'break' },
+      { type: 'appointment', appointmentStatus: 'confirmed', barber },
+    ] : [
+      { type: 'break' },
+      { type: 'appointment', appointmentStatus: 'confirmed' },
+    ],
+  };
 
     const docs = await Appointment.find(match, {
       appointmentDateTime: 1,
@@ -159,12 +168,23 @@ router.get("/appointments/range", async (req, res, next) => {
       _id: 0,
     }).lean();
 
-    const normalized = docs.map((a) => ({
-      start: a.appointmentDateTime,
-      duration: 40,
-      barber: a.barber,
-      type: a.type || 'appointment',
-    }));
+    const normalized = docs.map((a) => {
+      const start = a.appointmentDateTime;
+      let duration = 40;
+      if (typeof a.duration === 'number' && isFinite(a.duration) && a.duration > 0) {
+        duration = a.duration;
+      } else if (a.endTime) {
+        const end = new Date(a.endTime);
+        const diff = Math.max(1, Math.round((end - new Date(start)) / 60000));
+        duration = diff;
+      }
+      return {
+        start,
+        duration,
+        barber: a.barber,
+        type: a.type || 'appointment',
+      };
+    });
     res.json(normalized);
   } catch (e) {
     next(e);
