@@ -13,7 +13,7 @@ const folderRoutes = require("./routes/folderRoutes");
 const waitingListRoutes = require("./routes/waitingList");
 const adminRoutes = require("./routes/adminRoutes");
 const appointmentRoutes = require("./routes/appointmentRoutes");
-const { sendReminders } = require("./controllers/reminderScheduler");
+const { sendReminders, processScheduledMessages } = require("./controllers/reminderScheduler");
 const customerRoutes = require("./routes/customerRoutes");
 const reminderSchedulerRoute = require("./routes/reminderSchedulerRoute");
 const authRoutes = require("./routes/authRoutes");
@@ -118,9 +118,10 @@ if (process.env.NODE_ENV === "production") {
     console.log(`[${new Date().toISOString()}] ⏰ Running 1-minute reminder scheduler...`);
     try {
       await sendReminders();
-      console.log("✅ Reminders sent successfully.");
+      await processScheduledMessages();
+      console.log("✅ Reminders and scheduled messages processed.");
     } catch (error) {
-      console.error("❌ Error while sending reminders:", error.message);
+      console.error("❌ Error while processing schedulers:", error.message);
     }
   });
   

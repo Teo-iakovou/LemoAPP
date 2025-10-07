@@ -17,7 +17,7 @@ function parseYMD(s) {
 function businessWindow(date) {
   const dow = date.getDay(); // 0 Sun ... 6 Sat
   if (dow === 0 || dow === 1) return null; // closed Sun/Mon
-  if (dow === 6) return { open: 9 * 60, close: 17 * 60 + 40 }; // Sat 09:00–17:40
+  if (dow === 6) return { open: 9 * 60, close: 18 * 60 + 20 }; // Sat 09:00–18:20 (last start 17:40)
   return { open: 9 * 60, close: 19 * 60 }; // Tue–Fri 09:00–19:00
 }
 
@@ -44,11 +44,12 @@ async function buildMonthAvailability({ from, to, barber, includeSlots }) {
   const end = parseYMD(to);
   const endOfDay = new Date(end.getFullYear(), end.getMonth(), end.getDate(), 23, 59, 59, 999);
 
-  // Apply barber filter only to real appointments; include breaks regardless of barber
+  // Apply barber filter for both appointments and breaks. When a barber is specified,
+  // only include that barber's breaks so availability stays per‑barber.
   const match = {
     appointmentDateTime: { $gte: start, $lte: endOfDay },
     $or: barber ? [
-      { type: 'break' },
+      { type: 'break', barber },
       { type: 'appointment', appointmentStatus: 'confirmed', barber },
     ] : [
       { type: 'break' },
@@ -151,7 +152,7 @@ router.get("/appointments/range", async (req, res, next) => {
   const match = {
     appointmentDateTime: { $gte: start, $lte: end },
     $or: barber ? [
-      { type: 'break' },
+      { type: 'break', barber },
       { type: 'appointment', appointmentStatus: 'confirmed', barber },
     ] : [
       { type: 'break' },

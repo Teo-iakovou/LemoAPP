@@ -374,7 +374,7 @@ const handleCustomerSelect = (e) => {
                   value={repeatInterval}
                   onChange={(e) => setRepeatInterval(Number(e.target.value))}
                 >
-                  {[1, 2, 3, 4, 5].map((interval) => (
+                  {[1, 2, 3, 4, 5, 10, 20].map((interval) => (
                     <option key={interval} value={interval}>
                       {interval} εβδομάδες
                     </option>
@@ -385,7 +385,7 @@ const handleCustomerSelect = (e) => {
                   value={repeatCount}
                   onChange={(e) => setRepeatCount(Number(e.target.value))}
                 >
-                  {[1, 2, 3, 4, 5].map((count) => (
+                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((count) => (
                     <option key={count} value={count}>
                       {count} ραντεβού
                     </option>

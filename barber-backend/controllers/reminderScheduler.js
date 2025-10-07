@@ -1,4 +1,5 @@
 const Appointment = require("../models/appointment");
+const ScheduledMessage = require("../models/ScheduledMessage");
 const { sendSMS } = require("../utils/smsService");
 const moment = require("moment-timezone");
 
@@ -90,3 +91,39 @@ const sendReminders = async () => {
 };
 
 module.exports = { sendReminders };
+
+// Process scheduled messages due to be sent (e.g., recurrence follow-ups)
+async function processScheduledMessages() {
+  const tz = "Europe/Athens";
+  const now = moment().tz(tz).toDate();
+  const due = await ScheduledMessage.find({ status: 'pending', sendAt: { $lte: now } }).limit(50).lean();
+  if (!due.length) return;
+  for (const msg of due) {
+    try {
+      const result = await sendSMS(msg.phoneNumber, msg.messageText);
+      await ScheduledMessage.updateOne({ _id: msg._id }, { $set: { status: 'sent' } });
+      // Best-effort: attach a reminder log to the first appointment in the series
+      if (msg.appointmentIds && msg.appointmentIds.length) {
+        await Appointment.updateOne(
+          { _id: msg.appointmentIds[0] },
+          {
+            $push: {
+              reminders: {
+                type: 'recurrence-followup',
+                sentAt: new Date(),
+                status: result?.success ? 'sent' : result?.status || 'sent',
+                messageText: msg.messageText,
+                senderId: 'Lemo Barber',
+                retryCount: 0,
+              },
+            },
+          }
+        );
+      }
+    } catch (e) {
+      await ScheduledMessage.updateOne({ _id: msg._id }, { $set: { status: 'failed' }, $inc: { retryCount: 1 } });
+    }
+  }
+}
+
+module.exports.processScheduledMessages = processScheduledMessages;

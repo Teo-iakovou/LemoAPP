@@ -2,6 +2,14 @@ const Appointment = require("../models/appointment");
 const Customer = require("../models/customer");
 const { sendSMS } = require("../utils/smsService");
 const moment = require("moment-timezone");
+function normalizePhone(input = "") {
+  try {
+    return String(input).replace(/\s+/g, "");
+  } catch {
+    return String(input || "");
+  }
+}
+
 // Create an appointment
 const createAppointment = async (req, res, next) => {
   try {
@@ -16,7 +24,8 @@ const createAppointment = async (req, res, next) => {
       recurrence,
       repeatInterval, // How many weeks between each appointment
       repeatCount, // Total number of appointments
-dateOfBirth,    } = req.body;
+      dateOfBirth,
+    } = req.body;
 
     // Validate required fields
     if (type !== "break" && (!customerName || !phoneNumber)) {
@@ -29,9 +38,10 @@ dateOfBirth,    } = req.body;
       return res.status(400).json({ error: "Appointment time is required." });
     }
 
-    // Ensure repeatCount does not exceed 5
+    // Ensure repeatCount does not exceed 5 (total occurrences)
     const maxRepeat = Math.min(parseInt(repeatCount, 10) || 1, 5);
-    const intervalWeeks = Math.min(parseInt(repeatInterval, 10) || 1, 5);
+    // Allow weekly interval up to 20 weeks
+    const intervalWeeks = Math.min(parseInt(repeatInterval, 10) || 1, 20);
 
     // Validate appointment date
     const appointmentDateUTC = moment(appointmentDateTime).utc();
@@ -51,23 +61,37 @@ dateOfBirth,    } = req.body;
       appointmentDateAthens.format()
     );
 
+    // Normalize phone to avoid duplicates caused by spaces
+    const phone = normalizePhone(phoneNumber);
+
     // Check if customer exists, otherwise create a new one
     let customer = null;
-
-   if (type !== "break") {
-  customer = await Customer.findOne({ phoneNumber });
-  if (!customer) {
-    customer = new Customer({
-      name: customerName,
-      phoneNumber,
-      dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
-    });
-    await customer.save();
-  } else if (dateOfBirth && (!customer.dateOfBirth || customer.dateOfBirth.toISOString().slice(0,10) !== dateOfBirth)) {
-    customer.dateOfBirth = new Date(dateOfBirth);
-    await customer.save();
-  }
-}
+    if (type !== "break") {
+      customer = await Customer.findOne({ phoneNumber: phone });
+      if (!customer) {
+        customer = new Customer({
+          name: customerName,
+          phoneNumber: phone,
+          dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
+        });
+        await customer.save();
+      } else {
+        // Optionally update DOB if provided and different
+        if (dateOfBirth && (!customer.dateOfBirth || customer.dateOfBirth.toISOString().slice(0,10) !== dateOfBirth)) {
+          customer.dateOfBirth = new Date(dateOfBirth);
+        }
+        // If a different name is provided, keep this as the same person
+        // by updating the stored customer name to the latest provided name.
+        if (customerName && typeof customerName === 'string') {
+          const incoming = customerName.trim();
+          const existing = (customer.name || "").trim();
+          if (incoming && incoming.toLowerCase() !== existing.toLowerCase()) {
+            customer.name = incoming;
+          }
+        }
+        await customer.save();
+      }
+    }
 
 
     // Calculate end time in UTC
@@ -78,9 +102,10 @@ dateOfBirth,    } = req.body;
       .add(duration, "minutes")
       .toDate();
 
+    const effectiveName = customer ? customer.name : customerName;
     const newAppointment = new Appointment({
-      customerName,
-      phoneNumber,
+      customerName: effectiveName,
+      phoneNumber: phone,
       appointmentDateTime: appointmentDateUTC.toDate(),
       barber,
       duration,
@@ -108,42 +133,74 @@ dateOfBirth,    } = req.body;
       });
     }
 
-    // Send confirmation SMS for all appointments
+    // Send confirmation SMS (split for 10/20-week recurrences)
     if (!isPastDate) {
       try {
-        let message;
-
+        let result;
         if (recurrence === "weekly" && maxRepeat > 1) {
-          const allDates = [
-            appointmentDateAthens.format("DD/MM/YYYY HH:mm"),
+          const allMoments = [
+            appointmentDateAthens.clone(),
             ...additionalAppointments.map((appt) =>
-              moment(appt.appointmentDateTime)
-                .tz("Europe/Athens")
-                .format("DD/MM/YYYY HH:mm")
+              moment(appt.appointmentDateTime).tz("Europe/Athens")
             ),
-          ].join(", ");
+          ];
+          const labels = allMoments.map((m) => m.format("DD/MM/YYYY HH:mm"));
 
-          message = `Επιβεβαιώνουμε τα ραντεβού σας στο LEMO BARBER SHOP με τον ${barber} για τις ημερομηνίες: ${allDates}.`;
+          const shouldSplit = (intervalWeeks === 10 || intervalWeeks === 20) && maxRepeat > 5;
+          if (shouldSplit) {
+            const firstHalf = labels.slice(0, 5);
+            const secondHalf = labels.slice(5);
+            const msg1 = `Επιβεβαιώνουμε τα ραντεβού σας στο LEMO BARBER SHOP με τον ${barber} για τις ημερομηνίες: ${firstHalf.join(", ")}.`;
+            result = await sendSMS(phoneNumber, msg1);
+            savedAppointment.reminders.push({
+              type: "confirmation",
+              sentAt: new Date(),
+              messageId: result?.message_id || result?.messageId || null,
+              status: result?.success ? "sent" : "failed",
+              messageText: msg1,
+              senderId: "Lemo Barber",
+              retryCount: 0,
+            });
+
+            const halfWeeks = Math.floor(intervalWeeks / 2);
+            const sendAt = appointmentDateUTC.clone().add(halfWeeks, "weeks").toDate();
+            const ScheduledMessage = require("../models/ScheduledMessage");
+            await ScheduledMessage.create({
+              phoneNumber,
+              messageText: `Επιβεβαιώνουμε τα επιπλέον ραντεβού σας στο LEMO BARBER SHOP με τον ${barber}: ${secondHalf.join(", ")}.`,
+              sendAt,
+              status: "pending",
+              type: "recurrence-followup",
+              appointmentIds: [savedAppointment._id, ...additionalAppointments.map((a) => a._id)],
+              barber,
+            });
+          } else {
+            const msg = `Επιβεβαιώνουμε τα ραντεβού σας στο LEMO BARBER SHOP με τον ${barber} για τις ημερομηνίες: ${labels.join(", ")}.`;
+            result = await sendSMS(phoneNumber, msg);
+            savedAppointment.reminders.push({
+              type: "confirmation",
+              sentAt: new Date(),
+              messageId: result?.message_id || result?.messageId || null,
+              status: result?.success ? "sent" : "failed",
+              messageText: msg,
+              senderId: "Lemo Barber",
+              retryCount: 0,
+            });
+          }
         } else {
-          const formattedLocalTime =
-            appointmentDateAthens.format("DD/MM/YYYY HH:mm");
-          message = `Επιβεβαιώνουμε το ραντεβού σας στο LEMO BARBER SHOP με τον ${barber} για τις ${formattedLocalTime}!`;
+          const formattedLocalTime = appointmentDateAthens.format("DD/MM/YYYY HH:mm");
+          const msg = `Επιβεβαιώνουμε το ραντεβού σας στο LEMO BARBER SHOP με τον ${barber} για τις ${formattedLocalTime}!`;
+          result = await sendSMS(phoneNumber, msg);
+          savedAppointment.reminders.push({
+            type: "confirmation",
+            sentAt: new Date(),
+            messageId: result?.message_id || result?.messageId || null,
+            status: result?.success ? "sent" : "failed",
+            messageText: msg,
+            senderId: "Lemo Barber",
+            retryCount: 0,
+          });
         }
-
-        const result = await sendSMS(phoneNumber, message);
-        console.log("📲 Confirmation SMS sent.");
-        console.log("📦 SMS API Response:", result);
-
-        savedAppointment.reminders.push({
-          type: "confirmation", // ✅ CORRECT
-          sentAt: new Date(),
-          messageId: result?.message_id || result?.messageId || null,
-          status: result?.success ? "sent" : "failed",
-          messageText: message,
-          senderId: "Lemo Barber",
-          retryCount: 0,
-        });
-
         await savedAppointment.save();
       } catch (smsError) {
         console.error("❌ Failed to send confirmation SMS:", smsError.message);
