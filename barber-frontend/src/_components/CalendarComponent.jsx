@@ -51,6 +51,8 @@ const CalendarComponent = ({
     let backgroundColor;
     if (event.type === "break") {
       backgroundColor = event.barber === "ΛΕΜΟ" ? "#34D399" : "#0ea5e9";
+    } else if (event.type === "lock") {
+      backgroundColor = event.barber === "ΛΕΜΟ" ? "#dc2626" : "#2563eb";
     } else {
       backgroundColor = event.barber === "ΛΕΜΟ" ? "#6B21A8" : "orange";
     }

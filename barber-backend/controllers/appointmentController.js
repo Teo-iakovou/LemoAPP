@@ -25,10 +25,23 @@ const createAppointment = async (req, res, next) => {
       repeatInterval, // How many weeks between each appointment
       repeatCount, // Total number of appointments
       dateOfBirth,
+      duration: rawDuration,
+      endTime: rawEndTime,
+      lockReason,
+      createdBy,
     } = req.body;
 
+    const appointmentType = ["appointment", "break", "lock"].includes(
+      type
+    )
+      ? type
+      : "appointment";
+
     // Validate required fields
-    if (type !== "break" && (!customerName || !phoneNumber)) {
+    if (
+      appointmentType === "appointment" &&
+      (!customerName || !phoneNumber)
+    ) {
       return res
         .status(400)
         .json({ error: "Customer name and phone number are required." });
@@ -62,11 +75,11 @@ const createAppointment = async (req, res, next) => {
     );
 
     // Normalize phone to avoid duplicates caused by spaces
-    const phone = normalizePhone(phoneNumber);
+    const phone = phoneNumber ? normalizePhone(phoneNumber) : "";
 
     // Check if customer exists, otherwise create a new one
     let customer = null;
-    if (type !== "break") {
+    if (appointmentType === "appointment") {
       customer = await Customer.findOne({ phoneNumber: phone });
       if (!customer) {
         customer = new Customer({
@@ -96,25 +109,64 @@ const createAppointment = async (req, res, next) => {
 
     // Calculate end time in UTC
     // Accept duration from req.body or fallback to default
-    const duration = Number(req.body.duration) || 40;
-    const endTimeUTC = appointmentDateUTC
-      .clone()
-      .add(duration, "minutes")
-      .toDate();
+    const parsedDuration = Number(rawDuration);
+    let duration;
+    let endTimeUTC;
+
+    if (appointmentType === "lock") {
+      if (!barber) {
+        return res.status(400).json({ error: "Barber is required to lock time." });
+      }
+      let lockDuration = Number.isFinite(parsedDuration) ? parsedDuration : null;
+      if ((!lockDuration || lockDuration <= 0) && rawEndTime) {
+        const endMoment = moment(rawEndTime).utc();
+        if (endMoment.isValid()) {
+          lockDuration = Math.max(
+            1,
+            Math.round(
+              (endMoment.toDate().getTime() - appointmentDateUTC.toDate().getTime()) /
+                60000
+            )
+          );
+        }
+      }
+      if (!lockDuration || lockDuration <= 0) {
+        return res
+          .status(400)
+          .json({ error: "Lock duration must be greater than 0 or provide a valid end time." });
+      }
+      duration = lockDuration;
+      endTimeUTC = appointmentDateUTC.clone().add(lockDuration, "minutes").toDate();
+    } else if (appointmentType === "break") {
+      duration = Number.isFinite(parsedDuration) && parsedDuration > 0 ? parsedDuration : 0;
+      endTimeUTC = duration
+        ? appointmentDateUTC.clone().add(duration, "minutes").toDate()
+        : appointmentDateUTC.toDate();
+    } else {
+      duration = Number.isFinite(parsedDuration) && parsedDuration > 0 ? parsedDuration : 40;
+      endTimeUTC = appointmentDateUTC.clone().add(duration, "minutes").toDate();
+    }
 
     const effectiveName = customer ? customer.name : customerName;
     const newAppointment = new Appointment({
       customerName: effectiveName,
-      phoneNumber: phone,
+      phoneNumber: appointmentType === "appointment" ? phone : undefined,
       appointmentDateTime: appointmentDateUTC.toDate(),
       barber,
       duration,
       appointmentStatus: "confirmed",
-      type: type || "appointment",
+      type: appointmentType,
       endTime: endTimeUTC,
       recurrence: recurrence === "weekly" ? "weekly" : "one-time",
       repeatInterval: recurrence === "weekly" ? intervalWeeks : null,
       repeatCount: recurrence === "weekly" ? maxRepeat : null,
+      lockReason:
+        appointmentType === "lock" && typeof lockReason === "string"
+          ? lockReason.trim()
+          : appointmentType === "lock"
+          ? ""
+          : undefined,
+      createdBy: createdBy || undefined,
     });
 
     const savedAppointment = await newAppointment.save();
@@ -122,19 +174,31 @@ const createAppointment = async (req, res, next) => {
     // Generate recurring appointments if applicable
     let additionalAppointments = [];
     if (recurrence === "weekly" && maxRepeat > 1) {
-      additionalAppointments = await generateRecurringAppointments({
-        customerName,
-        phoneNumber,
-        barber,
-        initialAppointmentDate: appointmentDateUTC,
-        duration,
-        intervalWeeks,
-        repeatCount: maxRepeat - 1, // Since the first appointment is already created
-      });
+      if (appointmentType === "appointment") {
+        additionalAppointments = await generateRecurringAppointments({
+          customerName,
+          phoneNumber,
+          barber,
+          initialAppointmentDate: appointmentDateUTC,
+          duration,
+          intervalWeeks,
+          repeatCount: maxRepeat - 1, // Since the first appointment is already created
+        });
+      } else if (appointmentType === "lock") {
+        additionalAppointments = await generateRecurringLocks({
+          barber,
+          initialAppointmentDate: appointmentDateUTC,
+          duration,
+          intervalWeeks,
+          repeatCount: maxRepeat - 1,
+          lockReason: lockReason || "",
+          createdBy,
+        });
+      }
     }
 
     // Send confirmation SMS (split for 10/20-week recurrences)
-    if (!isPastDate) {
+    if (appointmentType === "appointment" && !isPastDate) {
       try {
         let result;
         if (recurrence === "weekly" && maxRepeat > 1) {
@@ -262,6 +326,42 @@ const generateRecurringAppointments = async ({
   return appointments;
 };
 
+const generateRecurringLocks = async ({
+  barber,
+  initialAppointmentDate,
+  duration,
+  intervalWeeks,
+  repeatCount,
+  lockReason,
+  createdBy,
+}) => {
+  const locks = [];
+  let currentDateUTC = initialAppointmentDate.clone();
+
+  for (let i = 1; i <= repeatCount; i++) {
+    currentDateUTC.add(intervalWeeks, "weeks");
+
+    const lock = new Appointment({
+      appointmentDateTime: currentDateUTC.toDate(),
+      barber,
+      duration,
+      endTime: currentDateUTC.clone().add(duration, "minutes").toDate(),
+      appointmentStatus: "confirmed",
+      type: "lock",
+      lockReason: lockReason || "",
+      createdBy: createdBy || undefined,
+      recurrence: "weekly",
+      repeatInterval: intervalWeeks,
+      repeatCount: null,
+    });
+
+    const savedLock = await lock.save();
+    locks.push(savedLock);
+  }
+
+  return locks;
+};
+
 // Get all appointments
 const getAppointments = async (req, res, next) => {
   const page = parseInt(req.query.page) || 1;
@@ -281,6 +381,7 @@ const getAppointments = async (req, res, next) => {
         duration: 1,
         endTime: 1,
         reminders: 1,
+        lockReason: 1,
       }
     )
       .sort({ appointmentDateTime: -1 })
@@ -307,7 +408,8 @@ const updateAppointment = async (req, res, next) => {
     const { id } = req.params;
     const {
       appointmentDateTime,
-      duration = 40,
+      duration,
+      endTime,
       phoneNumber,
       barber,
       ...updateData
@@ -330,12 +432,36 @@ const updateAppointment = async (req, res, next) => {
     if (appointmentDateTime) {
       const newDate = new Date(appointmentDateTime);
       appointment.appointmentDateTime = newDate;
-      appointment.endTime = new Date(newDate.getTime() + duration * 60 * 1000);
+      const effectiveDuration =
+        typeof duration === "number" && duration > 0
+          ? duration
+          : appointment.duration || 40;
+      appointment.duration = effectiveDuration;
+      appointment.endTime = new Date(
+        newDate.getTime() + effectiveDuration * 60 * 1000
+      );
     }
 
-    // 👇 Add this! Explicitly update duration field in DB
-    if (duration) {
+    if (typeof duration === "number" && duration > 0 && !appointmentDateTime) {
       appointment.duration = duration;
+      appointment.endTime = new Date(
+        appointment.appointmentDateTime.getTime() + duration * 60 * 1000
+      );
+    }
+
+    if (endTime) {
+      const newEnd = new Date(endTime);
+      if (!Number.isNaN(newEnd.getTime())) {
+        appointment.endTime = newEnd;
+        const diff = Math.max(
+          1,
+          Math.round(
+            (newEnd.getTime() - appointment.appointmentDateTime.getTime()) /
+              60000
+          )
+        );
+        appointment.duration = diff;
+      }
     }
 
     if (barber) {
@@ -356,7 +482,7 @@ const updateAppointment = async (req, res, next) => {
     const now = moment().utc();
     const isPast = moment(appointment.appointmentDateTime).isBefore(now);
 
-    if (!isPast) {
+    if (appointment.type === "appointment" && !isPast) {
       try {
         const message = `Το ραντεβού σας στο LEMO BARBER SHOP στις ${oldFormattedDate}, έχει αλλάξει για ${newFormattedDate}.`;
         const smsResponse = await sendSMS(
@@ -388,7 +514,10 @@ const updateAppointment = async (req, res, next) => {
 
     res.status(200).json({
       success: true,
-      message: "Appointment updated successfully and SMS sent",
+      message:
+        appointment.type === "appointment"
+          ? "Appointment updated successfully and SMS sent"
+          : "Appointment updated successfully",
       updatedAppointment: appointment,
     });
   } catch (error) {
@@ -421,7 +550,7 @@ const deleteAppointment = async (req, res, next) => {
         deletedAppointment.appointmentDateTime
       ).isBefore(now);
 
-      if (!isPastAppointment) {
+      if (deletedAppointment.type === "appointment" && !isPastAppointment) {
         try {
           const formattedDateTime = moment(
             deletedAppointment.appointmentDateTime
@@ -437,13 +566,16 @@ const deleteAppointment = async (req, res, next) => {
         }
       } else {
         console.log(
-          "📵 No Deletion SMS sent because appointment was in the past."
+          "📵 No Deletion SMS sent because appointment was in the past or not a standard appointment."
         );
       }
 
       return res.status(200).json({
         success: true,
-        message: "Appointment deleted successfully and SMS sent",
+        message:
+          deletedAppointment.type === "appointment"
+            ? "Appointment deleted successfully and SMS sent"
+            : "Appointment deleted successfully",
       });
     }
   } catch (error) {
@@ -462,7 +594,7 @@ const getUpcomingAppointments = async (req, res) => {
       {
         appointmentDateTime: { $gte: startOfYesterday },
         appointmentStatus: "confirmed",
-        type: { $in: ["appointment", "break"] },
+        type: { $in: ["appointment", "break", "lock"] },
       },
       {
         customerName: 1,

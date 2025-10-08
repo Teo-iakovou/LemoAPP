@@ -33,13 +33,25 @@ const [isLoading, setIsLoading] = useState(true);  // ✅ Fetch appointments
         const events = upcomingAppointments.map((appointment) => {
           const appointmentDate = new Date(appointment.appointmentDateTime);
           const isBreak = appointment.type === "break";
+          const isLock = appointment.type === "lock";
           const isLemo = appointment.barber === "ΛΕΜΟ";
 
           const duration = appointment.duration || 40;
+          const lockLabel = appointment.lockReason
+            ? `ΚΛΕΙΔΩΜΑ — ${appointment.lockReason}`
+            : "ΚΛΕΙΔΩΜΑ";
+
           return {
             id: appointment._id,
-            title: isBreak ? "ΔΙΑΛΕΙΜΜΑ" : appointment.customerName,
-            phoneNumber: appointment.phoneNumber, // keep phone from backend
+            title: isBreak
+              ? "ΔΙΑΛΕΙΜΜΑ"
+              : isLock
+              ? lockLabel
+              : appointment.customerName,
+            customerName: appointment.customerName,
+            phoneNumber:
+              appointment.type === "appointment" ? appointment.phoneNumber : "",
+            lockReason: appointment.lockReason || "",
             start: appointmentDate,
             end: new Date(appointmentDate.getTime() + duration * 60 * 1000),
             barber: appointment.barber,
@@ -48,6 +60,10 @@ const [isLoading, setIsLoading] = useState(true);  // ✅ Fetch appointments
               ? isLemo
                 ? "#34D399"
                 : "#0ea5e9"
+              : isLock
+              ? isLemo
+                ? "#dc2626"
+                : "#2563eb"
               : isLemo
               ? "#6B21A8"
               : "orange",
@@ -101,14 +117,19 @@ const [isLoading, setIsLoading] = useState(true);  // ✅ Fetch appointments
 
     console.log("Selected Appointment for Edit/Delete:", appointment);
 
+    const durationMinutes =
+      (appointment.end - appointment.start) / (60 * 1000);
+    const isAppointment = appointment.type === "appointment";
+
     setSelectedAppointment({
       _id: appointment.id,
-      customerName: appointment.title,
-      phoneNumber: appointment.phoneNumber || "",
+      customerName: isAppointment ? appointment.customerName || "" : "",
+      phoneNumber: isAppointment ? appointment.phoneNumber || "" : "",
       barber: appointment.barber || "ΛΕΜΟ",
       appointmentDateTime: appointment.start,
       type: appointment.type || "appointment",
-      duration: (appointment.end - appointment.start) / (60 * 1000), // for edit
+      duration: durationMinutes,
+      lockReason: appointment.lockReason || "",
     });
 
     setShowForm(true);
@@ -145,22 +166,44 @@ const [isLoading, setIsLoading] = useState(true);  // ✅ Fetch appointments
           ...(response.recurringAppointments || []),
         ];
 
-        const newEvents = createdAppointments.map((appointment) => ({
-          id: appointment._id,
-          title:
-            appointment.type === "break"
+        const newEvents = createdAppointments.map((appointment) => {
+          const startDate = new Date(appointment.appointmentDateTime);
+          const duration = appointment.duration || 40;
+          const isBreak = appointment.type === "break";
+          const isLock = appointment.type === "lock";
+          const isLemo = appointment.barber === "ΛΕΜΟ";
+          const lockLabel = appointment.lockReason
+            ? `ΚΛΕΙΔΩΜΑ — ${appointment.lockReason}`
+            : "ΚΛΕΙΔΩΜΑ";
+
+          return {
+            id: appointment._id,
+            title: isBreak
               ? "ΔΙΑΛΕΙΜΜΑ"
+              : isLock
+              ? lockLabel
               : appointment.customerName,
-          phoneNumber: appointment.phoneNumber,
-          start: new Date(appointment.appointmentDateTime),
-          end: new Date(
-            new Date(appointment.appointmentDateTime).getTime() +
-              (appointment.duration || 40) * 60 * 1000
-          ),
-          barber: appointment.barber,
-          type: appointment.type || "appointment",
-          backgroundColor: appointment.barber === "ΛΕΜΟ" ? "#6B21A8" : "orange",
-        }));
+            customerName: appointment.customerName,
+            phoneNumber:
+              appointment.type === "appointment" ? appointment.phoneNumber : "",
+            lockReason: appointment.lockReason || "",
+            start: startDate,
+            end: new Date(startDate.getTime() + duration * 60 * 1000),
+            barber: appointment.barber,
+            type: appointment.type || "appointment",
+            backgroundColor: isBreak
+              ? isLemo
+                ? "#34D399"
+                : "#0ea5e9"
+              : isLock
+              ? isLemo
+                ? "#dc2626"
+                : "#2563eb"
+              : isLemo
+              ? "#6B21A8"
+              : "orange",
+          };
+        });
 
         setAppointments((prevAppointments) => {
           const updatedIds = createdAppointments.map((appt) => appt._id);

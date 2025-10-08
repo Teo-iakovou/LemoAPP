@@ -4,18 +4,18 @@ const appointmentSchema = new mongoose.Schema({
   customerName: {
     type: String,
     required: function () {
-      return this.type !== "break";
+      return this.type === "appointment";
     },
   },
   phoneNumber: {
     type: String,
     required: function () {
-      return this.type !== "break";
+      return this.type === "appointment";
     },
     validate: {
       validator: function (v) {
-        if (this.type === "break") return true;
-        return v.length >= 6 && v.length <= 15;
+        if (this.type !== "appointment") return true;
+        return typeof v === "string" && v.length >= 6 && v.length <= 15;
       },
       message: "Phone number must be between 6 and 15 characters",
     },
@@ -27,9 +27,9 @@ const appointmentSchema = new mongoose.Schema({
   duration: {
     type: Number,
     required: function () {
-      return this.type !== "break";
+      return this.type === "appointment";
     },
-    min: 10, // or whatever minimum duration you want (e.g. 10 mins)
+    min: 0,
     max: 600, // you can set a max if you want (e.g. 10 hours)
     default: 40, // default to 40 if not provided
   },
@@ -51,8 +51,18 @@ const appointmentSchema = new mongoose.Schema({
   },
   type: {
     type: String,
-    enum: ["appointment", "break"],
+    enum: ["appointment", "break", "lock"],
     default: "appointment",
+  },
+  lockReason: {
+    type: String,
+    default: "",
+    trim: true,
+  },
+  createdBy: {
+    type: String,
+    default: null,
+    trim: true,
   },
 
   reminders: [
@@ -75,14 +85,51 @@ const appointmentSchema = new mongoose.Schema({
 
 // --- PRE-SAVE: Automatically calculate endTime ---
 appointmentSchema.pre("save", function (next) {
-  if (this.type !== "break") {
-    // Always calculate endTime based on duration and appointmentDateTime
-    const durationToUse = this.duration || 40; // fallback to 40
-    this.endTime = new Date(
-      new Date(this.appointmentDateTime).getTime() + durationToUse * 60 * 1000
-    );
+  const start = new Date(this.appointmentDateTime);
+  if (Number.isNaN(start.getTime())) {
+    return next(new Error("Invalid appointmentDateTime"));
+  }
+
+  if (this.type === "appointment") {
+    const durationToUse = this.duration || 40;
+    this.duration = durationToUse;
+    this.endTime = new Date(start.getTime() + durationToUse * 60 * 1000);
+  } else if (this.type === "lock") {
+    if (this.endTime) {
+      const end = new Date(this.endTime);
+      if (!Number.isNaN(end.getTime())) {
+        const diffMinutes = Math.max(
+          1,
+          Math.round((end.getTime() - start.getTime()) / 60000)
+        );
+        this.duration = diffMinutes;
+        this.endTime = new Date(start.getTime() + diffMinutes * 60 * 1000);
+      } else if (this.duration) {
+        this.endTime = new Date(start.getTime() + this.duration * 60 * 1000);
+      } else {
+        this.duration = 40;
+        this.endTime = new Date(start.getTime() + 40 * 60 * 1000);
+      }
+    } else if (this.duration) {
+      this.endTime = new Date(start.getTime() + this.duration * 60 * 1000);
+    } else {
+      // Fallback to 40 minutes if nothing provided
+      this.duration = 40;
+      this.endTime = new Date(start.getTime() + 40 * 60 * 1000);
+    }
   } else {
-    this.endTime = this.appointmentDateTime; // or handle breaks as you wish
+    // Break: allow arbitrary duration but default to zero-length block
+    if (this.endTime && !Number.isNaN(new Date(this.endTime).getTime())) {
+      const end = new Date(this.endTime);
+      const diffMinutes = Math.max(
+        0,
+        Math.round((end.getTime() - start.getTime()) / 60000)
+      );
+      this.duration = diffMinutes;
+    } else {
+      this.endTime = start;
+      this.duration = 0;
+    }
   }
   next();
 });

@@ -48,13 +48,17 @@ async function buildMonthAvailability({ from, to, barber, includeSlots }) {
   // only include that barber's breaks so availability stays per‑barber.
   const match = {
     appointmentDateTime: { $gte: start, $lte: endOfDay },
-    $or: barber ? [
-      { type: 'break', barber },
-      { type: 'appointment', appointmentStatus: 'confirmed', barber },
-    ] : [
-      { type: 'break' },
-      { type: 'appointment', appointmentStatus: 'confirmed' },
-    ],
+    $or: barber
+      ? [
+          { type: "break", barber },
+          { type: "lock", barber },
+          { type: "appointment", appointmentStatus: "confirmed", barber },
+        ]
+      : [
+          { type: "break" },
+          { type: "lock" },
+          { type: "appointment", appointmentStatus: "confirmed" },
+        ],
   };
 
   const docs = await Appointment.find(match, {
@@ -151,13 +155,17 @@ router.get("/appointments/range", async (req, res, next) => {
 
   const match = {
     appointmentDateTime: { $gte: start, $lte: end },
-    $or: barber ? [
-      { type: 'break', barber },
-      { type: 'appointment', appointmentStatus: 'confirmed', barber },
-    ] : [
-      { type: 'break' },
-      { type: 'appointment', appointmentStatus: 'confirmed' },
-    ],
+    $or: barber
+      ? [
+          { type: "break", barber },
+          { type: "lock", barber },
+          { type: "appointment", appointmentStatus: "confirmed", barber },
+        ]
+      : [
+          { type: "break" },
+          { type: "lock" },
+          { type: "appointment", appointmentStatus: "confirmed" },
+        ],
   };
 
     const docs = await Appointment.find(match, {

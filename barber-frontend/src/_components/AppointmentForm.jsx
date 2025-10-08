@@ -33,6 +33,7 @@ function AppointmentForm({
       dateOfBirth: appointmentData?.dateOfBirth || "",
     },
   });
+  const typeField = register("type");
 
   const [appointmentDateTime, setAppointmentDateTime] = useState(
     appointmentData?.appointmentDateTime || initialDate || new Date()
@@ -49,6 +50,9 @@ function AppointmentForm({
   const [recurrence, setRecurrence] = useState("none");
   const [repeatInterval, setRepeatInterval] = useState(1);
   const [repeatCount, setRepeatCount] = useState(1);
+  const [lockReasonValue, setLockReasonValue] = useState(
+    appointmentData?.lockReason || ""
+  );
   const [error, setError] = useState(null);
 
   // Click outside = close
@@ -91,9 +95,27 @@ function AppointmentForm({
       setDuration(appointmentData.duration || 40);
       if (!DURATION_OPTIONS.includes(appointmentData.duration))
         setDurationCustom(appointmentData.duration || "");
-
+      setLockReasonValue(appointmentData.lockReason || "");
     }
   }, [appointmentData, setValue]);
+
+  useEffect(() => {
+    if (appointmentType === "break") {
+      setRecurrence("none");
+      setRepeatInterval(1);
+      setRepeatCount(1);
+    }
+    if (appointmentType === "appointment" && !appointmentData) {
+      setLockReasonValue("");
+    }
+  }, [appointmentType, appointmentData]);
+
+  useEffect(() => {
+    if (appointmentType !== "appointment") {
+      setValue("customerName", "");
+      setValue("phoneNumber", "");
+    }
+  }, [appointmentType, setValue]);
 
 const handleCustomerSelect = (e) => {
   const displayName = e.target.value; // preserve user-entered spacing exactly as typed
@@ -142,9 +164,13 @@ const handleCustomerSelect = (e) => {
   };
 
   const submitForm = (data) => {
+    const requiresCustomer = appointmentType === "appointment";
+    const parsedDuration =
+      Number(durationCustom) || Number(duration) || (appointmentType === "break" ? 0 : NaN);
+
     if (
-      appointmentType !== "break" &&
-      (!data.customerName || !data.phoneNumber)
+      requiresCustomer &&
+      (!data.customerName || !data.customerName.trim() || !data.phoneNumber)
     ) {
       setError("Πρέπει να συμπληρώσετε όνομα και τηλέφωνο για ραντεβού.");
       return;
@@ -153,21 +179,25 @@ const handleCustomerSelect = (e) => {
       setError("Ημερομηνία/ώρα υποχρεωτικό πεδίο.");
       return;
     }
-    if (!duration || Number(duration) < 10 || Number(duration) > 600) {
+    if (
+      (appointmentType === "appointment" || appointmentType === "lock") &&
+      (!parsedDuration || parsedDuration < 10 || parsedDuration > 600)
+    ) {
       setError("Διάρκεια 10-600 λεπτά.");
       return;
     }
+
     setError(null);
 
-    onSubmit({
+    const payload = {
       ...appointmentData,
-    customerName: appointmentType === "break" ? "" : data.customerName.trim(), // trim here!
-      phoneNumber: appointmentType === "break" ? "" : data.phoneNumber,
+      customerName: requiresCustomer ? data.customerName.trim() : "",
+      phoneNumber: requiresCustomer ? data.phoneNumber : "",
       barber: data.barber || "ΛΕΜΟ",
-      duration: Number(durationCustom) || Number(duration),
+      duration:
+        appointmentType === "break" ? parsedDuration || 0 : parsedDuration,
       type: appointmentType || "appointment",
       appointmentDateTime: new Date(appointmentDateTime).toISOString(),
-
       recurrence:
         appointmentType !== "break" && recurrence !== "none"
           ? recurrence
@@ -180,8 +210,18 @@ const handleCustomerSelect = (e) => {
         appointmentType !== "break" && recurrence === "weekly"
           ? repeatCount
           : null,
-  dateOfBirth: data.dateOfBirth || "",     });
+      dateOfBirth:
+        requiresCustomer && data.dateOfBirth ? data.dateOfBirth : "",
+      lockReason:
+        appointmentType === "lock" ? lockReasonValue.trim() : undefined,
+    };
+
+    onSubmit(payload);
     reset();
+    setLockReasonValue("");
+    if (!isEditing) {
+      setAppointmentType("appointment");
+    }
     onClose();
   };
 
@@ -262,7 +302,7 @@ const handleCustomerSelect = (e) => {
 
         <form onSubmit={handleSubmit(submitForm)} className="space-y-4 ">
           {/* Customer Name */}
-          {appointmentType !== "break" && (
+          {appointmentType === "appointment" && (
             <div>
               <label className={labelClass}>ΟΝΟΜΑ ΠΕΛΑΤΗ</label>
               <input
@@ -272,7 +312,7 @@ const handleCustomerSelect = (e) => {
                 type="text"
                 className={fieldBase + " placeholder:text-[#a78bfa]"}
                 placeholder="Όνομα πελάτη"
-                required
+                required={appointmentType === "appointment"}
               />
               <datalist id="customerNameList">
                 {customers.map((customer) => (
@@ -283,7 +323,7 @@ const handleCustomerSelect = (e) => {
           )}
 
           {/* Phone Number */}
-          {appointmentType !== "break" && (
+          {appointmentType === "appointment" && (
             <div>
               <label className={labelClass}>ΤΗΛΕΦΩΝΟ</label>
               <input
@@ -292,7 +332,7 @@ const handleCustomerSelect = (e) => {
                 inputMode="tel"
                 className={fieldBase + " placeholder:text-[#a78bfa]"}
                 placeholder="Τηλέφωνο πελάτη"
-                required
+                required={appointmentType === "appointment"}
               />
             </div>
           )}
@@ -343,18 +383,41 @@ const handleCustomerSelect = (e) => {
           <div>
             <label className={labelClass}>ΤΥΠΟΣ ΚΑΤΑΧΩΡΗΣΗΣ</label>
             <select
-              {...register("type")}
+              {...typeField}
               className={fieldBase + " text-[#a78bfa]"}
               value={appointmentType}
-              onChange={(e) => setAppointmentType(e.target.value)}
+              onChange={(e) => {
+                typeField.onChange(e);
+                setAppointmentType(e.target.value);
+              }}
             >
               <option value="" disabled hidden className="text-[#a78bfa]">
                 Επιλέξτε τύπο
               </option>
               <option value="appointment">Ραντεβού</option>
               <option value="break">Διάλειμμα</option>
+              <option value="lock">Κλείδωμα</option>
             </select>
+            {appointmentType === "lock" && (
+              <p className="text-xs text-purple-200 mt-1">
+                Τα κλειδώματα αποκρύπτουν διαθέσιμα slots από το δημόσιο site,
+                αλλά μπορείτε πάντα να κλείσετε ραντεβού εσωτερικά πάνω από αυτά.
+              </p>
+            )}
           </div>
+
+          {appointmentType === "lock" && (
+            <div>
+              <label className={labelClass}>ΑΙΤΙΑ ΚΛΕΙΔΩΜΑΤΟΣ (Προαιρετικό)</label>
+              <input
+                type="text"
+                value={lockReasonValue}
+                onChange={(e) => setLockReasonValue(e.target.value)}
+                className={fieldBase + " placeholder:text-[#a78bfa]"}
+                placeholder="π.χ. Προσωπικές υποχρεώσεις"
+              />
+            </div>
+          )}
 
           {/* Recurrence */}
           <div>
@@ -363,11 +426,12 @@ const handleCustomerSelect = (e) => {
               className={fieldBase + " text-[#a78bfa]"}
               value={recurrence}
               onChange={(e) => setRecurrence(e.target.value)}
+              disabled={appointmentType === "break"}
             >
               <option value="none">Κανένα</option>
               <option value="weekly">Εβδομαδιαίο</option>
             </select>
-            {recurrence === "weekly" && (
+            {appointmentType !== "break" && recurrence === "weekly" && (
               <div className="flex gap-2 mt-2">
                 <select
                   className={fieldBase + " text-[#a78bfa]"}
@@ -427,13 +491,16 @@ const handleCustomerSelect = (e) => {
                   value={durationCustom}
                   onChange={handleDurationCustomChange}
                   placeholder="π.χ. 75"
-                  required
+                  required={
+                    appointmentType === "appointment" ||
+                    appointmentType === "lock"
+                  }
                 />
               )}
             </div>
           </div>
 {/* Date of Birth (optional) */}
-          {appointmentType !== "break" && (
+          {appointmentType === "appointment" && (
             <div>
               <label className={labelClass}>ΗΜΕΡΟΜΗΝΙΑ ΓΕΝΝΗΣΗΣ (Προαιρετικό)</label>
              <Controller
