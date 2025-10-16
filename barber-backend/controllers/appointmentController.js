@@ -214,7 +214,7 @@ const createAppointment = async (req, res, next) => {
           if (shouldSplit) {
             const firstHalf = labels.slice(0, 5);
             const secondHalf = labels.slice(5);
-            const msg1 = `Επιβεβαιώνουμε τα ραντεβού σας στο LEMO BARBER SHOP με τον ${barber} για τις ημερομηνίες: ${firstHalf.join(", ")}.`;
+            const msg1 = `Επιβεβαιώνουμε τα ραντεβού σας στο LEMO BARBER SHOP με τον ${barber} για τις ημερομηνίες: ${firstHalf.join(", ")}.\nWe confirm your appointments at LEMO BARBER SHOP with ${barber} for the dates: ${firstHalf.join(", ")}.`;
             result = await sendSMS(phoneNumber, msg1);
             savedAppointment.reminders.push({
               type: "confirmation",
@@ -231,7 +231,7 @@ const createAppointment = async (req, res, next) => {
             const ScheduledMessage = require("../models/ScheduledMessage");
             await ScheduledMessage.create({
               phoneNumber,
-              messageText: `Επιβεβαιώνουμε τα επιπλέον ραντεβού σας στο LEMO BARBER SHOP με τον ${barber}: ${secondHalf.join(", ")}.`,
+              messageText: `Επιβεβαιώνουμε τα επιπλέον ραντεβού σας στο LEMO BARBER SHOP με τον ${barber}: ${secondHalf.join(", ")}.\nWe confirm your additional appointments at LEMO BARBER SHOP with ${barber}: ${secondHalf.join(", ")}.`,
               sendAt,
               status: "pending",
               type: "recurrence-followup",
@@ -239,7 +239,7 @@ const createAppointment = async (req, res, next) => {
               barber,
             });
           } else {
-            const msg = `Επιβεβαιώνουμε τα ραντεβού σας στο LEMO BARBER SHOP με τον ${barber} για τις ημερομηνίες: ${labels.join(", ")}.`;
+            const msg = `Επιβεβαιώνουμε τα ραντεβού σας στο LEMO BARBER SHOP με τον ${barber} για τις ημερομηνίες: ${labels.join(", ")}.\nWe confirm your appointments at LEMO BARBER SHOP with ${barber} for the dates: ${labels.join(", ")}.`;
             result = await sendSMS(phoneNumber, msg);
             savedAppointment.reminders.push({
               type: "confirmation",
@@ -253,7 +253,7 @@ const createAppointment = async (req, res, next) => {
           }
         } else {
           const formattedLocalTime = appointmentDateAthens.format("DD/MM/YYYY HH:mm");
-          const msg = `Επιβεβαιώνουμε το ραντεβού σας στο LEMO BARBER SHOP με τον ${barber} για τις ${formattedLocalTime}!`;
+          const msg = `Επιβεβαιώνουμε το ραντεβού σας στο LEMO BARBER SHOP με τον ${barber} για τις ${formattedLocalTime}!\nWe confirm your appointment at LEMO BARBER SHOP with ${barber} for ${formattedLocalTime}!`;
           result = await sendSMS(phoneNumber, msg);
           savedAppointment.reminders.push({
             type: "confirmation",
@@ -484,7 +484,7 @@ const updateAppointment = async (req, res, next) => {
 
     if (appointment.type === "appointment" && !isPast) {
       try {
-        const message = `Το ραντεβού σας στο LEMO BARBER SHOP στις ${oldFormattedDate}, έχει αλλάξει για ${newFormattedDate}.`;
+        const message = `Το ραντεβού σας στο LEMO BARBER SHOP στις ${oldFormattedDate}, έχει αλλάξει για ${newFormattedDate}.\nYour appointment at LEMO BARBER SHOP on ${oldFormattedDate} has been rescheduled to ${newFormattedDate}.`;
         const smsResponse = await sendSMS(
           phoneNumber || appointment.phoneNumber,
           message
@@ -557,7 +557,7 @@ const deleteAppointment = async (req, res, next) => {
           )
             .tz("Europe/Athens")
             .format("DD/MM/YYYY HH:mm");
-          const message = `Θα θέλαμε να σας ενημερώσουμε ότι το ραντεβού σας για ${formattedDateTime} ακυρώνεται.`;
+          const message = `Θα θέλαμε να σας ενημερώσουμε ότι το ραντεβού σας για ${formattedDateTime} ακυρώνεται.\nWe would like to inform you that your appointment for ${formattedDateTime} has been canceled.`;
 
           await sendSMS(deletedAppointment.phoneNumber, message);
           console.log("📲 Deletion SMS sent successfully");
