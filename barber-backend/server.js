@@ -18,6 +18,7 @@ const customerRoutes = require("./routes/customerRoutes");
 const reminderSchedulerRoute = require("./routes/reminderSchedulerRoute");
 const authRoutes = require("./routes/authRoutes");
 const availabilityRoutes = require("./routes/availabilityRoutes");
+const autoCustomerRoutes = require("./routes/autoCustomerRoutes");
 const errorHandler = require("./middlewares/errorHandler");
 const helmet = require("helmet");
 dotenv.config();
@@ -83,6 +84,7 @@ app.use("/api/appointments", appointmentRoutes);
 app.use("/api", smsStatusRoutes);
 app.use("/api", smsResendRoute);
 app.use("/api/customers", customerRoutes);
+app.use("/api/auto-customers", autoCustomerRoutes);
 
 app.use("/api/waitingList", waitingListRoutes);
 app.use("/api/reminders", reminderSchedulerRoute);

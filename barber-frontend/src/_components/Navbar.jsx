@@ -11,6 +11,7 @@ import {
   FaTools,
   FaMoon,
   FaSun,
+  FaRedoAlt,
 } from "react-icons/fa";
 import Swal from "sweetalert2";
 import withReactContent from "sweetalert2-react-content";
@@ -141,6 +142,15 @@ const Navbar = ({ isAuth, onLogout, calendarDark, onToggleCalendarDark }) => {
               title="SMS Delivery Status"
             >
               <FaTools />
+            </Link>
+          </li>
+          <li>
+            <Link
+              to="/auto-customers"
+              className="hover:text-blue-500 transition-colors duration-300"
+              title="Recurring Customers"
+            >
+              <FaRedoAlt />
             </Link>
           </li>
           {/* Calendar theme toggle */}

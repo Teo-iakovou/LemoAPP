@@ -1,5 +1,24 @@
 const mongoose = require("mongoose");
 
+const appointmentSourceSchema = new mongoose.Schema(
+  {
+    kind: {
+      type: String,
+      enum: ["manual", "auto-customer"],
+      default: "manual",
+    },
+    autoCustomerId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "AutoCustomer",
+    },
+    batchId: {
+      type: String,
+      trim: true,
+    },
+  },
+  { _id: false }
+);
+
 const appointmentSchema = new mongoose.Schema({
   customerName: {
     type: String,
@@ -63,6 +82,15 @@ const appointmentSchema = new mongoose.Schema({
     type: String,
     default: null,
     trim: true,
+  },
+  source: {
+    type: appointmentSourceSchema,
+    default: () => ({ kind: "manual" }),
+  },
+  meta: {
+    type: Map,
+    of: mongoose.Schema.Types.Mixed,
+    default: undefined,
   },
 
   reminders: [
@@ -143,6 +171,7 @@ appointmentSchema.index({
 
 // Compound index used by range/month availability lookups
 appointmentSchema.index({ appointmentDateTime: 1, barber: 1, type: 1, appointmentStatus: 1 });
+appointmentSchema.index({ "source.kind": 1, "source.autoCustomerId": 1, appointmentDateTime: 1 });
 
 // --- Log Reminder Utility (needed for reminders and scripts) ---
 appointmentSchema.methods.logReminder = async function (type, data = {}) {

@@ -200,6 +200,94 @@ export async function addToWaitingList(customerId) {
   return response.json();
 }
 
+// ---- Recurring / Auto Customers ----
+
+export const fetchAutoCustomers = async (params = {}) => {
+  const query = new URLSearchParams(params).toString();
+  const url = query ? `${API_BASE_URL}/auto-customers?${query}` : `${API_BASE_URL}/auto-customers`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error("Failed to fetch recurring customers.");
+  const data = await res.json();
+  return data?.data ?? [];
+};
+
+export const createAutoCustomer = async (payload) => {
+  const res = await fetch(`${API_BASE_URL}/auto-customers`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({}));
+    throw new Error(error.errors?.join(" ") || error.message || "Failed to create recurring customer.");
+  }
+  return res.json();
+};
+
+export const updateAutoCustomer = async (id, payload) => {
+  const res = await fetch(`${API_BASE_URL}/auto-customers/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({}));
+    throw new Error(error.errors?.join(" ") || error.message || "Failed to update recurring customer.");
+  }
+  return res.json();
+};
+
+export const deleteAutoCustomer = async (id) => {
+  const res = await fetch(`${API_BASE_URL}/auto-customers/${id}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({}));
+    throw new Error(error.message || "Failed to delete recurring customer.");
+  }
+  return res.json();
+};
+
+export const pushAutoCustomers = async (payload) => {
+  const res = await fetch(`${API_BASE_URL}/auto-customers/push`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({}));
+    throw new Error(error.message || "Failed to push recurring customers to calendar.");
+  }
+  return res.json();
+};
+
+export const fetchAutoCustomerBatches = async (params = {}) => {
+  const query = new URLSearchParams(params).toString();
+  const url = query ? `${API_BASE_URL}/auto-customers/batches?${query}` : `${API_BASE_URL}/auto-customers/batches`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error("Failed to fetch auto-generation history.");
+  return res.json();
+};
+
+export const fetchAutoCustomerBatch = async (batchId) => {
+  const res = await fetch(`${API_BASE_URL}/auto-customers/batches/${batchId}`);
+  if (!res.ok) throw new Error("Failed to fetch batch details.");
+  return res.json();
+};
+
+export const undoAutoCustomerBatch = async (batchId, reason) => {
+  const res = await fetch(`${API_BASE_URL}/auto-customers/batches/${batchId}/undo`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(reason ? { reason } : {}),
+  });
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({}));
+    throw new Error(error.message || "Failed to undo batch.");
+  }
+  return res.json();
+};
+
 // Remove a customer from the waiting list
 export async function removeFromWaitingList(id) {
   const response = await fetch(`${API_BASE_URL}/waitingList/${id}`, {

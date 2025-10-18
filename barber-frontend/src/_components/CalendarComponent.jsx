@@ -12,6 +12,11 @@ import "../styles/calendar-dark.css";
 
 // Greek locale
 moment.locale("el");
+moment.updateLocale("el", {
+  meridiemParse: /π\.μ\.|μ\.μ\./,
+  meridiem: (hour) => (hour < 12 ? "π.μ." : "μ.μ."),
+  isPM: (input) => input === "μ.μ.",
+});
 const localizer = momentLocalizer(moment);
 const DragAndDropCalendar = withDragAndDrop(BigCalendar);
 
