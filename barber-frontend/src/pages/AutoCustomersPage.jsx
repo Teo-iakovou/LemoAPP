@@ -8,13 +8,43 @@ import {
   deleteAutoCustomer,
   pushAutoCustomers,
   fetchCustomers,
+  overrideAutoCustomerOccurrence,
 } from "../utils/api";
+import AutoCustomersCalendar from "../_components/AutoCustomersCalendar";
 import { toast } from "react-hot-toast";
+import Swal from "sweetalert2";
+import withReactContent from "sweetalert2-react-content";
 import DatePicker, { registerLocale } from "react-datepicker";
+import { ChevronLeft, ChevronRight, CalendarClock } from "lucide-react";
 import el from "date-fns/locale/el";
 import "react-datepicker/dist/react-datepicker.css";
 
 registerLocale("el", el);
+
+const addDays = (date, amount) => {
+  const next = new Date(date.getTime());
+  next.setDate(next.getDate() + amount);
+  return next;
+};
+
+const addWeeks = (date, weeks) => addDays(date, weeks * 7);
+
+const alignToWeekday = (startDate, targetDay) => {
+  const aligned = new Date(startDate.getTime());
+  const currentDay = aligned.getDay();
+  const diff = (Number(targetDay) - currentDay + 7) % 7;
+  aligned.setDate(aligned.getDate() + diff);
+  return aligned;
+};
+
+const alignToMondayStart = (value) => {
+  const base = value instanceof Date ? new Date(value.getTime()) : new Date(value);
+  base.setHours(0, 0, 0, 0);
+  const day = base.getDay();
+  const diff = (day + 6) % 7;
+  base.setDate(base.getDate() - diff);
+  return base;
+};
 
 const BARBER_OPTIONS = [
   { value: "ΛΕΜΟ", label: "ΛΕΜΟ" },
@@ -39,6 +69,40 @@ const CADENCE_OPTIONS = [
   { value: 5, label: "Ανά 5 εβδομάδες / Every 5 weeks" },
 ];
 
+const toLocalDateString = (date) => {
+  if (!date) return "";
+  const tzAdjusted = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+  return tzAdjusted.toISOString().slice(0, 10);
+};
+
+const parseLocalDateString = (value) => {
+  if (!value) return null;
+  const parts = value.split("-").map(Number);
+  if (parts.length !== 3 || parts.some((part) => Number.isNaN(part))) return null;
+  const [year, month, day] = parts;
+  return new Date(year, month - 1, day);
+};
+
+const toUtcIsoFromLocalDate = (value) => {
+  if (!value) return undefined;
+  const parsed = parseLocalDateString(value);
+  if (!parsed) return undefined;
+  return new Date(Date.UTC(parsed.getFullYear(), parsed.getMonth(), parsed.getDate())).toISOString();
+};
+
+const normalizeTimeString = (value, fallback = "09:00") => {
+  if (!value) return fallback;
+  if (typeof value === "string") {
+    const match = value.match(/(\d{1,2}):(\d{2})/);
+    if (match) {
+      const hours = String(Number(match[1]) % 24).padStart(2, "0");
+      const minutes = match[2];
+      return `${hours}:${minutes}`;
+    }
+  }
+  return fallback;
+};
+
 const emptyForm = {
   customerName: "",
   phoneNumber: "",
@@ -47,18 +111,25 @@ const emptyForm = {
   timeOfDay: "09:00",
   durationMin: 40,
   cadenceWeeks: 1,
-  startFrom: new Date().toISOString().slice(0, 10),
+  startFrom: toLocalDateString(new Date()),
   until: "",
-  maxOccurrences: "",
+  maxOccurrences: "5",
 };
 
 const toDateInput = (value) => {
   if (!value) return "";
-  try {
-    return value.slice(0, 10);
-  } catch {
-    return "";
+  if (typeof value === "string") {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+    try {
+      return toLocalDateString(new Date(value));
+    } catch {
+      return "";
+    }
   }
+  if (value instanceof Date) {
+    return toLocalDateString(value);
+  }
+  return "";
 };
 
 const AutoCustomersPage = () => {
@@ -67,21 +138,29 @@ const AutoCustomersPage = () => {
   const [formOpen, setFormOpen] = useState(false);
   const [formState, setFormState] = useState(emptyForm);
   const [editingId, setEditingId] = useState(null);
+  const [occurrenceContext, setOccurrenceContext] = useState(null);
   const [pushOpen, setPushOpen] = useState(false);
   const [pushState, setPushState] = useState({
-    from: new Date().toISOString().slice(0, 10),
+    from: toLocalDateString(new Date()),
     to: "",
   });
-  const [pushResult, setPushResult] = useState(null);
   const [directory, setDirectory] = useState([]);
   const formRef = useRef(null);
   const pushRef = useRef(null);
+  const MySwal = useMemo(() => withReactContent(Swal), []);
+  const [calendarStart, setCalendarStart] = useState(() => alignToMondayStart(new Date()));
 
   const loadCustomers = async () => {
     setLoading(true);
     try {
       const data = await fetchAutoCustomers();
-      setCustomers(Array.isArray(data) ? data : data?.data || []);
+      const list = Array.isArray(data) ? data : data?.data || [];
+      setCustomers(
+        list.map((customer) => ({
+          ...customer,
+          timeOfDay: normalizeTimeString(customer.timeOfDay, "09:00"),
+        }))
+      );
     } catch (error) {
       console.error(error);
       toast.error(error.message || "Αποτυχία φόρτωσης επαναλαμβανόμενων πελατών.");
@@ -111,23 +190,210 @@ const AutoCustomersPage = () => {
     return map;
   }, [directory]);
 
+  const calendarEvents = useMemo(() => {
+  const rangeWeeks = 12;
+  const rangeStart = alignToMondayStart(calendarStart);
+  const rangeEnd = addWeeks(rangeStart, rangeWeeks);
+  const events = [];
+
+  customers.forEach((customer) => {
+    if (!customer) return;
+    const cadence = Number(customer.cadenceWeeks) || 1;
+    const defaultDuration = Number(customer.durationMin) || 40;
+    let targetWeekday = Number(customer.weekday);
+    if (!Number.isFinite(targetWeekday)) {
+      targetWeekday = 0;
+    }
+    const [hour, minute] = normalizeTimeString(customer.timeOfDay, "09:00")
+      .split(":")
+      .map(Number);
+
+    const baseStart =
+      customer.startFrom && toDateInput(customer.startFrom)
+        ? parseLocalDateString(toDateInput(customer.startFrom))
+        : new Date(rangeStart.getTime());
+    if (!baseStart) return;
+    baseStart.setHours(hour || 0, minute || 0, 0, 0);
+
+    let occurrence = alignToWeekday(baseStart, targetWeekday);
+
+    const until = customer.until ? parseLocalDateString(toDateInput(customer.until)) : null;
+    const maxOccurrences = customer.maxOccurrences
+      ? Number(customer.maxOccurrences)
+      : customer.until
+      ? Infinity
+      : 5;
+    let generated = 0;
+
+    const skippedSet = new Set(
+      (customer.skippedOccurrences || [])
+        .map((value) => normalizeDateValue(value))
+        .filter(Boolean)
+        .map((date) => date.getTime())
+    );
+
+    const overrideMap = new Map(
+      (customer.occurrenceOverrides || [])
+        .map((entry) => {
+          const originalDate = normalizeDateValue(entry?.originalStart);
+          const overrideDate = normalizeDateValue(entry?.overrideStart);
+          if (!originalDate || !overrideDate) return null;
+          return [
+            originalDate.getTime(),
+            {
+              startMs: overrideDate.getTime(),
+              duration: entry?.durationMin,
+              barber: entry?.barber,
+            },
+          ];
+        })
+        .filter(Boolean)
+    );
+
+    while (occurrence <= rangeEnd) {
+      if (until && occurrence > until) break;
+
+      const occurrenceKey = occurrence.getTime();
+      const overrideInfo = overrideMap.get(occurrenceKey);
+      const isSkipped = skippedSet.has(occurrenceKey);
+
+      if (!isSkipped) {
+        if (maxOccurrences && generated >= maxOccurrences) break;
+
+        const startMs = overrideInfo?.startMs ?? occurrenceKey;
+        const eventStart = new Date(startMs);
+        const eventEnd = new Date(startMs + (overrideInfo?.duration ?? defaultDuration) * 60000);
+
+        if (eventStart >= rangeStart && eventStart <= rangeEnd) {
+          events.push({
+            id: `${customer._id || "auto"}-${occurrenceKey}`,
+            title: customer.customerName || "Ραντεβού",
+            start: eventStart,
+            end: eventEnd,
+            barber: overrideInfo?.barber || customer.barber || "ΛΕΜΟ",
+            type: "appointment",
+            autoCustomerId: customer._id,
+            originalStart: new Date(occurrenceKey),
+            hasOverride: Boolean(overrideInfo),
+            overrideBarber: overrideInfo?.barber || null,
+            overrideDuration: overrideInfo?.duration ?? null,
+            durationMin: overrideInfo?.duration ?? defaultDuration,
+          });
+        }
+
+        generated += 1;
+      }
+
+      occurrence = addWeeks(occurrence, cadence);
+      if (maxOccurrences && generated >= maxOccurrences) break;
+    }
+    });
+
+    return events;
+  }, [customers, calendarStart]);
+
   const handleOpenCreate = () => {
     setEditingId(null);
+    setOccurrenceContext(null);
     setFormState(emptyForm);
     setFormOpen(true);
   };
 
-  const handleEdit = (customer) => {
+  const shiftCalendar = (weeks) => {
+    setCalendarStart((prev) => alignToMondayStart(addWeeks(prev, weeks)));
+  };
+
+  const resetCalendarStart = () => {
+    setCalendarStart(alignToMondayStart(new Date()));
+  };
+
+  const handleCalendarEdit = (event) => {
+    const customer = customers.find((c) => c._id === event.autoCustomerId);
+    if (!customer) return;
+
+    handleEdit(customer, event.start, {
+      originalStart: event.originalStart,
+      overrideBarber: event.overrideBarber,
+      overrideDuration: event.overrideDuration,
+    });
+  };
+
+  function normalizeDateValue(value) {
+    if (!value) return null;
+    if (value instanceof Date) {
+      const copy = new Date(value.getTime());
+      copy.setSeconds(0, 0);
+      return copy;
+    }
+    if (typeof value === "string") {
+      if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+        const parsed = parseLocalDateString(value);
+        if (!parsed) return null;
+        parsed.setSeconds(0, 0);
+        return parsed;
+      }
+      const dateFromString = new Date(value);
+      if (Number.isNaN(dateFromString.getTime())) return null;
+      dateFromString.setSeconds(0, 0);
+      return dateFromString;
+    }
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return null;
+    date.setSeconds(0, 0);
+    return date;
+  }
+
+  function combineDateAndTime(dateString, timeString) {
+    if (!dateString || !timeString) return null;
+    const base = parseLocalDateString(dateString);
+    if (!base) return null;
+    const [hours, minutes] = timeString.split(":").map(Number);
+    base.setHours(hours || 0, minutes || 0, 0, 0);
+    return base;
+  }
+
+  const handleEdit = (customer, occurrenceDate, options = {}) => {
     setEditingId(customer._id);
+
+    const isOccurrenceEdit = Boolean(occurrenceDate);
+    let occurrence = isOccurrenceEdit ? normalizeDateValue(occurrenceDate) : null;
+    let originalOccurrence = options.originalStart ? normalizeDateValue(options.originalStart) : null;
+
+    if (!originalOccurrence && occurrence) {
+      originalOccurrence = new Date(occurrence.getTime());
+    }
+
+    if (!occurrence && isOccurrenceEdit) {
+      occurrence = customer.startFrom ? normalizeDateValue(customer.startFrom) : null;
+    }
+
+    if (originalOccurrence && occurrence) {
+      setOccurrenceContext({
+        originalStart: originalOccurrence.toISOString(),
+      });
+    } else {
+      setOccurrenceContext(null);
+    }
+
+    const startReference =
+      occurrence || (customer.startFrom ? new Date(customer.startFrom) : new Date());
+    const startIso = startReference.toISOString().slice(0, 10);
+    const derivedTime = isOccurrenceEdit
+      ? formatTimeValue(occurrence || new Date(startReference))
+      : normalizeTimeString(customer.timeOfDay, "09:00");
+    const derivedWeekday = occurrence ? ((occurrence.getDay() + 7) % 7) : customer.weekday ?? 1;
+    const effectiveBarber = options.overrideBarber || customer.barber || "ΛΕΜΟ";
+    const effectiveDuration = options.overrideDuration ?? customer.durationMin ?? 40;
+
     setFormState({
       customerName: customer.customerName || "",
       phoneNumber: customer.phoneNumber || "",
-      barber: customer.barber || "ΛΕΜΟ",
-      weekday: customer.weekday ?? 1,
-      timeOfDay: customer.timeOfDay || "09:00",
-      durationMin: customer.durationMin ?? 40,
+      barber: effectiveBarber,
+      weekday: derivedWeekday,
+      timeOfDay: derivedTime,
+      durationMin: effectiveDuration,
       cadenceWeeks: customer.cadenceWeeks ?? 1,
-      startFrom: toDateInput(customer.startFrom) || new Date().toISOString().slice(0, 10),
+      startFrom: startIso,
       until: toDateInput(customer.until),
       maxOccurrences: customer.maxOccurrences ? String(customer.maxOccurrences) : "",
     });
@@ -135,14 +401,36 @@ const AutoCustomersPage = () => {
   };
 
   const handleDelete = async (customer) => {
-    if (!window.confirm(`Διαγραφή ${customer.customerName};`)) return;
+    const confirmed = await MySwal.fire({
+      title: "Είστε σίγουρος;",
+      text: `Θα αφαιρεθεί ο επαναλαμβανόμενος πελάτης ${customer.customerName}.`,
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#a78bfa",
+      cancelButtonColor: "#64748b",
+      confirmButtonText: "Ναι, διαγραφή!",
+      cancelButtonText: "Ακύρωση",
+    });
+
+    if (!confirmed.isConfirmed) return;
+
     try {
       await deleteAutoCustomer(customer._id);
-      toast.success("Ο πελάτης αφαιρέθηκε.");
+      MySwal.fire({
+        title: "✅ Διαγραφή",
+        text: "Ο επαναλαμβανόμενος πελάτης αφαιρέθηκε με επιτυχία.",
+        icon: "success",
+        timer: 1600,
+        showConfirmButton: false,
+      });
       loadCustomers();
     } catch (error) {
       console.error(error);
-      toast.error(error.message || "Αποτυχία διαγραφής.");
+      MySwal.fire({
+        title: "Σφάλμα",
+        text: error.message || "Αποτυχία διαγραφής.",
+        icon: "error",
+      });
     }
   };
 
@@ -159,24 +447,28 @@ const AutoCustomersPage = () => {
     });
   };
 
-const timeStringToDate = (timeString) => {
-  if (!timeString) return null;
-  const [hours, minutes] = timeString.split(":").map(Number);
-  const date = new Date();
-  date.setHours(hours, minutes || 0, 0, 0);
-  return date;
-};
+  function timeStringToDate(timeString) {
+    if (!timeString) return null;
+    const [hours, minutes] = timeString.split(":").map(Number);
+    const date = new Date(1970, 0, 1, hours || 0, minutes || 0, 0, 0);
+    return date;
+  }
 
-const formatTimeValue = (date) => {
-  if (!date) return "";
-  return date.toLocaleTimeString("el-GR", {
-    hour12: false,
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-};
+  function formatTimeValue(date) {
+    if (!date) return "";
+    const hours = String(date.getHours()).padStart(2, "0");
+    const minutes = String(date.getMinutes()).padStart(2, "0");
+    return `${hours}:${minutes}`;
+  }
 
   const parseFormPayload = () => {
+    const untilIso = toUtcIsoFromLocalDate(formState.until);
+    let maxOccurrencesValue = formState.maxOccurrences ? Number(formState.maxOccurrences) : undefined;
+
+    if ((!maxOccurrencesValue || Number.isNaN(maxOccurrencesValue)) && !untilIso) {
+      maxOccurrencesValue = 5;
+    }
+
     const payload = {
       customerName: formState.customerName.trim(),
       phoneNumber: formState.phoneNumber.trim(),
@@ -185,15 +477,45 @@ const formatTimeValue = (date) => {
       timeOfDay: formState.timeOfDay,
       durationMin: Number(formState.durationMin) || 40,
       cadenceWeeks: Number(formState.cadenceWeeks) || 1,
-      startFrom: formState.startFrom ? new Date(formState.startFrom).toISOString() : undefined,
-      until: formState.until ? new Date(formState.until).toISOString() : undefined,
-      maxOccurrences: formState.maxOccurrences ? Number(formState.maxOccurrences) : undefined,
+      startFrom: toUtcIsoFromLocalDate(formState.startFrom),
+      until: untilIso,
+      maxOccurrences: maxOccurrencesValue,
     };
     return payload;
   };
 
   const handleFormSubmit = async (e) => {
     e.preventDefault();
+
+      if (occurrenceContext && editingId) {
+        const originalDate = normalizeDateValue(occurrenceContext.originalStart);
+        const targetDate = combineDateAndTime(formState.startFrom, formState.timeOfDay);
+
+        if (!originalDate || !targetDate) {
+          toast.error("Η ημερομηνία και η ώρα είναι υποχρεωτικές για την ενημέρωση.");
+          return;
+        }
+
+        try {
+          await overrideAutoCustomerOccurrence(editingId, {
+            occurrence: originalDate.toISOString(),
+            overrideStart: targetDate.toISOString(),
+            durationMin: Number(formState.durationMin) || 40,
+            barber: formState.barber,
+          });
+          toast.success("Η εμφάνιση ενημερώθηκε μόνο για αυτή την ημερομηνία.");
+          setFormOpen(false);
+          setEditingId(null);
+          setOccurrenceContext(null);
+        setFormState(emptyForm);
+        loadCustomers();
+      } catch (error) {
+        console.error(error);
+        toast.error(error.message || "Αποτυχία ενημέρωσης εμφάνισης.");
+      }
+      return;
+    }
+
     const payload = parseFormPayload();
 
     if (!payload.customerName || !payload.phoneNumber) {
@@ -211,6 +533,7 @@ const formatTimeValue = (date) => {
       }
       setFormOpen(false);
       setEditingId(null);
+      setOccurrenceContext(null);
       setFormState(emptyForm);
       loadCustomers();
     } catch (error) {
@@ -229,6 +552,8 @@ const formatTimeValue = (date) => {
       if (formOpen && formRef.current && !formRef.current.contains(target)) {
         setFormOpen(false);
         setEditingId(null);
+        setOccurrenceContext(null);
+        setFormState(emptyForm);
       }
 
       if (pushOpen && pushRef.current && !pushRef.current.contains(target)) {
@@ -250,14 +575,11 @@ const formatTimeValue = (date) => {
 
     try {
       const payload = {
-        from: pushState.from,
-        to: pushState.to || undefined,
+        from: toUtcIsoFromLocalDate(pushState.from),
+        to: pushState.to ? toUtcIsoFromLocalDate(pushState.to) : undefined,
         dryRun: false,
       };
-      const response = await pushAutoCustomers(payload);
-      const data = response?.data || response;
-
-      setPushResult(data || null);
+      await pushAutoCustomers(payload);
       toast.success("Οι επαναλαμβανόμενοι πελάτες προστέθηκαν.");
 
       loadCustomers();
@@ -270,39 +592,38 @@ const formatTimeValue = (date) => {
 
   return (
     <div className="h-full overflow-y-auto text-gray-100">
-      <div className="max-w-7xl mx-auto space-y-6">
+      <div className="max-w-7xl mx-auto space-y-6 px-4 sm:px-6 lg:px-8 py-6">
         <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <div>
+          <div className="space-y-1">
             <h1 className="text-2xl font-bold">Επαναλαμβανόμενοι Πελάτες</h1>
             <p className="text-sm text-gray-400">
               Διαχειριστείτε τις επαναλαμβανόμενες κρατήσεις και δημιουργήστε ραντεβού μαζικά.
             </p>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2 w-full sm:w-auto">
             <button
               onClick={handleOpenCreate}
-              className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg transition"
+              className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg transition w-full sm:w-auto"
             >
               Νέος Πελάτης
             </button>
             <button
               onClick={() => {
                 setPushOpen(true);
-                setPushResult(null);
               }}
-              className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition"
+              className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition w-full sm:w-auto"
             >
               Push στο Ημερολόγιο
             </button>
           </div>
         </header>
 
-        <section className="bg-gray-800 border border-gray-700 rounded-xl shadow-lg p-4">
+        <section className="bg-gray-800 border border-gray-700 rounded-xl shadow-lg p-3 sm:p-4">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold">Λίστα Πελατών</h2>
           </div>
 
-          <div className="overflow-x-auto">
+          <div className="hidden sm:block overflow-x-auto">
             <table className="min-w-full text-left text-sm">
               <thead className="bg-gray-700 text-gray-200 uppercase text-xs">
                 <tr>
@@ -379,73 +700,50 @@ const formatTimeValue = (date) => {
           </div>
         </section>
 
-        {pushResult && (
-          <section className="bg-gray-800 border border-gray-700 rounded-xl shadow-lg p-4">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold">Περίληψη Δημιουργίας</h2>
-              <div className="text-sm text-gray-400">
-                Περίοδος: {" "}
-                <span className="text-gray-200">
-                  {new Date(pushResult.range.from).toLocaleDateString("el-GR")} &rarr; {" "}
-                  {new Date(pushResult.range.to).toLocaleDateString("el-GR")}
-                </span>
+        <section className="rounded-xl">
+          <div className="flex flex-col gap-3 mb-4 px-1 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-2 text-lg font-semibold text-gray-100">
+              <CalendarClock size={18} className="text-purple-300" />
+              Προβολή στο Ημερολόγιο
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs text-gray-400 sm:hidden">Υπολογισμοί βασισμένοι στους αποθηκευμένους πελάτες</span>
+              <span className="hidden text-xs text-gray-400 sm:inline">Υπολογισμοί βασισμένοι στους αποθηκευμένους πελάτες</span>
+              <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => shiftCalendar(-4)}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-gray-600 text-gray-200 hover:bg-gray-700"
+                aria-label="Προηγούμενη εβδομάδα"
+              >
+                  <ChevronLeft size={18} />
+                </button>
+                <button
+                  type="button"
+                  onClick={resetCalendarStart}
+                  className="rounded-full border border-purple-500 px-3 py-1 text-xs uppercase tracking-wide text-purple-200 hover:bg-purple-600/20"
+                >
+                  Σήμερα
+                </button>
+              <button
+                type="button"
+                onClick={() => shiftCalendar(4)}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-gray-600 text-gray-200 hover:bg-gray-700"
+                aria-label="Επόμενη εβδομάδα"
+              >
+                  <ChevronRight size={18} />
+                </button>
               </div>
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
-              <Metric label="Σύνολο" value={pushResult.totals.attempted} />
-              <Metric label="Νέα" value={pushResult.totals.inserted} highlight />
-              <Metric label="Μετακινήσεις" value={pushResult.totals.moved} />
-              <Metric label="Παραλείφθηκαν" value={pushResult.totals.skipped} />
-              <Metric label="Υπήρχαν ήδη" value={pushResult.totals.existing} />
-              <Metric label="SMS Εστάλησαν" value={pushResult.totals.smsSent} />
-              <Metric label="SMS Απέτυχαν" value={pushResult.totals.smsFailed} />
-              <Metric label="SMS Παραλείφθηκαν" value={pushResult.totals.smsSkipped} />
-            </div>
-
-            {pushResult.summary && pushResult.summary.length > 0 && (
-              <div className="mt-4 overflow-x-auto">
-                <table className="min-w-full text-left text-sm">
-                  <thead className="bg-gray-700 text-gray-200 uppercase text-xs">
-                    <tr>
-                      <th className="px-3 py-2">Πελάτης</th>
-                      <th className="px-3 py-2">Barber</th>
-                      <th className="px-3 py-2">Προγραμματισμένο</th>
-                      <th className="px-3 py-2">Κατάσταση</th>
-                      <th className="px-3 py-2">Μετατόπιση</th>
-                      <th className="px-3 py-2">SMS</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {pushResult.summary.map((item, idx) => (
-                      <tr key={`${item.autoCustomerId || "unknown"}_${idx}`} className="border-t border-gray-700">
-                        <td className="px-3 py-2">
-                          <div className="font-medium text-gray-100">{item.customerName || "-"}</div>
-                        </td>
-                        <td className="px-3 py-2">{item.barber}</td>
-                        <td className="px-3 py-2 text-xs text-gray-300">
-                          {item.scheduledFor
-                            ? new Date(item.scheduledFor).toLocaleString("el-GR", {
-                                timeZone: "Europe/Athens",
-                              })
-                            : "-"}
-                        </td>
-                        <td className="px-3 py-2 capitalize">
-                          <StatusBadge status={item.status} />
-                        </td>
-                        <td className="px-3 py-2 text-xs text-gray-300">
-                          {item.shiftMinutes ? `+${item.shiftMinutes}’` : "-"}
-                        </td>
-                        <td className="px-3 py-2 text-xs text-gray-300">
-                          {item.smsStatus || "-"}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </section>
-        )}
+          </div>
+          <div className="h-[520px]">
+            <AutoCustomersCalendar
+              events={calendarEvents}
+              startDate={calendarStart}
+              onEdit={handleCalendarEdit}
+            />
+          </div>
+        </section>
       </div>
 
       {/* Form Modal */}
@@ -469,6 +767,19 @@ const formatTimeValue = (date) => {
                 &times;
               </button>
             </div>
+            {occurrenceContext && (
+              <div className="mb-4 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+                Η αλλαγή ημερομηνίας/ώρας θα εφαρμοστεί μόνο στο ραντεβού της{" "}
+                {new Date(occurrenceContext.originalStart).toLocaleString("el-GR", {
+                  day: "2-digit",
+                  month: "2-digit",
+                  year: "numeric",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
+                . Οι υπόλοιπες εμφανίσεις θα παραμείνουν ως έχουν.
+              </div>
+            )}
             <form className="grid grid-cols-1 sm:grid-cols-2 gap-4" onSubmit={handleFormSubmit}>
               <label className="flex flex-col text-sm gap-1">
                 Όνομα Πελάτη
@@ -530,7 +841,12 @@ const formatTimeValue = (date) => {
                 Ώρα
                 <DatePicker
                   selected={timeStringToDate(formState.timeOfDay)}
-                  onChange={(date) => handleFormChange("timeOfDay", formatTimeValue(date))}
+                  onChange={(date) =>
+                    handleFormChange(
+                      "timeOfDay",
+                      date ? formatTimeValue(new Date(date.getTime())) : formState.timeOfDay
+                    )
+                  }
                   showTimeSelect
                   showTimeSelectOnly
                   timeIntervals={5}
@@ -544,7 +860,6 @@ const formatTimeValue = (date) => {
                   timeClassName={() => "!bg-[#181a23] !text-[#ede9fe] !border-b !border-[#1f1f2d]"}
                   required
                 />
-                <span className="text-xs text-gray-500">Εμφανίζεται ως π.μ. / μ.μ.</span>
               </label>
               <label className="flex flex-col text-sm gap-1">
                 Διάρκεια (λεπτά)
@@ -577,21 +892,26 @@ const formatTimeValue = (date) => {
                   type="number"
                   min={1}
                   max={52}
-                  placeholder="π.χ. 5"
+                  list="preset-occurrences"
+                  placeholder="Επιλέξτε ή πληκτρολογήστε"
                   className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                   value={formState.maxOccurrences}
                   onChange={(e) => handleFormChange("maxOccurrences", e.target.value)}
                 />
-                <span className="text-xs text-gray-500">
-                  Αφήστε το κενό για απεριόριστη δημιουργία (μέχρι την ημερομηνία λήξης).
-                </span>
+                <datalist id="preset-occurrences">
+                  <option value="1">1</option>
+                  <option value="5">5</option>
+                  <option value="10">10</option>
+                  <option value="20">20</option>
+                </datalist>
+
               </label>
               <label className="flex flex-col text-sm gap-1">
                 Έναρξη
                 <DatePicker
-                  selected={formState.startFrom ? new Date(formState.startFrom) : null}
+                  selected={formState.startFrom ? parseLocalDateString(formState.startFrom) : null}
                   onChange={(date) =>
-                    handleFormChange("startFrom", date ? date.toISOString().slice(0, 10) : "")
+                    handleFormChange("startFrom", date ? toLocalDateString(date) : "")
                   }
                   dateFormat="dd/MM/yyyy"
                   locale="el"
@@ -604,9 +924,9 @@ const formatTimeValue = (date) => {
               <label className="flex flex-col text-sm gap-1">
                 Λήξη (προαιρετικό)
                 <DatePicker
-                  selected={formState.until ? new Date(formState.until) : null}
+                  selected={formState.until ? parseLocalDateString(formState.until) : null}
                   onChange={(date) =>
-                    handleFormChange("until", date ? date.toISOString().slice(0, 10) : "")
+                    handleFormChange("until", date ? toLocalDateString(date) : "")
                   }
                   dateFormat="dd/MM/yyyy"
                   locale="el"
@@ -623,6 +943,8 @@ const formatTimeValue = (date) => {
                   onClick={() => {
                     setFormOpen(false);
                     setEditingId(null);
+                    setOccurrenceContext(null);
+                    setFormState(emptyForm);
                   }}
                   className="px-4 py-2 rounded-lg border border-gray-600 text-gray-300 hover:bg-gray-800"
                 >
@@ -659,12 +981,12 @@ const formatTimeValue = (date) => {
             <form className="space-y-4" onSubmit={handlePushSubmit}>
               <label className="flex flex-col text-sm gap-1">
                 Από
-                <DatePicker
-                  selected={pushState.from ? new Date(pushState.from) : null}
+              <DatePicker
+                  selected={pushState.from ? parseLocalDateString(pushState.from) : null}
                   onChange={(date) =>
                     setPushState((prev) => ({
                       ...prev,
-                      from: date ? date.toISOString().slice(0, 10) : "",
+                      from: date ? toLocalDateString(date) : "",
                     }))
                   }
                   dateFormat="dd/MM/yyyy"
@@ -678,12 +1000,12 @@ const formatTimeValue = (date) => {
               </label>
               <label className="flex flex-col text-sm gap-1">
                 Έως (προαιρετικό)
-                <DatePicker
-                  selected={pushState.to ? new Date(pushState.to) : null}
+              <DatePicker
+                  selected={pushState.to ? parseLocalDateString(pushState.to) : null}
                   onChange={(date) =>
                     setPushState((prev) => ({
                       ...prev,
-                      to: date ? date.toISOString().slice(0, 10) : "",
+                      to: date ? toLocalDateString(date) : "",
                     }))
                   }
                   dateFormat="dd/MM/yyyy"
@@ -715,31 +1037,6 @@ const formatTimeValue = (date) => {
         </div>
       )}
     </div>
-  );
-};
-
-const Metric = ({ label, value, highlight = false }) => (
-  <div
-    className={`p-3 rounded-lg border ${
-      highlight ? "border-emerald-500 bg-emerald-500/10 text-emerald-100" : "border-gray-700"
-    }`}
-  >
-    <div className="text-xs uppercase text-gray-400">{label}</div>
-    <div className="text-lg font-semibold text-gray-100">{value ?? 0}</div>
-  </div>
-);
-
-const StatusBadge = ({ status }) => {
-  const styles = {
-    inserted: "bg-emerald-600",
-    moved: "bg-amber-500",
-    skipped: "bg-rose-600",
-    existing: "bg-indigo-600",
-  };
-  return (
-    <span className={`px-2 py-1 rounded text-xs ${styles[status] || "bg-gray-600"}`}>
-      {status}
-    </span>
   );
 };
 

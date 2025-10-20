@@ -81,6 +81,25 @@ const autoCustomerSchema = new mongoose.Schema(
     lastPushedAt: {
       type: Date,
     },
+    skippedOccurrences: {
+      type: [Date],
+      default: [],
+    },
+    occurrenceOverrides: [
+      {
+        originalStart: { type: Date, required: true },
+        overrideStart: { type: Date, required: true },
+        durationMin: {
+          type: Number,
+          min: 5,
+          max: 600,
+        },
+        barber: {
+          type: String,
+          enum: VALID_BARBERS,
+        },
+      },
+    ],
   },
   {
     timestamps: true,

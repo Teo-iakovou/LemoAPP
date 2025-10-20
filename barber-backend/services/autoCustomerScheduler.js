@@ -28,11 +28,14 @@ const computeBaseOccurrence = (customer) => {
   const [hour, minute] = (customer.timeOfDay || "09:00").split(":").map(Number);
 
   const startFrom = customer.startFrom
-    ? toMoment(customer.startFrom)
+    ? moment(customer.startFrom).tz(TZ)
     : moment.tz(TZ);
+  startFrom.startOf("day");
 
   let base = startFrom.clone().hour(hour).minute(minute).second(0).millisecond(0);
-  const targetWeekday = Number(customer.weekday ?? base.day());
+  const targetWeekday = Number.isFinite(Number(customer.weekday))
+    ? Number(customer.weekday)
+    : base.day();
 
   const currentWeekday = base.day();
   const diff = (targetWeekday - currentWeekday + 7) % 7;
@@ -211,15 +214,47 @@ const generateAutoAppointments = async ({
     if (!customer.timeOfDay) continue;
 
     const cadence = customer.cadenceWeeks || 1;
-    const duration = customer.durationMin || 40;
+    const defaultDuration = customer.durationMin || 40;
     const untilMoment = customer.until ? toMoment(customer.until).endOf("day") : null;
-    const maxOccurrences = customer.maxOccurrences && Number(customer.maxOccurrences) > 0
+    let maxOccurrences = customer.maxOccurrences && Number(customer.maxOccurrences) > 0
       ? Number(customer.maxOccurrences)
       : null;
+    if (!untilMoment && (!maxOccurrences || !Number.isFinite(maxOccurrences))) {
+      maxOccurrences = 5;
+    }
     let generatedForCustomer = 0;
 
+    const skippedSet = new Set(
+      (customer.skippedOccurrences || [])
+        .map((value) => toMoment(value))
+        .filter((momentDate) => momentDate && momentDate.isValid())
+        .map((momentDate) => momentDate.valueOf())
+    );
+
+    const overrideMap = new Map(
+      (customer.occurrenceOverrides || [])
+        .map((entry) => {
+          const original = entry.originalStart ? toMoment(entry.originalStart) : null;
+          const overrideStart = entry.overrideStart ? toMoment(entry.overrideStart) : null;
+          if (!original || !overrideStart || !original.isValid() || !overrideStart.isValid()) {
+            return null;
+          }
+          return [
+            original.startOf("minute").valueOf(),
+            {
+              overrideStart: overrideStart.startOf("minute"),
+              durationMin: entry.durationMin,
+              barber: entry.barber,
+            },
+          ];
+        })
+        .filter(Boolean)
+    );
+
     let occurrence = computeBaseOccurrence(customer);
-    const startBoundary = customer.startFrom ? toMoment(customer.startFrom) : fromMoment.clone();
+    const startBoundary = customer.startFrom
+      ? moment(customer.startFrom).tz(TZ).startOf("day")
+      : fromMoment.clone();
     const minStart = moment.max(fromMoment, startBoundary);
 
     while (occurrence.isBefore(minStart)) {
@@ -230,34 +265,43 @@ const generateAutoAppointments = async ({
       if (untilMoment && occurrence.isAfter(untilMoment)) break;
       if (maxOccurrences && generatedForCustomer >= maxOccurrences) break;
 
-      totals.attempted += 1;
-      const occurrenceKey = customerId ? `${customerId}_${occurrence.valueOf()}` : null;
+      const occurrenceValue = occurrence.valueOf();
 
-      if (occurrenceKey && existingAutoSet.has(occurrenceKey)) {
+      if (skippedSet.has(occurrenceValue)) {
         summary.push({
           autoCustomerId: customerId,
           customerName: customer.customerName,
           barber: customer.barber,
           scheduledFor: occurrence.toISOString(),
-          status: "existing",
-          reason: "already-created",
+          status: "skipped",
+          reason: "manual-skip",
           shiftMinutes: 0,
           smsStatus: "n/a",
         });
-        totals.existing += 1;
+        totals.skipped += 1;
         occurrence = occurrence.clone().add(cadence, "weeks");
         continue;
       }
 
-      const scheduleForBarber = scheduleMap.get(customer.barber) || [];
+      const overrideEntry = overrideMap.get(occurrenceValue);
+      const desiredStart = overrideEntry
+        ? overrideEntry.overrideStart.clone()
+        : occurrence.clone();
+      const targetBarber = overrideEntry?.barber || customer.barber;
+      const duration = overrideEntry?.durationMin || defaultDuration;
+
+      const shiftCandidates = overrideEntry ? [0] : SHIFT_OPTIONS;
+
+      totals.attempted += 1;
+      const scheduleForBarber = scheduleMap.get(targetBarber) || [];
       let matchedStart = null;
       let appliedShift = 0;
-      let reason = "conflict";
+      let reason = overrideEntry ? "override-conflict" : "conflict";
 
-      for (const shiftMin of SHIFT_OPTIONS) {
-        const candidateStart = occurrence.clone().add(shiftMin, "minutes");
+      for (const shiftMin of shiftCandidates) {
+        const candidateStart = desiredStart.clone().add(shiftMin, "minutes");
 
-        if (candidateStart.day() !== occurrence.day()) {
+        if (!overrideEntry && candidateStart.day() !== occurrence.day()) {
           continue;
         }
         if (candidateStart.isAfter(toMomentRange)) continue;
@@ -286,11 +330,28 @@ const generateAutoAppointments = async ({
         continue;
       }
 
+      const finalKey = customerId ? `${customerId}_${matchedStart.valueOf()}` : null;
+
+      if (finalKey && existingAutoSet.has(finalKey)) {
+        summary.push({
+          autoCustomerId: customerId,
+          customerName: customer.customerName,
+          barber: targetBarber,
+          scheduledFor: matchedStart.toISOString(),
+          status: "existing",
+          reason: overrideEntry ? "override-already-created" : "already-created",
+          shiftMinutes: appliedShift,
+          smsStatus: "n/a",
+        });
+        totals.existing += 1;
+        occurrence = occurrence.clone().add(cadence, "weeks");
+        continue;
+      }
+
       if (customerId) {
-        const finalKey = `${customerId}_${matchedStart.valueOf()}`;
         existingAutoSet.add(finalKey);
       }
-      addEventToSchedule(scheduleMap, customer.barber, matchedStart.clone(), duration);
+      addEventToSchedule(scheduleMap, targetBarber, matchedStart.clone(), duration);
       if (customerId) {
         touchedCustomers.add(customerId);
       }
@@ -301,7 +362,7 @@ const generateAutoAppointments = async ({
         const appointment = new Appointment({
           customerName: customer.customerName,
           phoneNumber: customer.phoneNumber,
-          barber: customer.barber,
+          barber: targetBarber,
           appointmentDateTime: matchedStart.clone().toDate(),
           endTime: appointmentEnd,
           duration,
@@ -317,6 +378,7 @@ const generateAutoAppointments = async ({
             cadenceWeeks: cadence,
             originalPlannedTime: occurrence.toISOString(),
             shiftMinutes: appliedShift,
+            overrideApplied: Boolean(overrideEntry),
           },
         });
 
@@ -332,11 +394,17 @@ const generateAutoAppointments = async ({
         summary.push({
           autoCustomerId: customerId,
           customerName: customer.customerName,
-          barber: customer.barber,
+          barber: targetBarber,
           scheduledFor: matchedStart.toISOString(),
           status: appliedShift === 0 ? "inserted" : "moved",
           shiftMinutes: appliedShift,
-          reason: appliedShift === 0 ? "scheduled" : `shifted-by-${appliedShift}`,
+          reason: overrideEntry
+            ? appliedShift === 0
+              ? "override-scheduled"
+              : `override-shifted-by-${appliedShift}`
+            : appliedShift === 0
+            ? "scheduled"
+            : `shifted-by-${appliedShift}`,
           smsStatus: "dry-run",
         });
       }

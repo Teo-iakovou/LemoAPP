@@ -288,6 +288,32 @@ export const undoAutoCustomerBatch = async (batchId, reason) => {
   return res.json();
 };
 
+export const overrideAutoCustomerOccurrence = async (id, payload) => {
+  const res = await fetch(`${API_BASE_URL}/auto-customers/${id}/occurrences/override`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({}));
+    throw new Error(error.message || "Failed to override occurrence.");
+  }
+  return res.json();
+};
+
+export const skipAutoCustomerOccurrence = async (id, payload) => {
+  const res = await fetch(`${API_BASE_URL}/auto-customers/${id}/occurrences/skip`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({}));
+    throw new Error(error.message || "Failed to skip occurrence.");
+  }
+  return res.json();
+};
+
 // Remove a customer from the waiting list
 export async function removeFromWaitingList(id) {
   const response = await fetch(`${API_BASE_URL}/waitingList/${id}`, {

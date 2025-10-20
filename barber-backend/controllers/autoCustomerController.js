@@ -33,6 +33,14 @@ const parseDateInput = (value) => {
   return Number.isNaN(date.getTime()) ? undefined : date;
 };
 
+const normalizeDateToMinute = (value) => {
+  if (!value) return null;
+  const date = value instanceof Date ? new Date(value) : new Date(String(value));
+  if (Number.isNaN(date.getTime())) return null;
+  date.setSeconds(0, 0);
+  return date;
+};
+
 const buildPayload = (body, { partial = false } = {}) => {
   const errors = [];
   const payload = {};
@@ -248,6 +256,175 @@ const deleteAutoCustomer = async (req, res, next) => {
   }
 };
 
+const overrideAutoCustomerOccurrence = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { occurrence, overrideStart, durationMin, barber } = req.body || {};
+
+    const originalMoment = normalizeDateToMinute(occurrence);
+    const overrideMoment = normalizeDateToMinute(overrideStart);
+
+    if (!originalMoment) {
+      return res.status(400).json({ success: false, message: "A valid occurrence datetime is required." });
+    }
+    if (!overrideMoment) {
+      return res.status(400).json({ success: false, message: "A valid override datetime is required." });
+    }
+
+    const autoCustomer = await AutoCustomer.findById(id);
+    if (!autoCustomer) {
+      return res.status(404).json({ success: false, message: "Auto customer not found." });
+    }
+
+    const originalTs = originalMoment.getTime();
+    const overrideTs = overrideMoment.getTime();
+
+    let overrideDuration = undefined;
+    if (durationMin !== undefined) {
+      const parsedDuration = Number(durationMin);
+      if (!Number.isFinite(parsedDuration) || parsedDuration < 5 || parsedDuration > 600) {
+        return res.status(400).json({
+          success: false,
+          message: "durationMin must be between 5 and 600 minutes.",
+        });
+      }
+      overrideDuration = parsedDuration;
+    }
+
+    let overrideBarber = undefined;
+    if (barber !== undefined) {
+      const normalizedBarber = String(barber).trim().toUpperCase();
+      if (!VALID_BARBERS.has(normalizedBarber)) {
+        return res.status(400).json({
+          success: false,
+          message: "Barber must be one of ΛΕΜΟ or ΦΟΡΟΥ.",
+        });
+      }
+      overrideBarber = normalizedBarber;
+    }
+
+    autoCustomer.skippedOccurrences = (autoCustomer.skippedOccurrences || [])
+      .map((value) => normalizeDateToMinute(value))
+      .filter((date) => date && date.getTime() !== originalTs)
+      .map((date) => (date ? new Date(date.getTime()) : null))
+      .filter(Boolean);
+
+    const overrides = (autoCustomer.occurrenceOverrides || []).map((entry) => ({
+      ...entry,
+      originalStart: normalizeDateToMinute(entry.originalStart),
+      overrideStart: normalizeDateToMinute(entry.overrideStart),
+      durationMin: entry.durationMin,
+      barber: entry.barber,
+    }));
+
+    const existingIndex = overrides.findIndex(
+      (entry) => entry.originalStart && entry.originalStart.getTime() === originalTs
+    );
+
+    if (originalTs === overrideTs) {
+      if (existingIndex >= 0) {
+        overrides.splice(existingIndex, 1);
+      }
+    } else if (existingIndex >= 0) {
+      overrides[existingIndex].overrideStart = overrideMoment;
+      if (overrideDuration !== undefined) {
+        overrides[existingIndex].durationMin = overrideDuration;
+      }
+      if (overrideBarber !== undefined) {
+        overrides[existingIndex].barber = overrideBarber;
+      }
+    } else {
+      overrides.push({
+        originalStart: originalMoment,
+        overrideStart: overrideMoment,
+        durationMin: overrideDuration,
+        barber: overrideBarber,
+      });
+    }
+
+    autoCustomer.occurrenceOverrides = overrides
+      .filter((entry) => entry.originalStart && entry.overrideStart)
+      .map((entry) => ({
+        originalStart: new Date(entry.originalStart.getTime()),
+        overrideStart: new Date(entry.overrideStart.getTime()),
+        durationMin: entry.durationMin !== undefined ? entry.durationMin : undefined,
+        barber: entry.barber,
+      }));
+
+    autoCustomer.updatedBy = req.user?._id || autoCustomer.updatedBy;
+
+    autoCustomer.markModified("occurrenceOverrides");
+    autoCustomer.markModified("skippedOccurrences");
+
+    await autoCustomer.save();
+
+    res.json({ success: true, data: autoCustomer });
+  } catch (error) {
+    console.error("Error overriding auto customer occurrence:", error);
+    next(error);
+  }
+};
+
+const skipAutoCustomerOccurrence = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { occurrence } = req.body || {};
+
+    const originalMoment = normalizeDateToMinute(occurrence);
+    if (!originalMoment) {
+      return res.status(400).json({ success: false, message: "A valid occurrence datetime is required." });
+    }
+
+    const autoCustomer = await AutoCustomer.findById(id);
+    if (!autoCustomer) {
+      return res.status(404).json({ success: false, message: "Auto customer not found." });
+    }
+
+    const originalTs = originalMoment.getTime();
+
+    const skippedSet = new Set(
+      (autoCustomer.skippedOccurrences || [])
+        .map((value) => normalizeDateToMinute(value))
+        .filter(Boolean)
+        .map((date) => date.getTime())
+    );
+    skippedSet.add(originalTs);
+
+    autoCustomer.skippedOccurrences = Array.from(skippedSet)
+      .sort((a, b) => a - b)
+      .map((timestamp) => new Date(timestamp));
+
+    autoCustomer.occurrenceOverrides = (autoCustomer.occurrenceOverrides || [])
+      .map((entry) => ({
+        ...entry,
+        originalStart: normalizeDateToMinute(entry.originalStart),
+        overrideStart: normalizeDateToMinute(entry.overrideStart),
+        durationMin: entry.durationMin,
+        barber: entry.barber,
+      }))
+      .filter((entry) => entry.originalStart && entry.originalStart.getTime() !== originalTs)
+      .filter((entry) => entry.originalStart && entry.overrideStart)
+      .map((entry) => ({
+        originalStart: new Date(entry.originalStart.getTime()),
+        overrideStart: new Date(entry.overrideStart.getTime()),
+        durationMin: entry.durationMin,
+        barber: entry.barber,
+      }));
+
+    autoCustomer.updatedBy = req.user?._id || autoCustomer.updatedBy;
+
+    autoCustomer.markModified("occurrenceOverrides");
+    autoCustomer.markModified("skippedOccurrences");
+
+    await autoCustomer.save();
+
+    res.json({ success: true, data: autoCustomer });
+  } catch (error) {
+    console.error("Error skipping auto customer occurrence:", error);
+    next(error);
+  }
+};
+
 const pushAutoCustomers = async (req, res, next) => {
   try {
     const {
@@ -389,4 +566,6 @@ module.exports = {
   listGenerationBatches,
   getGenerationBatch,
   undoGenerationBatch,
+  overrideAutoCustomerOccurrence,
+  skipAutoCustomerOccurrence,
 };
