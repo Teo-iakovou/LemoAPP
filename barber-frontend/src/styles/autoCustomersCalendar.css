@@ -156,3 +156,9 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+@media (max-width: 640px) {
+  .auto-calendar-grid {
+    grid-template-columns: repeat(1, minmax(0, 1fr));
+  }
+}

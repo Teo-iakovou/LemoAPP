@@ -307,17 +307,6 @@ const AutoCustomersPage = () => {
     setCalendarStart(alignToMondayStart(new Date()));
   };
 
-  const handleCalendarEdit = (event) => {
-    const customer = customers.find((c) => c._id === event.autoCustomerId);
-    if (!customer) return;
-
-    handleEdit(customer, event.start, {
-      originalStart: event.originalStart,
-      overrideBarber: event.overrideBarber,
-      overrideDuration: event.overrideDuration,
-    });
-  };
-
   function normalizeDateValue(value) {
     if (!value) return null;
     if (value instanceof Date) {
@@ -698,21 +687,81 @@ const AutoCustomersPage = () => {
               </tbody>
             </table>
           </div>
+
+          <div className="sm:hidden space-y-3">
+            {loading ? (
+              <div className="rounded-xl border border-gray-700 bg-gray-900 p-4 text-center text-gray-400">
+                Φόρτωση...
+              </div>
+            ) : customers.length === 0 ? (
+              <div className="rounded-xl border border-gray-700 bg-gray-900 p-4 text-center text-gray-400">
+                Δεν υπάρχουν επαναλαμβανόμενοι πελάτες.
+              </div>
+            ) : (
+              customers.map((customer) => (
+                <article
+                  key={customer._id}
+                  className="rounded-xl border border-gray-700 bg-gray-900 p-4 space-y-3 shadow-inner"
+                >
+                  <div>
+                    <div className="text-base font-semibold text-gray-100">
+                      {customer.customerName}
+                    </div>
+                    <div className="text-xs text-gray-400">{customer.phoneNumber}</div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-gray-300">
+                    <span className="font-medium text-gray-400">Barber</span>
+                    <span>{customer.barber}</span>
+                    <span className="font-medium text-gray-400">Ημέρα</span>
+                    <span>
+                      {WEEKDAY_OPTIONS.find((opt) => opt.value === customer.weekday)?.label ||
+                        customer.weekday}
+                    </span>
+                    <span className="font-medium text-gray-400">Ώρα</span>
+                    <span>{customer.timeOfDay}</span>
+                    <span className="font-medium text-gray-400">Συχνότητα</span>
+                    <span>
+                      {CADENCE_OPTIONS.find((opt) => opt.value === customer.cadenceWeeks)?.label ||
+                        `${customer.cadenceWeeks} εβδομάδες`}
+                    </span>
+                    <span className="font-medium text-gray-400">Έναρξη</span>
+                    <span>{customer.startFrom ? toDateInput(customer.startFrom) : "-"}</span>
+                    <span className="font-medium text-gray-400">Λήξη</span>
+                    <span>{customer.until ? toDateInput(customer.until) : "-"}</span>
+                  </div>
+                  <div className="flex flex-col gap-2 pt-3">
+                    <button
+                      className="w-full bg-blue-500/15 text-blue-100 border border-blue-400/40 px-3 py-2 rounded-lg text-xs font-medium hover:bg-blue-500/25"
+                      onClick={() => handleEdit(customer)}
+                    >
+                      Επεξεργασία
+                    </button>
+                    <button
+                      className="w-full bg-rose-500/15 text-rose-100 border border-rose-400/40 px-3 py-2 rounded-lg text-xs font-medium hover:bg-rose-500/25"
+                      onClick={() => handleDelete(customer)}
+                    >
+                      Διαγραφή
+                    </button>
+                  </div>
+                </article>
+              ))
+            )}
+          </div>
         </section>
 
         <section className="rounded-xl">
           <div className="flex flex-col gap-3 mb-4 px-1 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-2 text-lg font-semibold text-gray-100">
+            <div className="flex items-center gap-2 text-base sm:text-lg font-semibold text-gray-100">
               <CalendarClock size={18} className="text-purple-300" />
               Προβολή στο Ημερολόγιο
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-xs text-gray-400 sm:hidden">Υπολογισμοί βασισμένοι στους αποθηκευμένους πελάτες</span>
               <span className="hidden text-xs text-gray-400 sm:inline">Υπολογισμοί βασισμένοι στους αποθηκευμένους πελάτες</span>
-              <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => shiftCalendar(-4)}
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => shiftCalendar(-4)}
                 className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-gray-600 text-gray-200 hover:bg-gray-700"
                 aria-label="Προηγούμενη εβδομάδα"
               >
@@ -737,11 +786,7 @@ const AutoCustomersPage = () => {
             </div>
           </div>
           <div className="h-[520px]">
-            <AutoCustomersCalendar
-              events={calendarEvents}
-              startDate={calendarStart}
-              onEdit={handleCalendarEdit}
-            />
+            <AutoCustomersCalendar events={calendarEvents} startDate={calendarStart} />
           </div>
         </section>
       </div>
