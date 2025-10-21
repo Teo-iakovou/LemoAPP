@@ -51,8 +51,9 @@ const createAppointment = async (req, res, next) => {
       return res.status(400).json({ error: "Appointment time is required." });
     }
 
-    // Ensure repeatCount does not exceed 5 (total occurrences)
-    const maxRepeat = Math.min(parseInt(repeatCount, 10) || 1, 5);
+    // Allow up to 10 total occurrences (first 5 confirmed immediately, remainder via follow-up SMS)
+    const requestedRepeat = parseInt(repeatCount, 10) || 1;
+    const maxRepeat = Math.min(requestedRepeat, 10);
     // Allow weekly interval up to 20 weeks
     const intervalWeeks = Math.min(parseInt(repeatInterval, 10) || 1, 20);
 
@@ -210,7 +211,7 @@ const createAppointment = async (req, res, next) => {
           ];
           const labels = allMoments.map((m) => m.format("DD/MM/YYYY HH:mm"));
 
-          const shouldSplit = (intervalWeeks === 10 || intervalWeeks === 20) && maxRepeat > 5;
+          const shouldSplit = maxRepeat > 5 && labels.length > 5;
           if (shouldSplit) {
             const firstHalf = labels.slice(0, 5);
             const secondHalf = labels.slice(5);

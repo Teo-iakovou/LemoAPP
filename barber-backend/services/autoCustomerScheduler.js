@@ -220,7 +220,7 @@ const generateAutoAppointments = async ({
       ? Number(customer.maxOccurrences)
       : null;
     if (!untilMoment && (!maxOccurrences || !Number.isFinite(maxOccurrences))) {
-      maxOccurrences = 5;
+      maxOccurrences = 10;
     }
     let generatedForCustomer = 0;
 
