@@ -135,6 +135,7 @@ const toDateInput = (value) => {
 const AutoCustomersPage = () => {
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [renewing, setRenewing] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
   const [formState, setFormState] = useState(emptyForm);
   const [editingId, setEditingId] = useState(null);
@@ -579,6 +580,81 @@ const AutoCustomersPage = () => {
     }
   };
 
+  const buildUpdatePayloadFromCustomer = (customer, startDate) => {
+    const timeOfDay = normalizeTimeString(customer.timeOfDay, "09:00");
+    const cadenceWeeks = Number(customer.cadenceWeeks) || 1;
+    const weekday = Number(customer.weekday ?? 1);
+    const untilIso = customer.until
+      ? toUtcIsoFromLocalDate(toDateInput(customer.until))
+      : undefined;
+    const maxOccurrencesValue = customer.maxOccurrences
+      ? Number(customer.maxOccurrences)
+      : undefined;
+
+    return {
+      customerName: customer.customerName || "",
+      phoneNumber: customer.phoneNumber || "",
+      barber: customer.barber || "ΛΕΜΟ",
+      weekday,
+      timeOfDay,
+      durationMin: Number(customer.durationMin) || 40,
+      cadenceWeeks,
+      startFrom: toUtcIsoFromLocalDate(toLocalDateString(startDate)),
+      until: untilIso,
+      maxOccurrences: Number.isFinite(maxOccurrencesValue) ? maxOccurrencesValue : undefined,
+    };
+  };
+
+  const handleRenewAll = async () => {
+    if (!Array.isArray(customers) || customers.length === 0) {
+      toast("Δεν υπάρχουν επαναλαμβανόμενοι πελάτες για ανανέωση.");
+      return;
+    }
+
+    setRenewing(true);
+    try {
+      const now = new Date();
+      const updates = customers
+        .filter((customer) => customer && customer._id)
+        .map(async (customer) => {
+          const cadence = Number(customer.cadenceWeeks) || 1;
+          const weekday = Number(customer.weekday ?? 1);
+          const timeString = normalizeTimeString(customer.timeOfDay, "09:00");
+          const [hours, minutes] = timeString.split(":").map(Number);
+
+          const today = new Date();
+          const midnight = new Date(
+            today.getFullYear(),
+            today.getMonth(),
+            today.getDate(),
+            0,
+            0,
+            0,
+            0
+          );
+          let nextDate = alignToWeekday(midnight, weekday);
+          const firstOccurrence = new Date(nextDate.getTime());
+          firstOccurrence.setHours(hours || 0, minutes || 0, 0, 0);
+
+          if (firstOccurrence <= now) {
+            nextDate = addWeeks(nextDate, cadence);
+          }
+
+          const payload = buildUpdatePayloadFromCustomer(customer, nextDate);
+          await updateAutoCustomer(customer._id, payload);
+        });
+
+      await Promise.all(updates);
+      toast.success("Οι επαναλαμβανόμενοι πελάτες ανανεώθηκαν από σήμερα.");
+      await loadCustomers();
+    } catch (error) {
+      console.error("Failed to renew auto customers", error);
+      toast.error(error?.message || "Αποτυχία ανανέωσης πελατών.");
+    } finally {
+      setRenewing(false);
+    }
+  };
+
   return (
     <div className="h-full overflow-y-auto text-gray-100">
       <div className="max-w-7xl mx-auto space-y-6 px-4 sm:px-6 lg:px-8 py-6">
@@ -595,6 +671,13 @@ const AutoCustomersPage = () => {
               className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg transition w-full sm:w-auto"
             >
               Νέος Πελάτης
+            </button>
+            <button
+              onClick={handleRenewAll}
+              disabled={renewing || loading}
+              className="bg-emerald-600 hover:bg-emerald-600/90 disabled:bg-gray-700 disabled:text-gray-400 text-white px-4 py-2 rounded-lg transition w-full sm:w-auto"
+            >
+              {renewing ? "Ανανέωση..." : "Ανανέωση"}
             </button>
             <button
               onClick={() => {
