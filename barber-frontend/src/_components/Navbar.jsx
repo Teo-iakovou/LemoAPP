@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   FaChartBar,
@@ -12,6 +12,7 @@ import {
   FaMoon,
   FaSun,
   FaRedoAlt,
+  FaLock,
 } from "react-icons/fa";
 import Swal from "sweetalert2";
 import withReactContent from "sweetalert2-react-content";
@@ -151,6 +152,15 @@ const Navbar = ({ isAuth, onLogout, calendarDark, onToggleCalendarDark }) => {
               title="Recurring Customers"
             >
               <FaRedoAlt />
+            </Link>
+          </li>
+          <li>
+            <Link
+              to="/bulk-locks"
+              className="hover:text-blue-500 transition-colors duration-300"
+              title="Μαζικά κλειδώματα"
+            >
+              <FaLock />
             </Link>
           </li>
           {/* Calendar theme toggle */}

@@ -387,6 +387,20 @@ export const createAppointment = async (appointmentData) => {
   return response.json();
 };
 
+export const deleteAppointment = async (appointmentId) => {
+  const response = await fetch(`${API_BASE_URL}/appointments/${appointmentId}`, {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.message || "Failed to delete appointment.");
+  }
+
+  return response.json();
+};
+
 export const fetchAllCustomerAppointments = async (customerId) => {
   try {
     const res = await fetch(

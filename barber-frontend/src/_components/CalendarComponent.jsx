@@ -44,6 +44,37 @@ const greekDays = [
   "Σάββατο",
 ];
 
+const getLockColor = (event) => {
+  if (event?.backgroundColor) return event.backgroundColor;
+  if (event?.barber === "ΛΕΜΟ") return "#dc2626";
+  if (event?.barber) return "#2563eb";
+  return "#9ca3af"; // fallback gray
+};
+
+const LockEvent = ({ event }) => {
+  const dotColor = getLockColor(event);
+
+  return (
+    <span
+      style={{
+        display: "inline-block",
+        width: "10px",
+        height: "10px",
+        borderRadius: "50%",
+        backgroundColor: dotColor,
+        margin: "3px",
+      }}
+    />
+  );
+};
+
+const CalendarEvent = ({ event, title }) =>
+  event.type === "lock" ? (
+    <LockEvent event={event} />
+  ) : (
+    <span className="block truncate leading-tight">{title}</span>
+  );
+
 const CalendarComponent = ({
   events,
   onSelectSlot,
@@ -53,21 +84,45 @@ const CalendarComponent = ({
 }) => {
   // Style for each event
   const eventStyleGetter = (event, start, end, isSelected) => {
+    const baseStyle = {
+      borderRadius: "5px",
+      border: "none",
+      ...(isSelected && { boxShadow: "0 0 5px 2px rgba(0, 0, 0, 0.3)" }),
+    };
+
+    if (event.type === "lock") {
+      return {
+        style: {
+          ...baseStyle,
+          backgroundColor: "transparent",
+          color: "transparent",
+          boxShadow: "none",
+          padding: 0,
+          width: "18px",
+          minWidth: "18px",
+          maxWidth: "18px",
+          height: "18px",
+          minHeight: "18px",
+          maxHeight: "18px",
+          display: "flex",
+          alignItems: "flex-start",
+          justifyContent: "flex-start",
+          overflow: "visible",
+        },
+      };
+    }
+
     let backgroundColor;
     if (event.type === "break") {
       backgroundColor = event.barber === "ΛΕΜΟ" ? "#34D399" : "#0ea5e9";
-    } else if (event.type === "lock") {
-      backgroundColor = event.barber === "ΛΕΜΟ" ? "#dc2626" : "#2563eb";
     } else {
       backgroundColor = event.barber === "ΛΕΜΟ" ? "#6B21A8" : "orange";
     }
     return {
       style: {
+        ...baseStyle,
         backgroundColor,
         color: "white",
-        borderRadius: "5px",
-        border: "none",
-        ...(isSelected && { boxShadow: "0 0 5px 2px rgba(0, 0, 0, 0.3)" }),
       },
     };
   };
@@ -94,6 +149,9 @@ const CalendarComponent = ({
         onSelectSlot={onSelectSlot}
         onSelectEvent={onSelectEvent}
         eventPropGetter={eventStyleGetter}
+        components={{
+          event: CalendarEvent,
+        }}
         className={`relative z-0 ${
           disabled ? "pointer-events-none opacity-50" : ""
         }`}

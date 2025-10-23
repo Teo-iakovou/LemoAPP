@@ -37,16 +37,12 @@ const [isLoading, setIsLoading] = useState(true);  // ✅ Fetch appointments
           const isLemo = appointment.barber === "ΛΕΜΟ";
 
           const duration = appointment.duration || 40;
-          const lockLabel = appointment.lockReason
-            ? `ΚΛΕΙΔΩΜΑ — ${appointment.lockReason}`
-            : "ΚΛΕΙΔΩΜΑ";
-
           return {
             id: appointment._id,
             title: isBreak
               ? "ΔΙΑΛΕΙΜΜΑ"
               : isLock
-              ? lockLabel
+              ? ""
               : appointment.customerName,
             customerName: appointment.customerName,
             phoneNumber:
@@ -172,16 +168,12 @@ const [isLoading, setIsLoading] = useState(true);  // ✅ Fetch appointments
           const isBreak = appointment.type === "break";
           const isLock = appointment.type === "lock";
           const isLemo = appointment.barber === "ΛΕΜΟ";
-          const lockLabel = appointment.lockReason
-            ? `ΚΛΕΙΔΩΜΑ — ${appointment.lockReason}`
-            : "ΚΛΕΙΔΩΜΑ";
-
           return {
             id: appointment._id,
             title: isBreak
               ? "ΔΙΑΛΕΙΜΜΑ"
               : isLock
-              ? lockLabel
+              ? ""
               : appointment.customerName,
             customerName: appointment.customerName,
             phoneNumber:

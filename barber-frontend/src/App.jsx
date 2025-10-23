@@ -16,6 +16,7 @@ const Customers = lazy(() => import("./pages/CustomersPage"));
 const Login = lazy(() => import("./pages/Login"));
 const CustomerCounts = lazy(() => import("./pages/CustomerCounts"));
 const AutoCustomersPage = lazy(() => import("./pages/AutoCustomersPage"));
+const BulkLocksPage = lazy(() => import("./pages/BulkLocksPage"));
 
 const App = () => {
   const [isAuth, setAuth] = useState(false); // Authentication state
@@ -80,6 +81,7 @@ const App = () => {
                 <Route path="/NotePage" element={<NotePage />} />
                 <Route path="/sms-status" element={<SmsStatusPage />} />
                 <Route path="/auto-customers" element={<AutoCustomersPage />} />
+                <Route path="/bulk-locks" element={<BulkLocksPage />} />
               </Routes>
             ) : (
               <Routes>

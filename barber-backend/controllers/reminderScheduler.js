@@ -38,7 +38,7 @@ const sendReminders = async () => {
         .tz(tz)
         .format("DD/MM/YYYY HH:mm");
 
-      const message = `Υπενθύμιση για το ραντεβού σας αύριο στις ${appointmentTimeAthens} στο Lemo Barber Shop.`;
+      const message = `Υπενθύμιση για το ραντεβού σας αύριο στις ${appointmentTimeAthens} στο Lemo Barber Shop. Reminder for your appointment tomorrow at ${appointmentTimeAthens} at Lemo Barber Shop.`;
 
       const alreadyExists = appointment.reminders?.some(
   (r) =>
