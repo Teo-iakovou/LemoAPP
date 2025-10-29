@@ -18,7 +18,7 @@ function businessWindow(date) {
   const dow = date.getDay(); // 0 Sun ... 6 Sat
   if (dow === 0 || dow === 1) return null; // closed Sun/Mon
   if (dow === 6) return { open: 9 * 60, close: 18 * 60 + 20 }; // Sat 09:00–18:20 (last start 17:40)
-  return { open: 9 * 60, close: 19 * 60 }; // Tue–Fri 09:00–19:00
+  return { open: 9 * 60, close: 19 * 60 + 40 }; // Tue–Fri 09:00–19:40 (last start 19:00)
 }
 
 function generateSlots({ date, duration = 40, step = 40 }) {
