@@ -36,6 +36,7 @@ const BulkLocksPage = () => {
     barber: defaultBarber,
     slots: [createModalSlot()],
     repeatWeekly: false,
+    repeatInterval: 1,
   });
   const [editingId, setEditingId] = useState(null);
   const [editingValues, setEditingValues] = useState(null);
@@ -270,6 +271,7 @@ const BulkLocksPage = () => {
       barber: defaultBarber,
       slots: [createModalSlot()],
       repeatWeekly: false,
+      repeatInterval: 1,
     });
   };
 
@@ -302,6 +304,7 @@ const BulkLocksPage = () => {
       barber: baseBarber,
       slots,
       repeatWeekly: Boolean(initialData?.repeatWeekly),
+      repeatInterval: Math.max(1, Number(initialData?.repeatInterval) || 1),
     });
     setModalOpen(true);
   };
@@ -320,10 +323,18 @@ const BulkLocksPage = () => {
     }));
   };
 
+  const selectModalRepeatInterval = (repeatInterval) => {
+    setModalData((prev) => ({
+      ...prev,
+      repeatInterval: Math.max(1, Number(repeatInterval) || 1),
+    }));
+  };
+
   const toggleModalRepeat = (repeatWeekly) => {
     setModalData((prev) => ({
       ...prev,
       repeatWeekly,
+      repeatInterval: prev.repeatInterval || 1,
     }));
   };
 
@@ -365,7 +376,7 @@ const BulkLocksPage = () => {
   };
 
   const handleModalAdd = () => {
-    const { weekday, barber, slots, repeatWeekly } = modalData;
+    const { weekday, barber, slots, repeatWeekly, repeatInterval } = modalData;
     if (weekday === undefined || weekday === null) {
       toast.error("Επιλέξτε ημέρα.");
       return;
@@ -385,10 +396,12 @@ const BulkLocksPage = () => {
 
     const baseDate = getNextDateForWeekday(weekday);
     const locksToAdd = [];
+    const interval = repeatWeekly ? Math.max(1, Number(repeatInterval) || 1) : 1;
+    const totalWeeks = repeatWeekly ? REPEAT_WEEKS : 1;
 
     slots.forEach((slot) => {
-      for (let offset = 0; offset < (repeatWeekly ? REPEAT_WEEKS : 1); offset += 1) {
-        const dateInstance = addDays(baseDate, offset * 7);
+      for (let weekOffset = 0; weekOffset < totalWeeks; weekOffset += interval) {
+        const dateInstance = addDays(baseDate, weekOffset * 7);
         locksToAdd.push({
           id: generateId(),
           date: dateInstance,
@@ -397,6 +410,7 @@ const BulkLocksPage = () => {
           barber,
           recurring: repeatWeekly,
           weekday,
+          repeatInterval: interval,
           lockReason: repeatWeekly ? "ΜΟΝΙΜΟ" : undefined,
         });
       }
@@ -423,6 +437,7 @@ const BulkLocksPage = () => {
       barber: lock.barber,
       recurring: lock.recurring ?? false,
       weekday: lock.weekday ?? lock.date.getDay(),
+      repeatInterval: lock.repeatInterval || 1,
     });
   };
 
@@ -467,6 +482,7 @@ const BulkLocksPage = () => {
       barber: lock.barber,
       slots: [{ time: lock.time, duration: lock.duration }],
       repeatWeekly: lock.recurring,
+      repeatInterval: lock.repeatInterval || 1,
     });
   };
 
@@ -571,10 +587,92 @@ const BulkLocksPage = () => {
       toast.success("Τα κλειδώματα αφαιρέθηκαν.");
     }
 
-    setCreatedLocks((prev) =>
-      prev.filter((lock) => !uniqueIds.includes(lock.responseId))
+    const succeededIds = uniqueIds.filter(
+      (id) => !failed.some((entry) => entry.id === id)
     );
-    refreshCalendarLocks();
+
+    if (succeededIds.length > 0) {
+      const removedKeys = new Set();
+      setCreatedLocks((prev) => {
+        let changed = false;
+        const next = [];
+
+        prev.forEach((lock) => {
+          const remainingResponseIds = Array.isArray(lock.responseIds)
+            ? lock.responseIds.filter((responseId) => !succeededIds.includes(responseId))
+            : [];
+          const remainingOccurrences = Array.isArray(lock.occurrences)
+            ? lock.occurrences.filter((occurrence) => {
+                const responseId = occurrence?.responseId;
+                if (!responseId) return true;
+                return !succeededIds.includes(responseId);
+              })
+            : [];
+
+          const hasRemaining = remainingOccurrences.length > 0;
+
+          if (!hasRemaining) {
+            removedKeys.add(getLockRowKey(lock));
+            changed = true;
+            return;
+          }
+
+          if (
+            remainingOccurrences.length !== (lock.occurrences?.length || 0) ||
+            remainingResponseIds.length !== (lock.responseIds?.length || 0)
+          ) {
+            changed = true;
+            const firstOccurrence = remainingOccurrences[0];
+            const lastOccurrence = remainingOccurrences[remainingOccurrences.length - 1];
+            next.push({
+              ...lock,
+              responseIds: remainingResponseIds,
+              occurrences: remainingOccurrences.map((occ) => ({
+                ...occ,
+                startDate:
+                  occ.startDate instanceof Date ? occ.startDate : new Date(occ.startDate),
+                endDate:
+                  occ.endDate instanceof Date ? occ.endDate : new Date(occ.endDate),
+              })),
+              startDate:
+                firstOccurrence?.startDate instanceof Date
+                  ? firstOccurrence.startDate
+                  : new Date(firstOccurrence?.startDate || lock.startDate),
+              endDate:
+                lastOccurrence?.endDate instanceof Date
+                  ? lastOccurrence.endDate
+                  : new Date(lastOccurrence?.endDate || lock.endDate),
+            });
+          } else {
+            next.push(lock);
+          }
+        });
+
+        if (!changed) return prev;
+
+        next.sort(
+          (a, b) =>
+            (a.startDate instanceof Date ? a.startDate : new Date(a.startDate)) -
+              (b.startDate instanceof Date ? b.startDate : new Date(b.startDate)) ||
+            (a.time || "").localeCompare(b.time || "")
+        );
+
+        return next;
+      });
+
+      if (removedKeys.size > 0) {
+        setExpandedLockIds((prev) => {
+          const next = new Set(prev instanceof Set ? prev : []);
+          removedKeys.forEach((key) => next.delete(key));
+          return next;
+        });
+      }
+    }
+
+    if (failed.length > 0) {
+      refreshCalendarLocks();
+    }
+
     setUnlocking(false);
   };
 
@@ -868,6 +966,7 @@ const BulkLocksPage = () => {
         onUpdateSlot={updateModalSlot}
         onRemoveSlot={removeModalSlot}
         onToggleRepeat={toggleModalRepeat}
+        onSelectRepeatInterval={selectModalRepeatInterval}
         onSubmit={handleModalAdd}
       />
     </div>

@@ -189,6 +189,9 @@ const PendingLocksTable = ({
               {lock.recurring && (
                 <span className="inline-flex items-center rounded-full bg-amber-500/20 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-amber-200">
                   Μόνιμο
+                  {lock.repeatInterval && lock.repeatInterval > 1
+                    ? ` · κάθε ${lock.repeatInterval} εβδομάδες`
+                    : ""}
                 </span>
               )}
             </div>
@@ -266,11 +269,29 @@ const PendingLocksTable = ({
       const lastLock = group.locks[group.locks.length - 1];
       const startDate = firstLock.date;
       const endDate = lastLock.date;
+      const combineDateTime = (date, time) => {
+        if (!(date instanceof Date) || !time) return new Date(date);
+        const [hours, minutes] = time.split(":").map(Number);
+        return new Date(
+          date.getFullYear(),
+          date.getMonth(),
+          date.getDate(),
+          Number.isFinite(hours) ? hours : 0,
+          Number.isFinite(minutes) ? minutes : 0,
+          0,
+          0
+        );
+      };
+      const startDateTime = combineDateTime(firstLock.date, group.time);
       const durationMs = (group.duration || 0) * 60000;
-      const rangeEnd = new Date(startDate.getTime() + durationMs);
+      const rangeEnd = new Date(startDateTime.getTime() + durationMs);
       const groupLabel = `${getWeekdayLabel(group.weekday)} από ${simpleDateFormatter.format(
         startDate
       )} - ${simpleDateFormatter.format(endDate)}`;
+      const groupIntervalLabel =
+        group.locks[0]?.repeatInterval && group.locks[0].repeatInterval > 1
+          ? ` · κάθε ${group.locks[0].repeatInterval} εβδομάδες`
+          : "";
       const isExpanded = pendingExpandedIds.has(groupKey);
 
       pendingRows.push(
@@ -282,7 +303,7 @@ const PendingLocksTable = ({
             <div className="flex flex-wrap items-center gap-2">
               <span>{groupLabel}</span>
               <span className="inline-flex items-center rounded-full bg-amber-500/20 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-amber-200">
-                Μόνιμο
+                Μόνιμο{groupIntervalLabel}
               </span>
               <span className="text-xs text-gray-400">
                 ({group.locks.length} κλειδώματα)
@@ -290,7 +311,7 @@ const PendingLocksTable = ({
             </div>
           </td>
           <td className="whitespace-nowrap px-3 py-3 align-middle">
-            {timeFormatter.format(startDate)} — {timeFormatter.format(rangeEnd)}
+            {timeFormatter.format(startDateTime)} — {timeFormatter.format(rangeEnd)}
           </td>
           <td className="whitespace-nowrap px-3 py-3 align-middle">
             <span className="rounded-full bg-violet-500/20 px-2.5 py-1 text-xs font-semibold text-violet-100">

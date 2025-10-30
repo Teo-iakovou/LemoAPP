@@ -2,6 +2,7 @@ import Flatpickr from "react-flatpickr";
 import {
   BARBER_OPTIONS,
   DURATION_OPTIONS,
+  REPEAT_INTERVAL_OPTIONS,
   TIME_PICKER_OPTIONS,
   WEEKDAY_OPTIONS,
   parseTimeToDate,
@@ -19,6 +20,7 @@ const BulkLockModal = ({
   onUpdateSlot,
   onRemoveSlot,
   onToggleRepeat,
+  onSelectRepeatInterval,
   onSubmit,
 }) => {
   if (!open) return null;
@@ -154,10 +156,30 @@ const BulkLockModal = ({
               <span>
                 Κλείδωμα επαναλαμβανόμενο (για πάντα)
                 <span className="block text-xs text-gray-500">
-                  Δημιουργεί εβδομαδιαία κλειδώματα χωρίς λήξη (52 εβδομάδες).
+                  Δημιουργεί κλειδώματα για έως 52 εβδομάδες με τη συχνότητα που θα επιλέξετε.
                 </span>
               </span>
             </label>
+            {modalData.repeatWeekly && (
+              <div className="mt-3">
+                <label className="block text-xs font-semibold uppercase tracking-wide text-gray-400">
+                  Συχνότητα
+                </label>
+                <select
+                  value={modalData.repeatInterval || 1}
+                  onChange={(event) =>
+                    onSelectRepeatInterval?.(Number(event.target.value) || 1)
+                  }
+                  className="mt-2 w-full rounded-xl border border-gray-800 bg-gray-900 px-3 py-2 text-sm text-white focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500/40"
+                >
+                  {REPEAT_INTERVAL_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
         </div>
 

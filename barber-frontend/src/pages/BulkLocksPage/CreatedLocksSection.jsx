@@ -84,6 +84,9 @@ const CreatedLocksSection = ({
               {lock.recurring && (
                 <span className="ml-2 inline-flex items-center rounded-full bg-amber-500/20 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-amber-200">
                   Μόνιμο
+                  {lock.repeatInterval && lock.repeatInterval > 1
+                    ? ` · κάθε ${lock.repeatInterval} εβδομάδες`
+                    : ""}
                 </span>
               )}
             </td>

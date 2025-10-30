@@ -73,6 +73,13 @@ export const WEEKDAY_OPTIONS = [
   { value: 0, label: "Κυριακή" },
 ];
 
+export const REPEAT_INTERVAL_OPTIONS = [
+  { value: 1, label: "Κάθε εβδομάδα" },
+  { value: 2, label: "Κάθε 2 εβδομάδες" },
+  { value: 3, label: "Κάθε 3 εβδομάδες" },
+  { value: 5, label: "Κάθε 5 εβδομάδες" },
+];
+
 export const addDays = (date, amount) => {
   const next = new Date(date);
   next.setDate(next.getDate() + amount);
@@ -184,20 +191,33 @@ export const aggregateLocks = (locks) => {
   const result = [];
   const weekMs = 7 * 24 * 60 * 60 * 1000;
 
+  const TOLERANCE_MS = 3 * 60 * 60 * 1000;
+
   byKey.forEach((entries) => {
     entries.sort((a, b) => a.startDate - b.startDate);
     const responseIds = entries.map((entry) => entry.responseId).filter(Boolean);
-    const isWeeklyRecurring =
+    let repeatInterval = 1;
+    let isRecurring =
       entries.length > 1 &&
       entries.every((entry, index) => {
         if (index === 0) return true;
         const prev = entries[index - 1];
         const diff = Math.abs(entry.startDate - prev.startDate);
-        const delta = Math.abs(diff - weekMs);
-        return delta <= 3 * 60 * 60 * 1000;
+        const approxWeeks = Math.max(1, Math.round(diff / weekMs));
+        const expectedDiff = approxWeeks * weekMs;
+        const delta = Math.abs(diff - expectedDiff);
+        if (delta > TOLERANCE_MS) {
+          return false;
+        }
+        if (index === 1) {
+          repeatInterval = approxWeeks;
+        } else if (Math.abs(approxWeeks - repeatInterval) > 0) {
+          return false;
+        }
+        return true;
       });
 
-    if (isWeeklyRecurring) {
+    if (isRecurring) {
       const first = entries[0];
       const last = entries[entries.length - 1];
       const occurrences = entries.map((entry) => ({
@@ -223,6 +243,7 @@ export const aggregateLocks = (locks) => {
         responseIds,
         recurring: true,
         lockReason: "ΜΟΝΙΜΟ",
+        repeatInterval,
         occurrences,
       });
     } else {
@@ -252,6 +273,7 @@ export const aggregateLocks = (locks) => {
           responseIds: entry.responseId ? [entry.responseId] : [],
           recurring: false,
           lockReason: entry.lockReason,
+          repeatInterval: 1,
           occurrences,
         });
       });

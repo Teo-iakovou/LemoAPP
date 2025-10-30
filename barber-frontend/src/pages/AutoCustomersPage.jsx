@@ -141,6 +141,7 @@ const AutoCustomersPage = () => {
   const [editingId, setEditingId] = useState(null);
   const [occurrenceContext, setOccurrenceContext] = useState(null);
   const [pushOpen, setPushOpen] = useState(false);
+  const [pushSubmitting, setPushSubmitting] = useState(false);
   const [pushState, setPushState] = useState({
     from: toLocalDateString(new Date()),
     to: "",
@@ -558,10 +559,14 @@ const AutoCustomersPage = () => {
   const handlePushSubmit = async (e) => {
     e.preventDefault();
 
+    if (pushSubmitting) return;
+
     if (!pushState.from) {
       toast.error("Η ημερομηνία έναρξης είναι υποχρεωτική.");
       return;
     }
+
+    setPushSubmitting(true);
 
     try {
       const payload = {
@@ -569,14 +574,18 @@ const AutoCustomersPage = () => {
         to: pushState.to ? toUtcIsoFromLocalDate(pushState.to) : undefined,
         dryRun: false,
       };
+      toast.info("Οι πελάτες προστίθενται στο ημερολόγιο...");
+      setPushOpen(false);
       await pushAutoCustomers(payload);
       toast.success("Οι επαναλαμβανόμενοι πελάτες προστέθηκαν.");
 
       loadCustomers();
-      setPushOpen(false);
     } catch (error) {
       console.error(error);
       toast.error(error.message || "Αποτυχία δημιουργίας ραντεβού.");
+      setPushOpen(true);
+    } finally {
+      setPushSubmitting(false);
     }
   };
 
@@ -646,7 +655,23 @@ const AutoCustomersPage = () => {
 
       await Promise.all(updates);
       toast.success("Οι επαναλαμβανόμενοι πελάτες ανανεώθηκαν από σήμερα.");
+
+      const fromLocal = pushState.from || toLocalDateString(new Date());
+      try {
+        toast.info("Οι πελάτες προστίθενται στο ημερολόγιο...");
+        await pushAutoCustomers({
+          from: toUtcIsoFromLocalDate(fromLocal),
+          to: pushState.to ? toUtcIsoFromLocalDate(pushState.to) : undefined,
+          dryRun: false,
+        });
+        toast.success("Το ημερολόγιο ενημερώθηκε με τους πελάτες.");
+      } catch (pushError) {
+        console.error("Failed to push customers after renewal", pushError);
+        toast.error(pushError?.message || "Αποτυχία ενημέρωσης του ημερολογίου.");
+      }
+
       await loadCustomers();
+      setCalendarStart(alignToMondayStart(new Date()));
     } catch (error) {
       console.error("Failed to renew auto customers", error);
       toast.error(error?.message || "Αποτυχία ανανέωσης πελατών.");
@@ -692,8 +717,13 @@ const AutoCustomersPage = () => {
 
         <section className="bg-gray-800 border border-gray-700 rounded-xl shadow-lg p-3 sm:p-4">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold">Λίστα Πελατών</h2>
-          </div>
+            <h2 className="text-lg font-semibold">
+              Λίστα Πελατών
+              {!loading && (
+                <span className="ml-2 text-sm text-gray-400">({customers.length})</span>
+              )}
+            </h2>
+         </div>
 
           <div className="hidden sm:block overflow-x-auto">
             <table className="min-w-full text-left text-sm">
@@ -1155,7 +1185,8 @@ const AutoCustomersPage = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 rounded-lg bg-blue-500 hover:bg-blue-600 text-white"
+                  disabled={pushSubmitting}
+                  className="px-4 py-2 rounded-lg bg-blue-500 hover:bg-blue-600 text-white disabled:bg-gray-700 disabled:text-gray-400 disabled:hover:bg-gray-700"
                 >
                   Εκτέλεση
                 </button>
