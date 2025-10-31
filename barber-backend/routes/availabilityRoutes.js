@@ -2,16 +2,36 @@ const express = require("express");
 const router = express.Router();
 const Appointment = require("../models/appointment");
 
+const CY_TIMEZONE = "Europe/Athens";
+
 function toLocalYMD(d) {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: CY_TIMEZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(d);
+  const year = parts.find((p) => p.type === "year")?.value ?? "0000";
+  const month = parts.find((p) => p.type === "month")?.value ?? "01";
+  const day = parts.find((p) => p.type === "day")?.value ?? "01";
+  return `${year}-${month}-${day}`;
 }
 
 function parseYMD(s) {
   const [y, m, d] = s.split("-").map(Number);
-  return new Date(y, m - 1, d);
+  return new Date(Date.UTC(y, m - 1, d));
+}
+
+function zonedMinutes(date) {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: CY_TIMEZONE,
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(date);
+  const hour = Number(parts.find((p) => p.type === "hour")?.value ?? "0");
+  const minute = Number(parts.find((p) => p.type === "minute")?.value ?? "0");
+  return hour * 60 + minute;
 }
 
 function businessWindow(date) {
@@ -102,13 +122,13 @@ async function buildMonthAvailability({ from, to, barber, includeSlots }) {
     if (!slots.length) { result[ds] = 0; if (slotsMap) slotsMap[ds] = []; continue; }
     const dayAppts = appts.filter((b) => toLocalYMD(b.start) === ds);
     const free = slots.filter((s) => !dayAppts.some((b) => {
-      const bStart = b.start.getHours() * 60 + b.start.getMinutes();
+      const bStart = zonedMinutes(b.start);
       return overlaps(s, 40, bStart, b.duration);
     }));
     // Same-day 60' cutoff
     const now = new Date();
     if (toLocalYMD(now) === ds) {
-      const cutoff = now.getHours() * 60 + now.getMinutes() + 60;
+      const cutoff = zonedMinutes(now) + 60;
       for (let k = free.length - 1; k >= 0; k--) if (free[k] < cutoff) free.splice(k, 1);
     }
     result[ds] = free.length;
@@ -128,12 +148,12 @@ async function buildMonthAvailability({ from, to, barber, includeSlots }) {
       const slots = generateSlots({ date: d, duration: 40, step: 40 });
       const dayAppts = appts.filter((b) => toLocalYMD(b.start) === ds);
       const free = slots.filter((s) => !dayAppts.some((b) => {
-        const bStart = b.start.getHours() * 60 + b.start.getMinutes();
+        const bStart = zonedMinutes(b.start);
         return overlaps(s, 40, bStart, b.duration);
       }));
       const now = new Date();
       if (toLocalYMD(now) === ds) {
-        const cutoff = now.getHours() * 60 + now.getMinutes() + 60;
+        const cutoff = zonedMinutes(now) + 60;
         for (let k = free.length - 1; k >= 0; k--) if (free[k] < cutoff) free.splice(k, 1);
       }
       const labels = free.map((t) => `${String(Math.floor(t/60)).padStart(2,'0')}:${String(t%60).padStart(2,'0')}`);
