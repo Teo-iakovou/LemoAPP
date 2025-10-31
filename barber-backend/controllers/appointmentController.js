@@ -185,6 +185,14 @@ const createAppointment = async (req, res, next) => {
           intervalWeeks,
           repeatCount: maxRepeat - 1, // Since the first appointment is already created
         });
+      } else if (appointmentType === "break") {
+        additionalAppointments = await generateRecurringBreaks({
+          barber,
+          initialAppointmentDate: appointmentDateUTC,
+          duration,
+          intervalWeeks,
+          repeatCount: maxRepeat - 1,
+        });
       } else if (appointmentType === "lock") {
         additionalAppointments = await generateRecurringLocks({
           barber,
@@ -325,6 +333,40 @@ const generateRecurringAppointments = async ({
   }
 
   return appointments;
+};
+
+const generateRecurringBreaks = async ({
+  barber,
+  initialAppointmentDate,
+  duration,
+  intervalWeeks,
+  repeatCount,
+}) => {
+  const breaks = [];
+  let currentDateUTC = initialAppointmentDate.clone();
+
+  for (let i = 1; i <= repeatCount; i++) {
+    currentDateUTC.add(intervalWeeks, "weeks");
+
+    const breakEntry = new Appointment({
+      appointmentDateTime: currentDateUTC.toDate(),
+      barber,
+      duration,
+      endTime: duration
+        ? currentDateUTC.clone().add(duration, "minutes").toDate()
+        : currentDateUTC.toDate(),
+      appointmentStatus: "confirmed",
+      type: "break",
+      recurrence: "weekly",
+      repeatInterval: intervalWeeks,
+      repeatCount: null,
+    });
+
+    const savedBreak = await breakEntry.save();
+    breaks.push(savedBreak);
+  }
+
+  return breaks;
 };
 
 const generateRecurringLocks = async ({
