@@ -199,17 +199,11 @@ const handleCustomerSelect = (e) => {
       type: appointmentType || "appointment",
       appointmentDateTime: new Date(appointmentDateTime).toISOString(),
       recurrence:
-        appointmentType !== "break" && recurrence !== "none"
-          ? recurrence
-          : null,
+        recurrence !== "none" ? recurrence : null,
       repeatInterval:
-        appointmentType !== "break" && recurrence === "weekly"
-          ? repeatInterval
-          : null,
+        recurrence === "weekly" ? repeatInterval : null,
       repeatCount:
-        appointmentType !== "break" && recurrence === "weekly"
-          ? repeatCount
-          : null,
+        recurrence === "weekly" ? repeatCount : null,
       dateOfBirth:
         requiresCustomer && data.dateOfBirth ? data.dateOfBirth : "",
       lockReason:
@@ -421,17 +415,16 @@ const handleCustomerSelect = (e) => {
 
           {/* Recurrence */}
           <div>
-            <label className={labelClass}>ΕΠΑΝΑΛΑΗΨΗ ΡΑΝΤΕΒΟΥ</label>
+            <label className={labelClass}>ΕΠΑΝΑΛΗΨΗ ΡΑΝΤΕΒΟΥ</label>
             <select
               className={fieldBase + " text-[#a78bfa]"}
               value={recurrence}
               onChange={(e) => setRecurrence(e.target.value)}
-              disabled={appointmentType === "break"}
             >
               <option value="none">Κανένα</option>
               <option value="weekly">Εβδομαδιαίο</option>
             </select>
-            {appointmentType !== "break" && recurrence === "weekly" && (
+            {recurrence === "weekly" && (
               <div className="flex gap-2 mt-2">
                 <select
                   className={fieldBase + " text-[#a78bfa]"}
