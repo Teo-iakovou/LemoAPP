@@ -6,8 +6,6 @@ const MONGO_URI = process.env.MONGODB_URI;
 
 mongoose.set("strictQuery", true);
 // Don’t buffer model ops before connect; fail fast instead of hanging:
-mongoose.set("bufferCommands", false);
-
 async function connectDB() {
   try {
     await mongoose.connect(MONGO_URI, {

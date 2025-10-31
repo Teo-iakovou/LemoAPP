@@ -14,7 +14,15 @@ const signup = async (req, res, next) => {
     const user = new User({ username, password });
     await user.save();
 
-    res.status(201).json({ message: "User created successfully" });
+    const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, {
+      expiresIn: "1h",
+    });
+
+    res.status(201).json({
+      message: "User created successfully",
+      token,
+      user: { id: user._id, username: user.username },
+    });
   } catch (error) {
     next(error);
   }
@@ -41,7 +49,10 @@ const login = async (req, res, next) => {
       expiresIn: "1h",
     });
 
-    res.status(200).json({ token });
+    res.status(200).json({
+      token,
+      user: { id: user._id, username: user.username },
+    });
   } catch (error) {
     console.error("Error during login:", error);
     next(error);
@@ -82,8 +93,19 @@ const updateProfile = async (req, res, next) => {
   }
 };
 
+const me = async (req, res) => {
+  const user = req.user;
+  res.status(200).json({
+    user: {
+      id: user._id,
+      username: user.username,
+    },
+  });
+};
+
 module.exports = {
   signup,
   login,
   updateProfile,
+  me,
 };

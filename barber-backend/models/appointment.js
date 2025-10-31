@@ -78,6 +78,12 @@ const appointmentSchema = new mongoose.Schema({
     default: "",
     trim: true,
   },
+  user: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "User",
+    index: true,
+    default: null,
+  },
   createdBy: {
     type: String,
     default: null,

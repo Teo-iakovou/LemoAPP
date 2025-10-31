@@ -1,12 +1,30 @@
 const Appointment = require("../models/appointment");
 const Customer = require("../models/customer");
-const { sendSMS } = require("../utils/smsService");
+const { sendSMS } = require("../utils/smsService")
+
 const moment = require("moment-timezone");
+const { getUserIdFromRequest } = require("../utils/auth");
 function normalizePhone(input = "") {
   try {
     return String(input).replace(/\s+/g, "");
   } catch {
     return String(input || "");
+  }
+}
+const BARBER_MAP = {
+  lemo: "ΛΕΜΟ",
+  "λεμο": "ΛΕΜΟ",
+  forou: "ΦΟΡΟΥ",
+  "φορου": "ΦΟΡΟΥ",
+};
+
+function normalizeBarber(input = "") {
+  try {
+    const raw = String(input || "").trim();
+    if (!raw) return "";
+    return BARBER_MAP[raw.toLowerCase()] || raw;
+  } catch {
+    return "";
   }
 }
 
@@ -30,6 +48,10 @@ const createAppointment = async (req, res, next) => {
       lockReason,
       createdBy,
     } = req.body;
+
+    const normalizedBarber = normalizeBarber(barber);
+    const effectiveBarber = normalizedBarber || "ΛΕΜΟ";
+    const explicitBarberProvided = Boolean(normalizedBarber);
 
     const appointmentType = ["appointment", "break", "lock"].includes(
       type
@@ -115,7 +137,7 @@ const createAppointment = async (req, res, next) => {
     let endTimeUTC;
 
     if (appointmentType === "lock") {
-      if (!barber) {
+      if (!explicitBarberProvided) {
         return res.status(400).json({ error: "Barber is required to lock time." });
       }
       let lockDuration = Number.isFinite(parsedDuration) ? parsedDuration : null;
@@ -149,11 +171,12 @@ const createAppointment = async (req, res, next) => {
     }
 
     const effectiveName = customer ? customer.name : customerName;
+    const userId = getUserIdFromRequest(req);
     const newAppointment = new Appointment({
       customerName: effectiveName,
       phoneNumber: appointmentType === "appointment" ? phone : undefined,
       appointmentDateTime: appointmentDateUTC.toDate(),
-      barber,
+      barber: effectiveBarber,
       duration,
       appointmentStatus: "confirmed",
       type: appointmentType,
@@ -161,6 +184,7 @@ const createAppointment = async (req, res, next) => {
       recurrence: recurrence === "weekly" ? "weekly" : "one-time",
       repeatInterval: recurrence === "weekly" ? intervalWeeks : null,
       repeatCount: recurrence === "weekly" ? maxRepeat : null,
+      user: userId || undefined,
       lockReason:
         appointmentType === "lock" && typeof lockReason === "string"
           ? lockReason.trim()
@@ -179,29 +203,32 @@ const createAppointment = async (req, res, next) => {
         additionalAppointments = await generateRecurringAppointments({
           customerName,
           phoneNumber,
-          barber,
+          barber: effectiveBarber,
           initialAppointmentDate: appointmentDateUTC,
           duration,
           intervalWeeks,
           repeatCount: maxRepeat - 1, // Since the first appointment is already created
+          user: userId || undefined,
         });
       } else if (appointmentType === "break") {
         additionalAppointments = await generateRecurringBreaks({
-          barber,
+          barber: effectiveBarber,
           initialAppointmentDate: appointmentDateUTC,
           duration,
           intervalWeeks,
           repeatCount: maxRepeat - 1,
-        });
+          user: userId || undefined,
+      });
       } else if (appointmentType === "lock") {
         additionalAppointments = await generateRecurringLocks({
-          barber,
+          barber: effectiveBarber,
           initialAppointmentDate: appointmentDateUTC,
           duration,
           intervalWeeks,
           repeatCount: maxRepeat - 1,
           lockReason: lockReason || "",
           createdBy,
+          user: userId || undefined,
         });
       }
     }
@@ -223,7 +250,7 @@ const createAppointment = async (req, res, next) => {
           if (shouldSplit) {
             const firstHalf = labels.slice(0, 5);
             const secondHalf = labels.slice(5);
-            const msg1 = `Επιβεβαιώνουμε τα ραντεβού σας στο LEMO BARBER SHOP με τον ${barber} για τις ημερομηνίες: ${firstHalf.join(", ")}.\nWe confirm your appointments at LEMO BARBER SHOP with ${barber} for the dates: ${firstHalf.join(", ")}.`;
+            const msg1 = `Επιβεβαιώνουμε τα ραντεβού σας στο LEMO BARBER SHOP με τον ${effectiveBarber} για τις ημερομηνίες: ${firstHalf.join(", ")}.\nWe confirm your appointments at LEMO BARBER SHOP with ${effectiveBarber} for the dates: ${firstHalf.join(", ")}.`;
             result = await sendSMS(phoneNumber, msg1);
             savedAppointment.reminders.push({
               type: "confirmation",
@@ -240,15 +267,15 @@ const createAppointment = async (req, res, next) => {
             const ScheduledMessage = require("../models/ScheduledMessage");
             await ScheduledMessage.create({
               phoneNumber,
-              messageText: `Επιβεβαιώνουμε τα επιπλέον ραντεβού σας στο LEMO BARBER SHOP με τον ${barber}: ${secondHalf.join(", ")}.\nWe confirm your additional appointments at LEMO BARBER SHOP with ${barber}: ${secondHalf.join(", ")}.`,
+              messageText: `Επιβεβαιώνουμε τα επιπλέον ραντεβού σας στο LEMO BARBER SHOP με τον ${effectiveBarber}: ${secondHalf.join(", ")}.\nWe confirm your additional appointments at LEMO BARBER SHOP with ${effectiveBarber}: ${secondHalf.join(", ")}.`,
               sendAt,
               status: "pending",
               type: "recurrence-followup",
               appointmentIds: [savedAppointment._id, ...additionalAppointments.map((a) => a._id)],
-              barber,
+              barber: effectiveBarber,
             });
           } else {
-            const msg = `Επιβεβαιώνουμε τα ραντεβού σας στο LEMO BARBER SHOP με τον ${barber} για τις ημερομηνίες: ${labels.join(", ")}.\nWe confirm your appointments at LEMO BARBER SHOP with ${barber} for the dates: ${labels.join(", ")}.`;
+            const msg = `Επιβεβαιώνουμε τα ραντεβού σας στο LEMO BARBER SHOP με τον ${effectiveBarber} για τις ημερομηνίες: ${labels.join(", ")}.\nWe confirm your appointments at LEMO BARBER SHOP with ${effectiveBarber} for the dates: ${labels.join(", ")}.`;
             result = await sendSMS(phoneNumber, msg);
             savedAppointment.reminders.push({
               type: "confirmation",
@@ -262,7 +289,7 @@ const createAppointment = async (req, res, next) => {
           }
         } else {
           const formattedLocalTime = appointmentDateAthens.format("DD/MM/YYYY HH:mm");
-          const msg = `Επιβεβαιώνουμε το ραντεβού σας στο LEMO BARBER SHOP με τον ${barber} για τις ${formattedLocalTime}!\nWe confirm your appointment at LEMO BARBER SHOP with ${barber} for ${formattedLocalTime}!`;
+          const msg = `Επιβεβαιώνουμε το ραντεβού σας στο LEMO BARBER SHOP με τον ${effectiveBarber} για τις ${formattedLocalTime}!\nWe confirm your appointment at LEMO BARBER SHOP with ${effectiveBarber} for ${formattedLocalTime}!`;
           result = await sendSMS(phoneNumber, msg);
           savedAppointment.reminders.push({
             type: "confirmation",
@@ -305,6 +332,7 @@ const generateRecurringAppointments = async ({
   duration,
   intervalWeeks,
   repeatCount,
+  user,
 }) => {
   const appointments = [];
   let currentDateUTC = initialAppointmentDate.clone();
@@ -326,6 +354,7 @@ const generateRecurringAppointments = async ({
       recurrence: "weekly",
       appointmentStatus: "confirmed",
       type: "appointment",
+      user: user || undefined,
     });
 
     const savedAppointment = await additionalAppointment.save();
@@ -341,6 +370,7 @@ const generateRecurringBreaks = async ({
   duration,
   intervalWeeks,
   repeatCount,
+  user,
 }) => {
   const breaks = [];
   let currentDateUTC = initialAppointmentDate.clone();
@@ -360,6 +390,7 @@ const generateRecurringBreaks = async ({
       recurrence: "weekly",
       repeatInterval: intervalWeeks,
       repeatCount: null,
+      user: user || undefined,
     });
 
     const savedBreak = await breakEntry.save();
@@ -377,6 +408,7 @@ const generateRecurringLocks = async ({
   repeatCount,
   lockReason,
   createdBy,
+  user,
 }) => {
   const locks = [];
   let currentDateUTC = initialAppointmentDate.clone();
@@ -396,6 +428,7 @@ const generateRecurringLocks = async ({
       recurrence: "weekly",
       repeatInterval: intervalWeeks,
       repeatCount: null,
+      user: user || undefined,
     });
 
     const savedLock = await lock.save();
@@ -508,7 +541,10 @@ const updateAppointment = async (req, res, next) => {
     }
 
     if (barber) {
-      appointment.barber = barber;
+      const updatedBarber = normalizeBarber(barber);
+      if (updatedBarber) {
+        appointment.barber = updatedBarber;
+      }
     }
 
     Object.assign(appointment, updateData);
@@ -681,6 +717,32 @@ const getPastAppointments = async (req, res) => {
     res.status(500).json({ error: "Failed to fetch past appointments" });
   }
 };
+
+const getMyAppointments = async (req, res, next) => {
+  try {
+    const userId = req.userId || req.user?._id;
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
+    const appointments = await Appointment.find(
+      { user: userId },
+      {
+        customerName: 1,
+        appointmentDateTime: 1,
+        barber: 1,
+        type: 1,
+        duration: 1,
+        endTime: 1,
+        repeatInterval: 1,
+        repeatCount: 1,
+        _id: 1,
+      }
+    )
+      .sort({ appointmentDateTime: 1 })
+      .lean();
+    res.json({ appointments });
+  } catch (error) {
+    next(error);
+  }
+};
 module.exports = {
   createAppointment,
   getAppointments,
@@ -688,4 +750,5 @@ module.exports = {
   deleteAppointment,
   getUpcomingAppointments,
   getPastAppointments,
+  getMyAppointments,
 };
