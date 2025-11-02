@@ -13,10 +13,12 @@ const folderRoutes = require("./routes/folderRoutes");
 const waitingListRoutes = require("./routes/waitingList");
 const adminRoutes = require("./routes/adminRoutes");
 const appointmentRoutes = require("./routes/appointmentRoutes");
+const publicAppointmentRoutes = require("./routes/publicAppointmentRoutes");
 const { sendReminders, processScheduledMessages } = require("./controllers/reminderScheduler");
 const customerRoutes = require("./routes/customerRoutes");
 const reminderSchedulerRoute = require("./routes/reminderSchedulerRoute");
 const authRoutes = require("./routes/authRoutes");
+const publicAuthRoutes = require("./routes/publicAuthRoutes");
 const availabilityRoutes = require("./routes/availabilityRoutes");
 const autoCustomerRoutes = require("./routes/autoCustomerRoutes");
 const errorHandler = require("./middlewares/errorHandler");
@@ -81,6 +83,7 @@ app.use("/api/notes", noteRoutes);
 app.use("/api/folders", folderRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/appointments", appointmentRoutes);
+app.use("/api/public-appointments", publicAppointmentRoutes);
 app.use("/api", smsStatusRoutes);
 app.use("/api", smsResendRoute);
 app.use("/api/customers", customerRoutes);
@@ -89,6 +92,7 @@ app.use("/api/auto-customers", autoCustomerRoutes);
 app.use("/api/waitingList", waitingListRoutes);
 app.use("/api/reminders", reminderSchedulerRoute);
 app.use("/api/auth", authRoutes);
+app.use("/api/public-auth", publicAuthRoutes);
 app.use("/api", availabilityRoutes);
 // Minimal public services endpoint to support direct frontend calls
 app.get("/api/services", (req, res) => {

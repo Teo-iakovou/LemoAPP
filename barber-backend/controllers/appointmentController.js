@@ -6,10 +6,51 @@ const moment = require("moment-timezone");
 const { getUserIdFromRequest } = require("../utils/auth");
 function normalizePhone(input = "") {
   try {
-    return String(input).replace(/\s+/g, "");
+    return String(input)
+      .trim()
+      .replace(/\s+/g, "")
+      .replace(/^00/, "+");
   } catch {
     return String(input || "");
   }
+}
+function normalizePhoneDigits(input = "") {
+  try {
+    return String(input).replace(/\D+/g, "");
+  } catch {
+    return "";
+  }
+}
+
+function escapeForRegex(value = "") {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function buildPhoneLookupVariants(rawInput = "") {
+  const normalized = normalizePhone(rawInput);
+  const digits = normalizePhoneDigits(normalized);
+  const variants = [];
+
+  if (normalized) variants.push({ phoneNumber: normalized });
+
+  if (digits) {
+    variants.push({ phoneNumber: digits });
+    variants.push({
+      phoneNumber: new RegExp(`${escapeForRegex(digits)}$`),
+    });
+    if (digits.length >= 8) {
+      const lastEight = digits.slice(-8);
+      variants.push({ phoneNumber: lastEight });
+      variants.push({
+        phoneNumber: new RegExp(`${escapeForRegex(lastEight)}$`),
+      });
+    }
+  }
+
+  return {
+    normalized,
+    variants,
+  };
 }
 const BARBER_MAP = {
   lemo: "ΛΕΜΟ",
@@ -97,37 +138,52 @@ const createAppointment = async (req, res, next) => {
       appointmentDateAthens.format()
     );
 
-    // Normalize phone to avoid duplicates caused by spaces
-    const phone = phoneNumber ? normalizePhone(phoneNumber) : "";
+    const incomingName =
+      typeof customerName === "string" ? customerName.trim() : "";
+    const { normalized: normalizedPhoneInput, variants: phoneLookupVariants } =
+      buildPhoneLookupVariants(phoneNumber);
+    let canonicalPhone = normalizedPhoneInput;
 
     // Check if customer exists, otherwise create a new one
     let customer = null;
     if (appointmentType === "appointment") {
-      customer = await Customer.findOne({ phoneNumber: phone });
+      if (phoneLookupVariants.length) {
+        customer = await Customer.findOne({ $or: phoneLookupVariants });
+      }
       if (!customer) {
+        if (!canonicalPhone) {
+          canonicalPhone = String(phoneNumber || "").trim();
+        }
+        if (!canonicalPhone) {
+          return res
+            .status(400)
+            .json({ error: "Valid phone number is required." });
+        }
         customer = new Customer({
-          name: customerName,
-          phoneNumber: phone,
+          name: incomingName || canonicalPhone,
+          phoneNumber: canonicalPhone,
           dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
         });
         await customer.save();
       } else {
         // Optionally update DOB if provided and different
-        if (dateOfBirth && (!customer.dateOfBirth || customer.dateOfBirth.toISOString().slice(0,10) !== dateOfBirth)) {
+        if (
+          dateOfBirth &&
+          (!customer.dateOfBirth ||
+            customer.dateOfBirth.toISOString().slice(0, 10) !== dateOfBirth)
+        ) {
           customer.dateOfBirth = new Date(dateOfBirth);
+          await customer.save();
         }
-        // If a different name is provided, keep this as the same person
-        // by updating the stored customer name to the latest provided name.
-        if (customerName && typeof customerName === 'string') {
-          const incoming = customerName.trim();
-          const existing = (customer.name || "").trim();
-          if (incoming && incoming.toLowerCase() !== existing.toLowerCase()) {
-            customer.name = incoming;
-          }
-        }
-        await customer.save();
       }
     }
+
+    const phone =
+      appointmentType === "appointment"
+        ? customer
+          ? customer.phoneNumber
+          : canonicalPhone || normalizePhone(phoneNumber)
+        : normalizePhone(phoneNumber);
 
 
     // Calculate end time in UTC
@@ -170,7 +226,7 @@ const createAppointment = async (req, res, next) => {
       endTimeUTC = appointmentDateUTC.clone().add(duration, "minutes").toDate();
     }
 
-    const effectiveName = customer ? customer.name : customerName;
+    const effectiveName = customer ? customer.name : incomingName || customerName;
     const userId = getUserIdFromRequest(req);
     const newAppointment = new Appointment({
       customerName: effectiveName,
