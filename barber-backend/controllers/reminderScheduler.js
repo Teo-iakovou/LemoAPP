@@ -22,7 +22,15 @@ const sendReminders = async () => {
       },
       appointmentStatus: "confirmed",
       type: "appointment",
-    });
+      reminders: {
+        $not: {
+          $elemMatch: {
+            type: "24-hour",
+            status: { $ne: "failed" },
+          },
+        },
+      },
+    }).lean();
 
     if (appointments.length === 0) {
       console.log(`[${timestamp}] 🔍 No appointments found in window.`);
@@ -40,48 +48,77 @@ const sendReminders = async () => {
 
       const message = `Υπενθύμιση για το ραντεβού σας αύριο στις ${appointmentTimeAthens} στο Lemo Barber Shop. Reminder for your appointment tomorrow at ${appointmentTimeAthens} at Lemo Barber Shop.`;
 
-      const alreadyExists = appointment.reminders?.some(
-  (r) =>
-    r.type === "24-hour" &&
-    r.status !== "failed" // ignore failed attempts
-);
+      const claimed = await Appointment.findOneAndUpdate(
+        {
+          _id: appointment._id,
+          reminders: {
+            $not: {
+              $elemMatch: {
+                type: "24-hour",
+                status: { $ne: "failed" },
+              },
+            },
+          },
+        },
+        {
+          $push: {
+            reminders: {
+              type: "24-hour",
+              sentAt: new Date(),
+              messageId: null,
+              status: "pending",
+              messageText: message,
+              senderId: "Lemo Barber",
+              retryCount: 0,
+            },
+          },
+        },
+        { new: true }
+      );
 
-      if (alreadyExists) {
+      if (!claimed) {
         console.log(
-          `[${timestamp}] ⛔ Already reminded: ${appointment.customerName} (${appointmentTimeAthens})`
+          `[${timestamp}] ⚠️ Skipping ${appointment.customerName} (${appointmentTimeAthens}) - already claimed by another process.`
         );
         continue;
       }
 
+      const reminderEntry =
+        claimed.reminders[claimed.reminders.length - 1];
+      const reminderId = reminderEntry?._id;
+
       try {
         const result = await sendSMS(appointment.phoneNumber, message);
 
-        appointment.reminders.push({
-          type: "24-hour",
-          sentAt: new Date(),
-          messageId: result?.message_id || result?.messageId || null,
-          status: result?.success ? "sent" : result?.status || "failed",
-          messageText: message,
-          senderId: "Lemo Barber",
-          retryCount: 0,
-        });
-        await appointment.save();
+        const successStatus = result?.success ? "sent" : result?.status || "sent";
+        await Appointment.updateOne(
+          { _id: appointment._id, "reminders._id": reminderId },
+          {
+            $set: {
+              "reminders.$.status": successStatus,
+              "reminders.$.messageId":
+                result?.message_id || result?.messageId || null,
+              "reminders.$.sentAt": new Date(),
+              "reminders.$.messageText": message,
+            },
+          }
+        );
 
         console.log(`[${timestamp}] ✅ Reminder sent to ${appointment.customerName} (${appointmentTimeAthens})`);
       } catch (err) {
         console.error(
           `[${timestamp}] ❌ SMS failed for ${appointment.customerName}: ${err.message}`
         );
-        appointment.reminders.push({
-          type: "24-hour",
-          sentAt: new Date(),
-          messageId: null,
-          status: "failed",
-          messageText: message,
-          senderId: "Lemo Barber",
-          retryCount: 0,
-        });
-        await appointment.save();
+        await Appointment.updateOne(
+          { _id: appointment._id, "reminders._id": reminderId },
+          {
+            $set: {
+              "reminders.$.status": "failed",
+              "reminders.$.sentAt": new Date(),
+            },
+            $inc: { "reminders.$.retryCount": 1 },
+          }
+        );
       }
     }
   } catch (err) {
