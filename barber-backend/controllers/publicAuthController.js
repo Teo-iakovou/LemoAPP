@@ -121,13 +121,29 @@ const signup = async (req, res, next) => {
 
 const login = async (req, res, next) => {
   try {
-    const username = String(req.body?.username || req.body?.name || "").trim();
+    const identifier = req.body?.phoneNumber || req.body?.phone || req.body?.username || req.body?.name || "";
     const password = String(req.body?.password || "");
-    if (!username || !password) {
+
+    if (!identifier || !password) {
       return res.status(400).json({ message: "Missing credentials" });
     }
 
-    const user = await PublicUser.findOne({ username });
+    const { normalized: phoneNumber, variants } = buildPhoneLookupVariants(identifier);
+    let user = null;
+
+    if (phoneNumber) {
+      user = variants.length
+        ? await PublicUser.findOne({ $or: variants })
+        : await PublicUser.findOne({ phoneNumber });
+    }
+
+    if (!user) {
+      const username = String(identifier).trim();
+      if (username) {
+        user = await PublicUser.findOne({ username });
+      }
+    }
+
     if (!user) {
       return res.status(400).json({ message: "Invalid credentials" });
     }
