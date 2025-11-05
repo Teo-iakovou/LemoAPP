@@ -29,20 +29,38 @@ function buildPhoneLookupVariants(rawInput = "") {
   const normalized = normalizePhone(rawInput);
   const digits = normalizePhoneDigits(normalized);
   const variants = [];
+  const seen = new Set();
 
-  if (normalized) variants.push({ phoneNumber: normalized });
+  const pushVariant = (value) => {
+    if (!value) return;
+    const key = value instanceof RegExp ? value.toString() : value;
+    if (seen.has(key)) return;
+    seen.add(key);
+    variants.push({ phoneNumber: value });
+  };
+
+  if (normalized) pushVariant(normalized);
 
   if (digits) {
-    variants.push({ phoneNumber: digits });
-    variants.push({
-      phoneNumber: new RegExp(`${escapeForRegex(digits)}$`, "i"),
-    });
+    pushVariant(digits);
+    pushVariant(new RegExp(`${escapeForRegex(digits)}$`, "i"));
+
+    if (digits.length === 8) {
+      pushVariant(`+357${digits}`);
+      pushVariant(new RegExp(`${escapeForRegex(digits)}$`, "i"));
+    }
+
+    if (digits.length === 10) {
+      pushVariant(`+30${digits}`);
+      pushVariant(new RegExp(`${escapeForRegex(digits)}$`, "i"));
+    }
+
     if (digits.length >= 8) {
       const lastEight = digits.slice(-8);
-      variants.push({ phoneNumber: lastEight });
-      variants.push({
-        phoneNumber: new RegExp(`${escapeForRegex(lastEight)}$`, "i"),
-      });
+      pushVariant(lastEight);
+      pushVariant(new RegExp(`${escapeForRegex(lastEight)}$`, "i"));
+      pushVariant(new RegExp(`${escapeForRegex(`357${lastEight}`)}$`, "i"));
+      pushVariant(new RegExp(`${escapeForRegex(`0${lastEight}`)}$`, "i"));
     }
   }
 
