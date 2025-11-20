@@ -8,6 +8,10 @@ registerLocale("el", el);
 import Swal from "sweetalert2";
 import withReactContent from "sweetalert2-react-content";
 const DURATION_OPTIONS = [20, 30, 40, 60, 90, 120];
+// Calendar runs from 07:00 to 21:00, so a full-day break needs 14 hours (840 minutes).
+const BREAK_FULL_DAY_MINUTES = 14 * 60;
+const BREAK_FULL_DAY_HOURS = BREAK_FULL_DAY_MINUTES / 60;
+const BREAK_MIN_MINUTES = 5;
 
 
 
@@ -50,6 +54,11 @@ function AppointmentForm({
   const [recurrence, setRecurrence] = useState("none");
   const [repeatInterval, setRepeatInterval] = useState(1);
   const [repeatCount, setRepeatCount] = useState(1);
+  const [breakFullDay, setBreakFullDay] = useState(() =>
+    appointmentData?.type === "break"
+      ? (appointmentData.duration || 0) >= BREAK_FULL_DAY_MINUTES
+      : true
+  );
   const [lockReasonValue, setLockReasonValue] = useState(
     appointmentData?.lockReason || ""
   );
@@ -95,6 +104,11 @@ function AppointmentForm({
       setDuration(appointmentData.duration || 40);
       if (!DURATION_OPTIONS.includes(appointmentData.duration))
         setDurationCustom(appointmentData.duration || "");
+      setBreakFullDay(
+        appointmentData.type === "break"
+          ? (appointmentData.duration || 0) >= BREAK_FULL_DAY_MINUTES
+          : true
+      );
       setLockReasonValue(appointmentData.lockReason || "");
     }
   }, [appointmentData, setValue]);
@@ -165,8 +179,8 @@ const handleCustomerSelect = (e) => {
 
   const submitForm = (data) => {
     const requiresCustomer = appointmentType === "appointment";
-    const parsedDuration =
-      Number(durationCustom) || Number(duration) || (appointmentType === "break" ? 0 : NaN);
+    const manualDuration =
+      Number(durationCustom) || Number(duration) || 0;
 
     if (
       requiresCustomer &&
@@ -181,21 +195,37 @@ const handleCustomerSelect = (e) => {
     }
     if (
       (appointmentType === "appointment" || appointmentType === "lock") &&
-      (!parsedDuration || parsedDuration < 10 || parsedDuration > 600)
+      (!manualDuration || manualDuration < 10 || manualDuration > 600)
     ) {
       setError("Διάρκεια 10-600 λεπτά.");
       return;
     }
+    if (
+      appointmentType === "break" &&
+      !breakFullDay &&
+      (!manualDuration ||
+        manualDuration < BREAK_MIN_MINUTES ||
+        manualDuration > BREAK_FULL_DAY_MINUTES)
+    ) {
+      setError("Διάρκεια διαλείμματος 5-600 λεπτά.");
+      return;
+    }
 
     setError(null);
+
+    const finalDuration =
+      appointmentType === "break"
+        ? breakFullDay
+          ? BREAK_FULL_DAY_MINUTES
+          : manualDuration
+        : manualDuration;
 
     const payload = {
       ...appointmentData,
       customerName: requiresCustomer ? data.customerName.trim() : "",
       phoneNumber: requiresCustomer ? data.phoneNumber : "",
       barber: data.barber || "ΛΕΜΟ",
-      duration:
-        appointmentType === "break" ? parsedDuration || 0 : parsedDuration,
+      duration: finalDuration,
       type: appointmentType || "appointment",
       appointmentDateTime: new Date(appointmentDateTime).toISOString(),
       recurrence:
@@ -455,42 +485,74 @@ const handleCustomerSelect = (e) => {
           {/* Duration */}
           <div>
             <label className={labelClass}>ΔΙΑΡΚΕΙΑ (ΛΕΠΤΑ)</label>
-            <div className="flex gap-2 items-center">
-              <select
-                className={fieldBase + " w-32 text-[#a78bfa]"}
-                value={
-                  DURATION_OPTIONS.includes(Number(duration))
-                    ? duration
-                    : "custom"
-                }
-                onChange={handleDurationChange}
-              >
-                {DURATION_OPTIONS.map((mins) => (
-                  <option key={mins} value={mins}>
-                    {mins} λεπτά
-                  </option>
-                ))}
-                <option value="custom">Άλλο</option>
-              </select>
-              {(!DURATION_OPTIONS.includes(Number(duration)) ||
-                duration === "" ||
-                duration === "custom") && (
+            {appointmentType === "break" && (
+              <div className="flex items-center gap-2 mt-2 mb-3 text-sm text-purple-200">
                 <input
-                  className={fieldBase + " w-20 placeholder:text-[#a78bfa]"}
-                  type="number"
-                  min={10}
-                  max={600}
-                  step={5}
-                  value={durationCustom}
-                  onChange={handleDurationCustomChange}
-                  placeholder="π.χ. 75"
-                  required={
-                    appointmentType === "appointment" ||
-                    appointmentType === "lock"
-                  }
+                  id="breakFullDay"
+                  type="checkbox"
+                  checked={breakFullDay}
+                  onChange={(e) => setBreakFullDay(e.target.checked)}
+                  className="h-4 w-4 rounded border-purple-400 bg-[#181a23] text-purple-400 focus:ring-purple-400"
                 />
-              )}
-            </div>
+                <label htmlFor="breakFullDay" className="cursor-pointer select-none">
+                  Κλείδωσε όλο το ωράριο (07:00 - 21:00)
+                </label>
+              </div>
+            )}
+            {appointmentType === "break" && breakFullDay ? (
+              <div className={`${fieldBase} flex items-center justify-between`}>
+                <span>Ολόκληρη ημέρα</span>
+                <span className="font-semibold text-purple-100">
+                  {BREAK_FULL_DAY_MINUTES} λεπτά (~{BREAK_FULL_DAY_HOURS} ώρες)
+                </span>
+              </div>
+            ) : (
+              <div className="flex gap-2 items-center">
+                <select
+                  className={fieldBase + " w-32 text-[#a78bfa]"}
+                  value={
+                    DURATION_OPTIONS.includes(Number(duration))
+                      ? duration
+                      : "custom"
+                  }
+                  onChange={handleDurationChange}
+                >
+                  {DURATION_OPTIONS.map((mins) => (
+                    <option key={mins} value={mins}>
+                      {mins} λεπτά
+                    </option>
+                  ))}
+                  <option value="custom">Άλλο</option>
+                </select>
+                {(!DURATION_OPTIONS.includes(Number(duration)) ||
+                  duration === "" ||
+                  duration === "custom") && (
+                  <input
+                    className={fieldBase + " w-20 placeholder:text-[#a78bfa]"}
+                    type="number"
+                    min={
+                      appointmentType === "break"
+                        ? BREAK_MIN_MINUTES
+                        : 10
+                    }
+                    max={
+                      appointmentType === "break"
+                        ? BREAK_FULL_DAY_MINUTES
+                        : 600
+                    }
+                    step={5}
+                    value={durationCustom}
+                    onChange={handleDurationCustomChange}
+                    placeholder="π.χ. 75"
+                    required={
+                      appointmentType === "appointment" ||
+                      appointmentType === "lock" ||
+                      (appointmentType === "break" && !breakFullDay)
+                    }
+                  />
+                )}
+              </div>
+            )}
           </div>
 {/* Date of Birth (optional) */}
           {appointmentType === "appointment" && (
