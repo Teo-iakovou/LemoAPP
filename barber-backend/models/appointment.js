@@ -19,6 +19,9 @@ const appointmentSourceSchema = new mongoose.Schema(
   { _id: false }
 );
 
+const MAX_APPOINTMENT_MINUTES = 600;
+const MAX_BREAK_MINUTES = 14 * 60; // matches 07:00-21:00 window
+
 const appointmentSchema = new mongoose.Schema({
   customerName: {
     type: String,
@@ -49,7 +52,20 @@ const appointmentSchema = new mongoose.Schema({
       return this.type === "appointment";
     },
     min: 0,
-    max: 600, // you can set a max if you want (e.g. 10 hours)
+    validate: {
+      validator: function (value) {
+        if (typeof value !== "number") return false;
+        if (this.type === "break") {
+          return value <= MAX_BREAK_MINUTES;
+        }
+        return value <= MAX_APPOINTMENT_MINUTES;
+      },
+      message: function () {
+        return this.type === "break"
+          ? `Break duration cannot exceed ${MAX_BREAK_MINUTES} minutes.`
+          : `Duration cannot exceed ${MAX_APPOINTMENT_MINUTES} minutes.`;
+      },
+    },
     default: 40, // default to 40 if not provided
   },
   endTime: {
