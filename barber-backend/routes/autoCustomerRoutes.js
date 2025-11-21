@@ -3,6 +3,7 @@
 const express = require("express");
 const {
   listAutoCustomers,
+  getLastAutoCustomerAppointments,
   createAutoCustomer,
   updateAutoCustomer,
   deleteAutoCustomer,
@@ -17,6 +18,7 @@ const {
 const router = express.Router();
 
 router.get("/", listAutoCustomers);
+router.get("/last-appointments", getLastAutoCustomerAppointments);
 router.post("/", createAutoCustomer);
 router.post("/push", pushAutoCustomers);
 router.put("/:id", updateAutoCustomer);

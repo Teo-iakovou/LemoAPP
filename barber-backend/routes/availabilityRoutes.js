@@ -4,6 +4,8 @@ const Appointment = require("../models/appointment");
 const PublicBookingSettings = require("../models/publicBookingSettings");
 
 const CY_TIMEZONE = "Europe/Athens";
+const DEFAULT_OPEN_MINUTES = 9 * 60;
+const DEFAULT_CLOSE_MINUTES = 19 * 60 + 40;
 
 function toLocalYMD(d) {
   const parts = new Intl.DateTimeFormat("en-CA", {
@@ -42,8 +44,8 @@ function businessWindow(date) {
   return { open: 9 * 60, close: 19 * 60 + 40 }; // Tue–Fri 09:00–19:40 (last start 19:00)
 }
 
-function generateSlots({ date, duration = 40, step = 40 }) {
-  const win = businessWindow(date);
+function generateSlots({ date, duration = 40, step = 40, windowOverride = null }) {
+  const win = windowOverride || businessWindow(date);
   if (!win) return [];
   const out = [];
   for (let t = win.open; t + duration <= win.close; t += step) {
@@ -158,12 +160,13 @@ async function buildMonthAvailability({ from, to, barber, includeSlots }) {
       candidateLabels = whitelist.slice();
     } else {
       const win = businessWindow(d);
-      if (!win && !manualOpen) {
+      const effectiveWindow = win || (manualOpen ? { open: DEFAULT_OPEN_MINUTES, close: DEFAULT_CLOSE_MINUTES } : null);
+      if (!effectiveWindow) {
         result[ds] = 0;
         if (slotsMap) slotsMap[ds] = [];
         continue;
       }
-      const baseSlots = win ? generateSlots({ date: d, duration: 40, step: 40 }).map(minutesToHHMM) : [];
+      const baseSlots = generateSlots({ date: d, duration: 40, step: 40, windowOverride: effectiveWindow }).map(minutesToHHMM);
       candidateLabels = baseSlots.slice();
       extras.forEach((time) => {
         if (!candidateLabels.includes(time)) candidateLabels.push(time);
@@ -383,10 +386,11 @@ router.get("/availability", async (req, res, next) => {
       candidateLabels = whiteListSlots.slice();
     } else {
       const win = businessWindow(dayStart);
-      if (!win && !manualOpen) {
+      const effectiveWindow = win || (manualOpen ? { open: DEFAULT_OPEN_MINUTES, close: DEFAULT_CLOSE_MINUTES } : null);
+      if (!effectiveWindow) {
         return res.json({ slots: [] });
       }
-      const base = win ? generateSlots({ date: dayStart, duration: 40, step: 40 }).map(minutesToHHMM) : [];
+      const base = generateSlots({ date: dayStart, duration: 40, step: 40, windowOverride: effectiveWindow }).map(minutesToHHMM);
       candidateLabels = base.slice();
       extraSlots.forEach((time) => {
         if (!candidateLabels.includes(time)) candidateLabels.push(time);

@@ -1,6 +1,7 @@
 "use strict";
 
 const AutoCustomer = require("../models/autoCustomer");
+const Appointment = require("../models/appointment");
 const { generateAutoAppointments } = require("../services/autoCustomerScheduler");
 const AutoGenerationBatch = require("../models/autoGenerationBatch");
 
@@ -204,6 +205,47 @@ const listAutoCustomers = async (req, res, next) => {
     res.json({ success: true, data: autoCustomers });
   } catch (error) {
     console.error("Error listing auto customers:", error);
+    next(error);
+  }
+};
+
+const getLastAutoCustomerAppointments = async (req, res, next) => {
+  try {
+    const cursor = await Appointment.aggregate([
+      {
+        $match: {
+          type: "appointment",
+          appointmentStatus: { $ne: "cancelled" },
+          "source.kind": "auto-customer",
+          "source.autoCustomerId": { $ne: null },
+        },
+      },
+      { $sort: { appointmentDateTime: -1 } },
+      {
+        $group: {
+          _id: "$source.autoCustomerId",
+          appointmentDateTime: { $first: "$appointmentDateTime" },
+          endTime: { $first: "$endTime" },
+          duration: { $first: "$duration" },
+          barber: { $first: "$barber" },
+        },
+      },
+    ]);
+
+    const map = {};
+    cursor.forEach((entry) => {
+      if (!entry?._id) return;
+      map[entry._id.toString()] = {
+        appointmentDateTime: entry.appointmentDateTime,
+        endTime: entry.endTime,
+        duration: entry.duration,
+        barber: entry.barber,
+      };
+    });
+
+    res.json({ success: true, data: map });
+  } catch (error) {
+    console.error("Error fetching last auto customer appointments:", error);
     next(error);
   }
 };
@@ -559,6 +601,7 @@ const undoGenerationBatch = async (req, res, next) => {
 
 module.exports = {
   listAutoCustomers,
+  getLastAutoCustomerAppointments,
   createAutoCustomer,
   updateAutoCustomer,
   deleteAutoCustomer,
