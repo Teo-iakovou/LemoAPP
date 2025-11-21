@@ -9,6 +9,7 @@ import {
   pushAutoCustomers,
   fetchCustomers,
   overrideAutoCustomerOccurrence,
+  fetchAutoCustomerLastAppointments,
 } from "../utils/api";
 import AutoCustomersCalendar from "../_components/AutoCustomersCalendar";
 import { toast } from "react-hot-toast";
@@ -343,7 +344,7 @@ const AutoCustomersPage = () => {
     return base;
   }
 
-  const computeNextDatesFromHistory = (customer) => {
+  const computeNextDatesFromHistory = (customer, options = {}) => {
     if (!customer) return null;
 
     const cadence = Number(customer.cadenceWeeks) || 1;
@@ -375,32 +376,46 @@ const AutoCustomersPage = () => {
       : undefined;
     const hasMaxLimit = Number.isFinite(maxOccurrencesValue) && maxOccurrencesValue > 0;
     const hasUntilLimit = Boolean(untilDate);
-    const hasLimit = hasMaxLimit || hasUntilLimit;
 
-    if (!hasLimit) {
-      return null;
+    let spanWeeks = 0;
+
+    if (hasMaxLimit || hasUntilLimit) {
+      while (true) {
+        const potentialNext = addWeeks(lastOccurrence, cadence);
+        const nextCount = occurrencesCount + 1;
+        const exceedsUntil = hasUntilLimit && untilDate && potentialNext > untilDate;
+        const exceedsMax = hasMaxLimit && nextCount > maxOccurrencesValue;
+
+        if (exceedsUntil || exceedsMax) break;
+
+        lastOccurrence = potentialNext;
+        occurrencesCount = nextCount;
+      }
+
+      spanWeeks = cadence * Math.max(occurrencesCount - 1, 0);
+    } else {
+      lastOccurrence = null;
     }
 
-    while (true) {
-      const potentialNext = addWeeks(lastOccurrence, cadence);
-      const nextCount = occurrencesCount + 1;
-      const exceedsUntil = hasUntilLimit && potentialNext > untilDate;
-      const exceedsMax = hasMaxLimit && nextCount > maxOccurrencesValue;
-
-      if (exceedsUntil || exceedsMax) break;
-
-      lastOccurrence = potentialNext;
-      occurrencesCount = nextCount;
+    const actualLast = options?.lastActualStart instanceof Date ? options.lastActualStart : null;
+    if (actualLast && !Number.isNaN(actualLast.getTime())) {
+      const alignedActual = new Date(actualLast.getTime());
+      alignedActual.setSeconds(0, 0);
+      const nextStart = addWeeks(alignedActual, cadence);
+      const newUntil = spanWeeks > 0 ? addWeeks(nextStart, spanWeeks) : undefined;
+      return { nextStart, newUntil };
     }
 
-    const nextStart = addWeeks(lastOccurrence, cadence);
-    const totalSpanWeeks = cadence * Math.max(occurrencesCount - 1, 0);
-    const newUntil = hasUntilLimit ? addWeeks(nextStart, totalSpanWeeks) : undefined;
+    if (lastOccurrence) {
+      const nextStart = addWeeks(lastOccurrence, cadence);
+      const newUntil = spanWeeks > 0 ? addWeeks(nextStart, spanWeeks) : undefined;
+      return { nextStart, newUntil };
+    }
 
-    return {
-      nextStart,
-      newUntil,
-    };
+    const fallbackStart = getNextStartFromToday(customer);
+    const newUntil = spanWeeks > 0 ? addWeeks(fallbackStart, spanWeeks) : undefined;
+
+    return { nextStart: fallbackStart, newUntil };
   };
 
   const getNextStartFromToday = (customer) => {
@@ -662,7 +677,7 @@ const AutoCustomersPage = () => {
         to: pushState.to ? toUtcIsoFromLocalDate(pushState.to) : undefined,
         dryRun: false,
       };
-      toast.info("Οι πελάτες προστίθενται στο ημερολόγιο...");
+      toast("Οι πελάτες προστίθενται στο ημερολόγιο...");
       setPushOpen(false);
       await pushAutoCustomers(payload);
       toast.success("Οι επαναλαμβανόμενοι πελάτες προστέθηκαν.");
@@ -712,10 +727,21 @@ const AutoCustomersPage = () => {
 
     setRenewing(true);
     try {
+      let lastAppointmentsByCustomer = {};
+      try {
+        lastAppointmentsByCustomer = await fetchAutoCustomerLastAppointments();
+      } catch (historyError) {
+        console.error("Failed to fetch last saved appointments for auto customers", historyError);
+      }
+
       const updates = customers
         .filter((customer) => customer && customer._id)
         .map(async (customer) => {
-          const historicalWindow = computeNextDatesFromHistory(customer);
+          const lastEntry = lastAppointmentsByCustomer?.[customer._id];
+          const lastActualStart = lastEntry?.appointmentDateTime
+            ? new Date(lastEntry.appointmentDateTime)
+            : null;
+          const historicalWindow = computeNextDatesFromHistory(customer, { lastActualStart });
           const nextDate = historicalWindow?.nextStart || getNextStartFromToday(customer);
           const payload = buildUpdatePayloadFromCustomer(customer, nextDate, {
             ...(historicalWindow?.newUntil ? { untilOverride: historicalWindow.newUntil } : {}),
@@ -728,7 +754,7 @@ const AutoCustomersPage = () => {
 
       const fromLocal = pushState.from || toLocalDateString(new Date());
       try {
-        toast.info("Οι πελάτες προστίθενται στο ημερολόγιο...");
+        toast("Οι πελάτες προστίθενται στο ημερολόγιο...");
         await pushAutoCustomers({
           from: toUtcIsoFromLocalDate(fromLocal),
           to: pushState.to ? toUtcIsoFromLocalDate(pushState.to) : undefined,

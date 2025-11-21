@@ -211,6 +211,15 @@ export const fetchAutoCustomers = async (params = {}) => {
   return data?.data ?? [];
 };
 
+export const fetchAutoCustomerLastAppointments = async () => {
+  const res = await fetch(`${API_BASE_URL}/auto-customers/last-appointments`);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data?.message || "Failed to fetch last auto customer appointments.");
+  }
+  return data?.data ?? {};
+};
+
 export const createAutoCustomer = async (payload) => {
   const res = await fetch(`${API_BASE_URL}/auto-customers`, {
     method: "POST",
