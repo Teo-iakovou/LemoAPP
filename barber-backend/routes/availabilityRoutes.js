@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const Appointment = require("../models/appointment");
+const PublicBookingSettings = require("../models/publicBookingSettings");
 
 const CY_TIMEZONE = "Europe/Athens";
 
@@ -56,6 +57,18 @@ function overlaps(aStart, aDur, bStart, bDur) {
   const aEnd = aStart + aDur;
   const bEnd = bStart + bDur;
   return aStart < bEnd && bStart < aEnd;
+}
+
+function minutesToHHMM(totalMinutes) {
+  const h = String(Math.floor(totalMinutes / 60)).padStart(2, "0");
+  const m = String(totalMinutes % 60).padStart(2, "0");
+  return `${h}:${m}`;
+}
+
+function hhmmToMinutes(value) {
+  const match = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(value || "");
+  if (!match) return null;
+  return Number(match[1]) * 60 + Number(match[2]);
 }
 
 // Core month availability computation reused by multiple routes
@@ -256,6 +269,118 @@ router.get("/availability/horizon", async (req, res, next) => {
     res.json(payload);
   } catch (e) {
     next(e);
+  }
+});
+
+// GET /api/availability?date=YYYY-MM-DD&barberId=lemo
+router.get("/availability", async (req, res, next) => {
+  try {
+    const { date, barberId, barber } = req.query;
+    if (!date) return res.status(400).json({ error: "date is required" });
+
+    const settingsDoc = await PublicBookingSettings.getSingleton();
+    const closedMonths = Array.isArray(settingsDoc.closedMonths) ? settingsDoc.closedMonths : [];
+    const blockedDates = new Set(settingsDoc.blockedDates || []);
+    const allowedDates = new Set(settingsDoc.allowedDates || []);
+    const specialDayHours = settingsDoc.specialDayHours || {};
+    const extraDaySlots = settingsDoc.extraDaySlots || {};
+    const manualOpenDates = new Set([
+      ...allowedDates,
+      ...Object.keys(specialDayHours || {}),
+      ...Object.keys(extraDaySlots || {}),
+    ]);
+
+    const day = parseYMD(date);
+    const monthClosed = closedMonths.includes(day.getMonth());
+    const manualOpen = manualOpenDates.has(date);
+    const manualClosed = blockedDates.has(date) || (monthClosed && !manualOpen);
+    if (manualClosed) return res.json({ slots: [] });
+
+    let greekBarber = barber || "";
+    if (!greekBarber && barberId) {
+      const id = String(barberId).toLowerCase();
+      if (id === "lemo") greekBarber = "ΛΕΜΟ";
+      else if (id === "forou") greekBarber = "ΦΟΡΟΥ";
+    }
+
+    const dayStart = day;
+    const dayEnd = new Date(dayStart.getTime() + 86400000 - 1);
+    const match = {
+      appointmentDateTime: { $gte: dayStart, $lte: dayEnd },
+      $or: greekBarber
+        ? [
+            { type: "break", barber: greekBarber },
+            { type: "lock", barber: greekBarber },
+            { type: "appointment", appointmentStatus: "confirmed", barber: greekBarber },
+          ]
+        : [
+            { type: "break" },
+            { type: "lock" },
+            { type: "appointment", appointmentStatus: "confirmed" },
+          ],
+    };
+    const docs = await Appointment.find(match, {
+      appointmentDateTime: 1,
+      duration: 1,
+      endTime: 1,
+      type: 1,
+      _id: 0,
+    }).lean();
+
+    const existing = docs.map((a) => {
+      const start = new Date(a.appointmentDateTime);
+      let duration = 40;
+      if (typeof a.duration === "number" && isFinite(a.duration) && a.duration > 0) {
+        duration = a.duration;
+      } else if (a.endTime) {
+        const end = new Date(a.endTime);
+        const diff = Math.max(1, Math.round((end - start) / 60000));
+        duration = diff;
+      }
+      return { start, duration };
+    });
+
+    const whiteListSlots = Array.isArray(specialDayHours?.[date]) ? specialDayHours[date] : [];
+    const extraSlots = Array.isArray(extraDaySlots?.[date]) ? extraDaySlots[date] : [];
+
+    let candidateLabels = [];
+    if (whiteListSlots.length) {
+      candidateLabels = whiteListSlots.slice();
+    } else {
+      const win = businessWindow(dayStart);
+      if (!win && !manualOpen) {
+        return res.json({ slots: [] });
+      }
+      const base = win ? generateSlots({ date: dayStart, duration: 40, step: 40 }).map(minutesToHHMM) : [];
+      candidateLabels = base.slice();
+      extraSlots.forEach((time) => {
+        if (!candidateLabels.includes(time)) candidateLabels.push(time);
+      });
+      candidateLabels.sort();
+    }
+
+    const candidateObjs = candidateLabels
+      .map((label) => ({ label, start: hhmmToMinutes(label) }))
+      .filter((entry) => entry.start !== null);
+
+    const free = candidateObjs.filter((slot) => {
+      return !existing.some((appt) => {
+        const apptStart = zonedMinutes(appt.start);
+        return overlaps(slot.start, 40, apptStart, appt.duration);
+      });
+    });
+
+    const now = new Date();
+    if (toLocalYMD(now) === date) {
+      const cutoff = zonedMinutes(now) + 60;
+      for (let i = free.length - 1; i >= 0; i -= 1) {
+        if (free[i].start < cutoff) free.splice(i, 1);
+      }
+    }
+
+    res.json({ slots: free.map((slot) => slot.label) });
+  } catch (error) {
+    next(error);
   }
 });
 
