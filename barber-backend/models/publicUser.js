@@ -7,6 +7,11 @@ const publicUserSchema = new mongoose.Schema(
     displayName: { type: String, trim: true },
     password: { type: String, required: true },
     phoneNumber: { type: String, required: true, unique: true, trim: true },
+    role: {
+      type: String,
+      enum: ["customer", "barber", "admin"],
+      default: "customer",
+    },
     resetToken: { type: String, default: null },
     resetTokenExpires: { type: Date, default: null },
   },

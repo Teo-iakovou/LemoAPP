@@ -21,6 +21,7 @@ const authRoutes = require("./routes/authRoutes");
 const publicAuthRoutes = require("./routes/publicAuthRoutes");
 const availabilityRoutes = require("./routes/availabilityRoutes");
 const autoCustomerRoutes = require("./routes/autoCustomerRoutes");
+const publicBookingSettingsRoutes = require("./routes/publicBookingSettingsRoutes");
 const errorHandler = require("./middlewares/errorHandler");
 const helmet = require("helmet");
 dotenv.config();
@@ -93,6 +94,7 @@ app.use("/api/waitingList", waitingListRoutes);
 app.use("/api/reminders", reminderSchedulerRoute);
 app.use("/api/auth", authRoutes);
 app.use("/api/public-auth", publicAuthRoutes);
+app.use("/api/public-settings", publicBookingSettingsRoutes);
 app.use("/api", availabilityRoutes);
 // Minimal public services endpoint to support direct frontend calls
 app.get("/api/services", (req, res) => {

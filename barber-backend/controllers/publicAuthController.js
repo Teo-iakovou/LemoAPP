@@ -112,6 +112,7 @@ const signup = async (req, res, next) => {
         username: user.username,
         displayName: user.displayName,
         phoneNumber: user.phoneNumber,
+        role: user.role || "customer",
       },
     });
   } catch (error) {
@@ -162,6 +163,7 @@ const login = async (req, res, next) => {
         username: user.username,
         displayName: user.displayName,
         phoneNumber: user.phoneNumber,
+        role: user.role || "customer",
       },
     });
   } catch (error) {
@@ -177,6 +179,7 @@ const me = async (req, res) => {
       username: user.username,
       displayName: user.displayName,
       phoneNumber: user.phoneNumber,
+      role: user.role || "customer",
     },
   });
 };
