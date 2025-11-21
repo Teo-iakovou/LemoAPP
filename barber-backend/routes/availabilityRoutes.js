@@ -76,6 +76,17 @@ async function buildMonthAvailability({ from, to, barber, includeSlots }) {
   const start = parseYMD(from);
   const end = parseYMD(to);
   const endOfDay = new Date(end.getFullYear(), end.getMonth(), end.getDate(), 23, 59, 59, 999);
+  const settingsDoc = await PublicBookingSettings.getSingleton();
+  const closedMonths = Array.isArray(settingsDoc.closedMonths) ? settingsDoc.closedMonths : [];
+  const blockedDates = new Set(settingsDoc.blockedDates || []);
+  const allowedDates = new Set(settingsDoc.allowedDates || []);
+  const specialDayHours = settingsDoc.specialDayHours || {};
+  const extraDaySlots = settingsDoc.extraDaySlots || {};
+  const manualOpenDates = new Set([
+    ...allowedDates,
+    ...Object.keys(specialDayHours || {}),
+    ...Object.keys(extraDaySlots || {}),
+  ]);
 
   // Apply barber filter for both appointments and breaks. When a barber is specified,
   // only include that barber's breaks so availability stays per‑barber.
@@ -120,6 +131,7 @@ async function buildMonthAvailability({ from, to, barber, includeSlots }) {
   // Build counts per day
   const result = {};
   const slotsMap = includeSlots ? {} : null;
+  const freeLabelCache = {};
   const days = Math.round((endOfDay - start) / 86400000) + 1;
   const todayYMD = toLocalYMD(new Date());
   for (let i = 0; i < days; i++) {
@@ -131,12 +143,46 @@ async function buildMonthAvailability({ from, to, barber, includeSlots }) {
       if (slotsMap) slotsMap[ds] = [];
       continue;
     }
-    const slots = generateSlots({ date: d, duration: 40, step: 40 });
-    if (!slots.length) { result[ds] = 0; if (slotsMap) slotsMap[ds] = []; continue; }
+    const monthClosed = closedMonths.includes(d.getMonth());
+    const manualOpen = manualOpenDates.has(ds);
+    const manualClosed = blockedDates.has(ds) || (monthClosed && !manualOpen);
+    if (manualClosed) {
+      result[ds] = 0;
+      if (slotsMap) slotsMap[ds] = [];
+      continue;
+    }
+    const whitelist = Array.isArray(specialDayHours?.[ds]) ? specialDayHours[ds] : [];
+    const extras = Array.isArray(extraDaySlots?.[ds]) ? extraDaySlots[ds] : [];
+    let candidateLabels = [];
+    if (whitelist.length) {
+      candidateLabels = whitelist.slice();
+    } else {
+      const win = businessWindow(d);
+      if (!win && !manualOpen) {
+        result[ds] = 0;
+        if (slotsMap) slotsMap[ds] = [];
+        continue;
+      }
+      const baseSlots = win ? generateSlots({ date: d, duration: 40, step: 40 }).map(minutesToHHMM) : [];
+      candidateLabels = baseSlots.slice();
+      extras.forEach((time) => {
+        if (!candidateLabels.includes(time)) candidateLabels.push(time);
+      });
+      candidateLabels.sort();
+    }
+    const candidates = candidateLabels
+      .map((label) => ({ label, start: hhmmToMinutes(label) }))
+      .filter((slot) => slot.start !== null);
+    if (!candidates.length) {
+      result[ds] = 0;
+      if (slotsMap) slotsMap[ds] = [];
+      freeLabelCache[ds] = [];
+      continue;
+    }
     const dayAppts = appts.filter((b) => toLocalYMD(b.start) === ds);
-    const free = slots.filter((s) => !dayAppts.some((b) => {
+    const free = candidates.filter((slot) => !dayAppts.some((b) => {
       const bStart = zonedMinutes(b.start);
-      return overlaps(s, 40, bStart, b.duration);
+      return overlaps(slot.start, 40, bStart, b.duration);
     }));
     // Same-day 60' cutoff
     const now = new Date();
@@ -145,8 +191,9 @@ async function buildMonthAvailability({ from, to, barber, includeSlots }) {
       for (let k = free.length - 1; k >= 0; k--) if (free[k] < cutoff) free.splice(k, 1);
     }
     result[ds] = free.length;
+    const labels = free.map((slot) => slot.label);
+    freeLabelCache[ds] = labels;
     if (slotsMap) {
-      const labels = free.map((t) => `${String(Math.floor(t/60)).padStart(2,'0')}:${String(t%60).padStart(2,'0')}`);
       slotsMap[ds] = labels;
     }
   }
@@ -158,19 +205,7 @@ async function buildMonthAvailability({ from, to, barber, includeSlots }) {
     const ds = toLocalYMD(d);
     if (ds < todayYMD) continue; // only today and future
     if ((result[ds] || 0) > 0) {
-      const slots = generateSlots({ date: d, duration: 40, step: 40 });
-      const dayAppts = appts.filter((b) => toLocalYMD(b.start) === ds);
-      const free = slots.filter((s) => !dayAppts.some((b) => {
-        const bStart = zonedMinutes(b.start);
-        return overlaps(s, 40, bStart, b.duration);
-      }));
-      const now = new Date();
-      if (toLocalYMD(now) === ds) {
-        const cutoff = zonedMinutes(now) + 60;
-        for (let k = free.length - 1; k >= 0; k--) if (free[k] < cutoff) free.splice(k, 1);
-      }
-      const labels = free.map((t) => `${String(Math.floor(t/60)).padStart(2,'0')}:${String(t%60).padStart(2,'0')}`);
-      firstAvailable = { date: ds, slots: labels };
+      firstAvailable = { date: ds, slots: freeLabelCache[ds] || [] };
       break;
     }
   }
