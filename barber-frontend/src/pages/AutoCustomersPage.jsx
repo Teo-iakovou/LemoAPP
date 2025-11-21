@@ -343,6 +343,94 @@ const AutoCustomersPage = () => {
     return base;
   }
 
+  const computeNextDatesFromHistory = (customer) => {
+    if (!customer) return null;
+
+    const cadence = Number(customer.cadenceWeeks) || 1;
+    const weekday = Number(customer.weekday ?? 1);
+    const timeString = normalizeTimeString(customer.timeOfDay, "09:00");
+    const [hours, minutes] = timeString.split(":").map(Number);
+
+    const startReferenceInput = customer.startFrom ? toDateInput(customer.startFrom) : "";
+    let baseStart = startReferenceInput ? parseLocalDateString(startReferenceInput) : null;
+    if (!baseStart) {
+      baseStart = alignToMondayStart(new Date());
+    }
+    baseStart.setHours(0, 0, 0, 0);
+
+    const firstOccurrence = alignToWeekday(baseStart, weekday);
+    firstOccurrence.setHours(hours || 0, minutes || 0, 0, 0);
+
+    let lastOccurrence = new Date(firstOccurrence.getTime());
+    let occurrencesCount = 1;
+
+    const untilInput = customer.until ? toDateInput(customer.until) : "";
+    let untilDate = untilInput ? parseLocalDateString(untilInput) : null;
+    if (untilDate) {
+      untilDate.setHours(hours || 0, minutes || 0, 0, 0);
+    }
+
+    const maxOccurrencesValue = customer.maxOccurrences
+      ? Number(customer.maxOccurrences)
+      : undefined;
+    const hasMaxLimit = Number.isFinite(maxOccurrencesValue) && maxOccurrencesValue > 0;
+    const hasUntilLimit = Boolean(untilDate);
+    const hasLimit = hasMaxLimit || hasUntilLimit;
+
+    if (!hasLimit) {
+      return null;
+    }
+
+    while (true) {
+      const potentialNext = addWeeks(lastOccurrence, cadence);
+      const nextCount = occurrencesCount + 1;
+      const exceedsUntil = hasUntilLimit && potentialNext > untilDate;
+      const exceedsMax = hasMaxLimit && nextCount > maxOccurrencesValue;
+
+      if (exceedsUntil || exceedsMax) break;
+
+      lastOccurrence = potentialNext;
+      occurrencesCount = nextCount;
+    }
+
+    const nextStart = addWeeks(lastOccurrence, cadence);
+    const totalSpanWeeks = cadence * Math.max(occurrencesCount - 1, 0);
+    const newUntil = hasUntilLimit ? addWeeks(nextStart, totalSpanWeeks) : undefined;
+
+    return {
+      nextStart,
+      newUntil,
+    };
+  };
+
+  const getNextStartFromToday = (customer) => {
+    const cadence = Number(customer.cadenceWeeks) || 1;
+    const weekday = Number(customer.weekday ?? 1);
+    const timeString = normalizeTimeString(customer.timeOfDay, "09:00");
+    const [hours, minutes] = timeString.split(":").map(Number);
+
+    const today = new Date();
+    const midnight = new Date(
+      today.getFullYear(),
+      today.getMonth(),
+      today.getDate(),
+      0,
+      0,
+      0,
+      0
+    );
+    let nextDate = alignToWeekday(midnight, weekday);
+    const firstOccurrence = new Date(nextDate.getTime());
+    firstOccurrence.setHours(hours || 0, minutes || 0, 0, 0);
+
+    if (firstOccurrence <= today) {
+      nextDate = addWeeks(nextDate, cadence);
+    }
+
+    nextDate.setHours(hours || 0, minutes || 0, 0, 0);
+    return nextDate;
+  };
+
   const handleEdit = (customer, occurrenceDate, options = {}) => {
     setEditingId(customer._id);
 
@@ -589,13 +677,15 @@ const AutoCustomersPage = () => {
     }
   };
 
-  const buildUpdatePayloadFromCustomer = (customer, startDate) => {
+  const buildUpdatePayloadFromCustomer = (customer, startDate, options = {}) => {
     const timeOfDay = normalizeTimeString(customer.timeOfDay, "09:00");
     const cadenceWeeks = Number(customer.cadenceWeeks) || 1;
     const weekday = Number(customer.weekday ?? 1);
-    const untilIso = customer.until
-      ? toUtcIsoFromLocalDate(toDateInput(customer.until))
-      : undefined;
+    const hasUntilOverride = Object.prototype.hasOwnProperty.call(options, "untilOverride");
+    const untilInput = hasUntilOverride
+      ? toDateInput(options.untilOverride)
+      : toDateInput(customer.until);
+    const untilIso = untilInput ? toUtcIsoFromLocalDate(untilInput) : undefined;
     const maxOccurrencesValue = customer.maxOccurrences
       ? Number(customer.maxOccurrences)
       : undefined;
@@ -608,7 +698,7 @@ const AutoCustomersPage = () => {
       timeOfDay,
       durationMin: Number(customer.durationMin) || 40,
       cadenceWeeks,
-      startFrom: toUtcIsoFromLocalDate(toLocalDateString(startDate)),
+      startFrom: startDate ? toUtcIsoFromLocalDate(toLocalDateString(startDate)) : undefined,
       until: untilIso,
       maxOccurrences: Number.isFinite(maxOccurrencesValue) ? maxOccurrencesValue : undefined,
     };
@@ -622,34 +712,14 @@ const AutoCustomersPage = () => {
 
     setRenewing(true);
     try {
-      const now = new Date();
       const updates = customers
         .filter((customer) => customer && customer._id)
         .map(async (customer) => {
-          const cadence = Number(customer.cadenceWeeks) || 1;
-          const weekday = Number(customer.weekday ?? 1);
-          const timeString = normalizeTimeString(customer.timeOfDay, "09:00");
-          const [hours, minutes] = timeString.split(":").map(Number);
-
-          const today = new Date();
-          const midnight = new Date(
-            today.getFullYear(),
-            today.getMonth(),
-            today.getDate(),
-            0,
-            0,
-            0,
-            0
-          );
-          let nextDate = alignToWeekday(midnight, weekday);
-          const firstOccurrence = new Date(nextDate.getTime());
-          firstOccurrence.setHours(hours || 0, minutes || 0, 0, 0);
-
-          if (firstOccurrence <= now) {
-            nextDate = addWeeks(nextDate, cadence);
-          }
-
-          const payload = buildUpdatePayloadFromCustomer(customer, nextDate);
+          const historicalWindow = computeNextDatesFromHistory(customer);
+          const nextDate = historicalWindow?.nextStart || getNextStartFromToday(customer);
+          const payload = buildUpdatePayloadFromCustomer(customer, nextDate, {
+            ...(historicalWindow?.newUntil ? { untilOverride: historicalWindow.newUntil } : {}),
+          });
           await updateAutoCustomer(customer._id, payload);
         });
 
