@@ -23,6 +23,12 @@ const publicBookingSettingsSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.Mixed,
       default: () => ({}),
     },
+    visibleMonthCount: {
+      type: Number,
+      default: 2,
+      min: 1,
+      max: 6,
+    },
     updatedBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "PublicUser",

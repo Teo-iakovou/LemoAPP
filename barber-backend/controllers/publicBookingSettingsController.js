@@ -1,5 +1,18 @@
 const PublicBookingSettings = require("../models/publicBookingSettings");
 
+const MIN_VISIBLE_MONTHS = 1;
+const MAX_VISIBLE_MONTHS = 6;
+const DEFAULT_VISIBLE_MONTH_COUNT = 2;
+
+function clampVisibleMonthCount(value) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return DEFAULT_VISIBLE_MONTH_COUNT;
+  return Math.min(
+    MAX_VISIBLE_MONTHS,
+    Math.max(MIN_VISIBLE_MONTHS, Math.floor(num))
+  );
+}
+
 function serializeSettings(doc) {
   if (!doc) {
     return {
@@ -8,6 +21,7 @@ function serializeSettings(doc) {
       allowedDates: [],
       specialDayHours: {},
       extraDaySlots: {},
+      visibleMonthCount: DEFAULT_VISIBLE_MONTH_COUNT,
       updatedAt: null,
       updatedBy: null,
     };
@@ -34,6 +48,7 @@ function serializeSettings(doc) {
             ])
           )
         : {},
+    visibleMonthCount: clampVisibleMonthCount(doc.visibleMonthCount),
     updatedAt: doc.updatedAt || null,
     updatedBy: doc.updatedBy || null,
   };
@@ -109,6 +124,10 @@ function normalizeExtraDaySlots(payload) {
   return result;
 }
 
+function normalizeVisibleMonthCount(value) {
+  return clampVisibleMonthCount(value);
+}
+
 const getSettings = async (req, res, next) => {
   try {
     const doc = await PublicBookingSettings.getSingleton();
@@ -132,11 +151,16 @@ const updateSettings = async (req, res, next) => {
       req.body?.extraDaySlots || req.body?.extraSlots
     );
 
+    const visibleMonthCount = normalizeVisibleMonthCount(
+      req.body?.visibleMonthCount
+    );
+
     doc.closedMonths = closedMonths;
     doc.blockedDates = blockedDates;
     doc.allowedDates = allowedDates;
     doc.specialDayHours = specialDayHours;
     doc.extraDaySlots = extraDaySlots;
+    doc.visibleMonthCount = visibleMonthCount;
     doc.updatedBy = req.publicUserId || null;
     await doc.save();
 
