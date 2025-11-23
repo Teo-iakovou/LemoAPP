@@ -1,5 +1,6 @@
 "use strict";
 
+const mongoose = require("mongoose");
 const AutoCustomer = require("../models/autoCustomer");
 const Appointment = require("../models/appointment");
 const { generateAutoAppointments } = require("../services/autoCustomerScheduler");
@@ -10,6 +11,110 @@ const VALID_CADENCE = new Set([1, 2, 4]);
 const VALID_BARBERS = new Set(["ΛΕΜΟ", "ΦΟΡΟΥ"]);
 
 const normalizePhone = (input = "") => String(input).replace(/\s+/g, "").trim();
+const normalizePhoneDigits = (input = "") => String(input).replace(/\D+/g, "").trim();
+const escapeRegex = (value = "") => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const buildPhoneVariants = (input = "") => {
+  const variants = new Set();
+  const raw = typeof input === "string" ? input.trim() : "";
+  const normalized = normalizePhone(input);
+  const digits = normalizePhoneDigits(input);
+
+  if (raw) variants.add(raw);
+  if (normalized && normalized !== raw) variants.add(normalized);
+
+  if (digits) {
+    variants.add(digits);
+    variants.add(`+${digits}`);
+    variants.add(`00${digits}`);
+    if (digits.startsWith("00")) {
+      const trimmed = digits.slice(2);
+      if (trimmed) {
+        variants.add(trimmed);
+        variants.add(`+${trimmed}`);
+      }
+    }
+    if (digits.length >= 8) {
+      const lastEight = digits.slice(-8);
+      variants.add(lastEight);
+      variants.add(`+${lastEight}`);
+      variants.add(`00${lastEight}`);
+    }
+  }
+
+  const variantList = Array.from(variants).filter(Boolean);
+  const lastDigits = digits && digits.length >= 6 ? digits.slice(-8) : null;
+
+  return {
+    variants: variantList,
+    digits,
+    lastDigits,
+  };
+};
+
+const findLatestAppointmentForCustomer = async (customer) => {
+  if (!customer) return null;
+  const { variants, lastDigits } = buildPhoneVariants(customer.phoneNumber);
+  const baseMatch = {
+    type: "appointment",
+    appointmentStatus: { $ne: "cancelled" },
+  };
+
+  if (variants.length > 0) {
+    const byPhone = await Appointment.findOne({
+      ...baseMatch,
+      phoneNumber: { $in: variants },
+    })
+      .sort({ appointmentDateTime: -1 })
+      .lean();
+    if (byPhone) {
+      return {
+        appointmentDateTime: byPhone.appointmentDateTime,
+        endTime: byPhone.endTime,
+        duration: byPhone.duration,
+        barber: byPhone.barber || customer.barber,
+      };
+    }
+  }
+
+  if (lastDigits) {
+    const regex = new RegExp(`${escapeRegex(lastDigits)}$`);
+    const byPartialPhone = await Appointment.findOne({
+      ...baseMatch,
+      phoneNumber: regex,
+    })
+      .sort({ appointmentDateTime: -1 })
+      .lean();
+    if (byPartialPhone) {
+      return {
+        appointmentDateTime: byPartialPhone.appointmentDateTime,
+        endTime: byPartialPhone.endTime,
+        duration: byPartialPhone.duration,
+        barber: byPartialPhone.barber || customer.barber,
+      };
+    }
+  }
+
+  if (customer.customerName) {
+    const byName = await Appointment.findOne({
+      ...baseMatch,
+      customerName: new RegExp(`^${escapeRegex(customer.customerName)}$`, "i"),
+      barber: customer.barber,
+    })
+      .sort({ appointmentDateTime: -1 })
+      .lean();
+    if (byName) {
+      return {
+        appointmentDateTime: byName.appointmentDateTime,
+        endTime: byName.endTime,
+        duration: byName.duration,
+        barber: byName.barber || customer.barber,
+      };
+    }
+  }
+
+  return null;
+};
 
 const parseBoolean = (value, defaultValue) => {
   if (value === undefined) return defaultValue;
@@ -209,17 +314,48 @@ const listAutoCustomers = async (req, res, next) => {
   }
 };
 
+const parseIdList = (value) => {
+  if (!value) return [];
+  if (Array.isArray(value)) {
+    return value
+      .flatMap((entry) => String(entry).split(","))
+      .map((entry) => entry.trim())
+      .filter(Boolean);
+  }
+  return String(value)
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+};
+
+const toObjectId = (value) => {
+  if (!value) return null;
+  try {
+    return new mongoose.Types.ObjectId(value);
+  } catch {
+    return null;
+  }
+};
+
 const getLastAutoCustomerAppointments = async (req, res, next) => {
   try {
-    const cursor = await Appointment.aggregate([
-      {
-        $match: {
-          type: "appointment",
-          appointmentStatus: { $ne: "cancelled" },
-          "source.kind": "auto-customer",
-          "source.autoCustomerId": { $ne: null },
-        },
-      },
+    const requestedIdStrings = parseIdList(req.query.ids);
+    const requestedIds = requestedIdStrings.map(toObjectId).filter(Boolean);
+    const restrictByIds = requestedIds.length > 0;
+
+    const matchConditions = {
+      type: "appointment",
+      appointmentStatus: { $ne: "cancelled" },
+      "source.kind": "auto-customer",
+      "source.autoCustomerId": { $ne: null },
+    };
+
+    if (restrictByIds) {
+      matchConditions["source.autoCustomerId"] = { $in: requestedIds };
+    }
+
+    const directMatches = await Appointment.aggregate([
+      { $match: matchConditions },
       { $sort: { appointmentDateTime: -1 } },
       {
         $group: {
@@ -232,18 +368,42 @@ const getLastAutoCustomerAppointments = async (req, res, next) => {
       },
     ]);
 
-    const map = {};
-    cursor.forEach((entry) => {
+    const map = new Map();
+    directMatches.forEach((entry) => {
       if (!entry?._id) return;
-      map[entry._id.toString()] = {
+      map.set(entry._id.toString(), {
         appointmentDateTime: entry.appointmentDateTime,
         endTime: entry.endTime,
         duration: entry.duration,
         barber: entry.barber,
-      };
+      });
     });
 
-    res.json({ success: true, data: map });
+    if (restrictByIds) {
+      const autoCustomers = await AutoCustomer.find({ _id: { $in: requestedIds } })
+        .select({ phoneNumber: 1, barber: 1, customerName: 1 })
+        .lean();
+
+      for (const customer of autoCustomers) {
+        const fallbackMatch = await findLatestAppointmentForCustomer(customer);
+        if (!fallbackMatch) continue;
+
+        const current = map.get(customer._id.toString());
+        if (
+          !current ||
+          (current.appointmentDateTime || 0) < (fallbackMatch.appointmentDateTime || 0)
+        ) {
+          map.set(customer._id.toString(), fallbackMatch);
+        }
+      }
+    }
+
+    const payload = {};
+    map.forEach((value, key) => {
+      payload[key] = value;
+    });
+
+    res.json({ success: true, data: payload });
   } catch (error) {
     console.error("Error fetching last auto customer appointments:", error);
     next(error);

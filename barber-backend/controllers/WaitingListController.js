@@ -1,6 +1,17 @@
 const WaitingList = require("../models/WaitingList");
 const Customer = require("../models/customer");
 
+function normalizeBarber(input = "") {
+  const value = (input || "").toString().toLowerCase();
+  if (value === "lemo" || value === "λεμο") return "ΛΕΜΟ";
+  if (value === "forou" || value === "φορου") return "ΦΟΡΟΥ";
+  return input || "";
+}
+
+function normalizePhone(phone = "") {
+  return phone.replace(/[^\d+]/g, "");
+}
+
 exports.getAllCustomers = async (req, res) => {
   try {
     const customers = await Customer.find().sort({ name: 1 });
@@ -25,10 +36,15 @@ exports.addToWaitingList = async (req, res) => {
       return res.status(404).json({ error: "Customer not found." });
     }
 
-    const newEntry = new WaitingList({ customerId });
+    const newEntry = new WaitingList({
+      customerId,
+      customerName: customerExists.name,
+      phoneNumber: customerExists.phoneNumber,
+      barber: customerExists.barber || "",
+      source: "internal",
+    });
     await newEntry.save();
 
-    // Populate the customerId field with full customer details
     const populatedEntry = await newEntry.populate("customerId");
 
     res.status(201).json(populatedEntry);
@@ -38,10 +54,63 @@ exports.addToWaitingList = async (req, res) => {
   }
 };
 
+exports.addPublicRequest = async (req, res) => {
+  try {
+    const {
+      name,
+      phoneNumber,
+      preferredDate,
+      preferredTime,
+      serviceId,
+      barberId,
+    } = req.body || {};
+
+    const cleanName = (name || "").trim();
+    const normalizedPhone = normalizePhone(phoneNumber || "");
+    const trimmedDate = (preferredDate || "").trim();
+    const trimmedTime = (preferredTime || "").trim();
+
+    if (!cleanName || !normalizedPhone || !trimmedDate || !trimmedTime) {
+      return res.status(400).json({ error: "Missing required fields." });
+    }
+
+    const barber = normalizeBarber(barberId);
+
+    let customer = await Customer.findOne({ phoneNumber: normalizedPhone });
+    if (!customer) {
+      customer = await Customer.create({
+        name: cleanName,
+        phoneNumber: normalizedPhone,
+        barber: barber || null,
+      });
+    }
+
+    const entry = new WaitingList({
+      customerId: customer?._id,
+      customerName: cleanName,
+      phoneNumber: normalizedPhone,
+      preferredDate: trimmedDate,
+      preferredTime: trimmedTime,
+      serviceId: serviceId || "",
+      barber,
+      source: "public",
+    });
+
+    await entry.save();
+    const populated = await entry.populate("customerId");
+    res.status(201).json(populated);
+  } catch (error) {
+    console.error("Error adding public wait request:", error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+};
+
 // Get all waiting list customers (sorted by oldest first)
 exports.getWaitingList = async (req, res) => {
   try {
-    const waitingList = await WaitingList.find().populate("customerId");
+    const waitingList = await WaitingList.find()
+      .populate("customerId")
+      .sort({ addedAt: 1 });
     res.json(waitingList);
   } catch (error) {
     res.status(500).json({ error: "Error fetching waiting list" });

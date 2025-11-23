@@ -6,6 +6,7 @@ const PublicBookingSettings = require("../models/publicBookingSettings");
 const CY_TIMEZONE = "Europe/Athens";
 const DEFAULT_OPEN_MINUTES = 9 * 60;
 const DEFAULT_CLOSE_MINUTES = 19 * 60 + 40;
+const DEFAULT_STEP_MINUTES = 40;
 
 function toLocalYMD(d) {
   const parts = new Intl.DateTimeFormat("en-CA", {
@@ -82,8 +83,8 @@ async function buildMonthAvailability({ from, to, barber, includeSlots }) {
   const closedMonths = Array.isArray(settingsDoc.closedMonths) ? settingsDoc.closedMonths : [];
   const blockedDates = new Set(settingsDoc.blockedDates || []);
   const allowedDates = new Set(settingsDoc.allowedDates || []);
-  const specialDayHours = settingsDoc.specialDayHours || {};
-  const extraDaySlots = settingsDoc.extraDaySlots || {};
+const specialDayHours = settingsDoc.specialDayHours || {};
+const extraDaySlots = settingsDoc.extraDaySlots || {};
   const manualOpenDates = new Set([
     ...allowedDates,
     ...Object.keys(specialDayHours || {}),
@@ -155,6 +156,22 @@ async function buildMonthAvailability({ from, to, barber, includeSlots }) {
     }
     const whitelist = Array.isArray(specialDayHours?.[ds]) ? specialDayHours[ds] : [];
     const extras = Array.isArray(extraDaySlots?.[ds]) ? extraDaySlots[ds] : [];
+    let extraOnly = [];
+    if (!extras.length) {
+      const extraWindowStart = DEFAULT_OPEN_MINUTES - DEFAULT_STEP_MINUTES * 3; // 3 slots (~2h) before
+      const extraWindowEnd = DEFAULT_CLOSE_MINUTES + DEFAULT_STEP_MINUTES * 3; // 3 slots after
+      const extraBefore = [];
+      for (let t = extraWindowStart; t < DEFAULT_OPEN_MINUTES; t += DEFAULT_STEP_MINUTES) {
+        if (t >= 0) extraBefore.push(minutesToHHMM(t));
+      }
+      const extraAfter = [];
+      for (let t = DEFAULT_CLOSE_MINUTES; t <= extraWindowEnd; t += DEFAULT_STEP_MINUTES) {
+        if (t < 24 * 60) extraAfter.push(minutesToHHMM(t));
+      }
+      extraOnly = [...extraBefore, ...extraAfter];
+    } else {
+      extraOnly = extras.slice();
+    }
     let candidateLabels = [];
     if (whitelist.length) {
       candidateLabels = whitelist.slice();
@@ -168,7 +185,8 @@ async function buildMonthAvailability({ from, to, barber, includeSlots }) {
       }
       const baseSlots = generateSlots({ date: d, duration: 40, step: 40, windowOverride: effectiveWindow }).map(minutesToHHMM);
       candidateLabels = baseSlots.slice();
-      extras.forEach((time) => {
+      const extraCandidates = extras.length ? extras : extraOnly;
+      extraCandidates.forEach((time) => {
         if (!candidateLabels.includes(time)) candidateLabels.push(time);
       });
       candidateLabels.sort();
@@ -380,6 +398,17 @@ router.get("/availability", async (req, res, next) => {
 
     const whiteListSlots = Array.isArray(specialDayHours?.[date]) ? specialDayHours[date] : [];
     const extraSlots = Array.isArray(extraDaySlots?.[date]) ? extraDaySlots[date] : [];
+    const extraFallback = [];
+    if (!extraSlots.length) {
+      const extraWindowStart = DEFAULT_OPEN_MINUTES - DEFAULT_STEP_MINUTES * 3;
+      const extraWindowEnd = DEFAULT_CLOSE_MINUTES + DEFAULT_STEP_MINUTES * 3;
+      for (let t = extraWindowStart; t < DEFAULT_OPEN_MINUTES; t += DEFAULT_STEP_MINUTES) {
+        if (t >= 0) extraFallback.push(minutesToHHMM(t));
+      }
+      for (let t = DEFAULT_CLOSE_MINUTES; t <= extraWindowEnd; t += DEFAULT_STEP_MINUTES) {
+        if (t < 24 * 60) extraFallback.push(minutesToHHMM(t));
+      }
+    }
 
     let candidateLabels = [];
     if (whiteListSlots.length) {
@@ -392,7 +421,8 @@ router.get("/availability", async (req, res, next) => {
       }
       const base = generateSlots({ date: dayStart, duration: 40, step: 40, windowOverride: effectiveWindow }).map(minutesToHHMM);
       candidateLabels = base.slice();
-      extraSlots.forEach((time) => {
+      const extraCandidates = extraSlots.length ? extraSlots : extraFallback;
+      extraCandidates.forEach((time) => {
         if (!candidateLabels.includes(time)) candidateLabels.push(time);
       });
       candidateLabels.sort();
