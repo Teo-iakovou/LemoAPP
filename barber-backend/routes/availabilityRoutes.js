@@ -155,23 +155,6 @@ const extraDaySlots = settingsDoc.extraDaySlots || {};
       continue;
     }
     const whitelist = Array.isArray(specialDayHours?.[ds]) ? specialDayHours[ds] : [];
-    const extras = Array.isArray(extraDaySlots?.[ds]) ? extraDaySlots[ds] : [];
-    let extraOnly = [];
-    if (!extras.length) {
-      const extraWindowStart = DEFAULT_OPEN_MINUTES - DEFAULT_STEP_MINUTES * 3; // 3 slots (~2h) before
-      const extraWindowEnd = DEFAULT_CLOSE_MINUTES + DEFAULT_STEP_MINUTES * 3; // 3 slots after
-      const extraBefore = [];
-      for (let t = extraWindowStart; t < DEFAULT_OPEN_MINUTES; t += DEFAULT_STEP_MINUTES) {
-        if (t >= 0) extraBefore.push(minutesToHHMM(t));
-      }
-      const extraAfter = [];
-      for (let t = DEFAULT_CLOSE_MINUTES; t <= extraWindowEnd; t += DEFAULT_STEP_MINUTES) {
-        if (t < 24 * 60) extraAfter.push(minutesToHHMM(t));
-      }
-      extraOnly = [...extraBefore, ...extraAfter];
-    } else {
-      extraOnly = extras.slice();
-    }
     let candidateLabels = [];
     if (whitelist.length) {
       candidateLabels = whitelist.slice();
@@ -184,12 +167,7 @@ const extraDaySlots = settingsDoc.extraDaySlots || {};
         continue;
       }
       const baseSlots = generateSlots({ date: d, duration: 40, step: 40, windowOverride: effectiveWindow }).map(minutesToHHMM);
-      candidateLabels = baseSlots.slice();
-      const extraCandidates = extras.length ? extras : extraOnly;
-      extraCandidates.forEach((time) => {
-        if (!candidateLabels.includes(time)) candidateLabels.push(time);
-      });
-      candidateLabels.sort();
+      candidateLabels = baseSlots.sort();
     }
     const candidates = candidateLabels
       .map((label) => ({ label, start: hhmmToMinutes(label) }))
