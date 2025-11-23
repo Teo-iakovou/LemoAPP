@@ -211,8 +211,13 @@ export const fetchAutoCustomers = async (params = {}) => {
   return data?.data ?? [];
 };
 
-export const fetchAutoCustomerLastAppointments = async () => {
-  const res = await fetch(`${API_BASE_URL}/auto-customers/last-appointments`);
+export const fetchAutoCustomerLastAppointments = async (autoCustomerIds = []) => {
+  const params = new URLSearchParams();
+  if (Array.isArray(autoCustomerIds) && autoCustomerIds.length) {
+    params.set("ids", autoCustomerIds.join(","));
+  }
+  const query = params.toString() ? `?${params.toString()}` : "";
+  const res = await fetch(`${API_BASE_URL}/auto-customers/last-appointments${query}`);
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     throw new Error(data?.message || "Failed to fetch last auto customer appointments.");

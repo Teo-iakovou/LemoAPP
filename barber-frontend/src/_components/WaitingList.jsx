@@ -188,40 +188,66 @@ export default function WaitingList() {
           }}
         >
           <ul className="space-y-4">
-            {waitingList.map((entry) => (
-              <li
-                key={entry._id}
-                className="p-4 bg-gray-800 rounded flex justify-between items-center"
-              >
-                <div>
-                  <p className="font-semibold">{entry.customerId.name}</p>
-                  <p className="text-sm text-gray-400">
-                    {entry.customerId.phoneNumber}
-                  </p>
-                </div>
-                <div className="flex items-center space-x-4">
-                  <input
-                    type="text"
-                    value={entry.note || ""}
-                    onChange={(e) =>
-                      handleNoteChange(entry._id, e.target.value)
-                    }
-                    onBlur={() => handleNoteSave(entry._id)} // Save note on blur
-                    placeholder="Προσθέστε σημείωση..."
-                    className="p-2 rounded bg-gray-700 text-white"
-                  />
-                </div>
-                <button
-                  onClick={() => handleRemoveFromWaitingList(entry._id)}
-                  disabled={isDeleting}
-                  className={`${
-                    isDeleting ? "bg-gray-600" : "bg-red-500 hover:bg-red-600"
-                  } text-white px-3 py-1 rounded`}
+            {waitingList.map((entry) => {
+              const displayName =
+                entry?.customerId?.name || entry?.customerName || "Χωρίς όνομα";
+              const displayPhone =
+                entry?.customerId?.phoneNumber || entry?.phoneNumber || "—";
+              const preferredDate = entry?.preferredDate;
+              const preferredTime = entry?.preferredTime;
+              const sourceLabel =
+                entry?.source === "public"
+                  ? "ΔΗΜΟΣΙΟ"
+                  : entry?.source === "internal"
+                  ? "ΕΣΩΤΕΡΙΚΟ"
+                  : "";
+              return (
+                <li
+                  key={entry._id}
+                  className="p-4 bg-gray-800 rounded flex justify-between items-center"
                 >
-                  {isDeleting ? "Αφαίρεση..." : "Αφαίρεση"}
-                </button>
-              </li>
-            ))}
+                  <div className="flex-1 pr-4">
+                    <p className="font-semibold flex items-center gap-2">
+                      {displayName}
+                      {sourceLabel && (
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-700 text-gray-200">
+                          {sourceLabel}
+                        </span>
+                      )}
+                    </p>
+                    <p className="text-sm text-gray-400">{displayPhone}</p>
+                    {(preferredDate || preferredTime) && (
+                      <p className="text-xs text-gray-400 mt-1">
+                        {preferredDate && <span>Ημ/νία: {preferredDate}</span>}
+                        {preferredDate && preferredTime && <span> • </span>}
+                        {preferredTime && <span>Ώρα: {preferredTime}</span>}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex items-center space-x-4">
+                    <input
+                      type="text"
+                      value={entry.note || ""}
+                      onChange={(e) =>
+                        handleNoteChange(entry._id, e.target.value)
+                      }
+                      onBlur={() => handleNoteSave(entry._id)} // Save note on blur
+                      placeholder="Προσθέστε σημείωση..."
+                      className="p-2 rounded bg-gray-700 text-white"
+                    />
+                  </div>
+                  <button
+                    onClick={() => handleRemoveFromWaitingList(entry._id)}
+                    disabled={isDeleting}
+                    className={`${
+                      isDeleting ? "bg-gray-600" : "bg-red-500 hover:bg-red-600"
+                    } text-white px-3 py-1 rounded`}
+                  >
+                    {isDeleting ? "Αφαίρεση..." : "Αφαίρεση"}
+                  </button>
+                </li>
+              );
+            })}
           </ul>
         </div>
       )}

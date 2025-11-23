@@ -729,7 +729,10 @@ const AutoCustomersPage = () => {
     try {
       let lastAppointmentsByCustomer = {};
       try {
-        lastAppointmentsByCustomer = await fetchAutoCustomerLastAppointments();
+        const customerIds = customers
+          .map((customer) => (customer && customer._id ? String(customer._id) : null))
+          .filter(Boolean);
+        lastAppointmentsByCustomer = await fetchAutoCustomerLastAppointments(customerIds);
       } catch (historyError) {
         console.error("Failed to fetch last saved appointments for auto customers", historyError);
       }
@@ -737,7 +740,9 @@ const AutoCustomersPage = () => {
       const updates = customers
         .filter((customer) => customer && customer._id)
         .map(async (customer) => {
-          const lastEntry = lastAppointmentsByCustomer?.[customer._id];
+          const customerKey =
+            customer && customer._id ? (typeof customer._id === "string" ? customer._id : String(customer._id)) : "";
+          const lastEntry = customerKey ? lastAppointmentsByCustomer?.[customerKey] : undefined;
           const lastActualStart = lastEntry?.appointmentDateTime
             ? new Date(lastEntry.appointmentDateTime)
             : null;
