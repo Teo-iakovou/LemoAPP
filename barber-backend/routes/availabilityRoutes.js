@@ -375,18 +375,6 @@ router.get("/availability", async (req, res, next) => {
     });
 
     const whiteListSlots = Array.isArray(specialDayHours?.[date]) ? specialDayHours[date] : [];
-    const extraSlots = Array.isArray(extraDaySlots?.[date]) ? extraDaySlots[date] : [];
-    const extraFallback = [];
-    if (!extraSlots.length) {
-      const extraWindowStart = DEFAULT_OPEN_MINUTES - DEFAULT_STEP_MINUTES * 3;
-      const extraWindowEnd = DEFAULT_CLOSE_MINUTES + DEFAULT_STEP_MINUTES * 3;
-      for (let t = extraWindowStart; t < DEFAULT_OPEN_MINUTES; t += DEFAULT_STEP_MINUTES) {
-        if (t >= 0) extraFallback.push(minutesToHHMM(t));
-      }
-      for (let t = DEFAULT_CLOSE_MINUTES; t <= extraWindowEnd; t += DEFAULT_STEP_MINUTES) {
-        if (t < 24 * 60) extraFallback.push(minutesToHHMM(t));
-      }
-    }
 
     let candidateLabels = [];
     if (whiteListSlots.length) {
@@ -398,12 +386,7 @@ router.get("/availability", async (req, res, next) => {
         return res.json({ slots: [] });
       }
       const base = generateSlots({ date: dayStart, duration: 40, step: 40, windowOverride: effectiveWindow }).map(minutesToHHMM);
-      candidateLabels = base.slice();
-      const extraCandidates = extraSlots.length ? extraSlots : extraFallback;
-      extraCandidates.forEach((time) => {
-        if (!candidateLabels.includes(time)) candidateLabels.push(time);
-      });
-      candidateLabels.sort();
+      candidateLabels = base.sort();
     }
 
     const candidateObjs = candidateLabels
