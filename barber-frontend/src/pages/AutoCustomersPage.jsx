@@ -114,7 +114,7 @@ const emptyForm = {
   cadenceWeeks: 1,
   startFrom: toLocalDateString(new Date()),
   until: "",
-  maxOccurrences: "5",
+  maxOccurrences: "10",
 };
 
 const toDateInput = (value) => {
@@ -560,7 +560,7 @@ const AutoCustomersPage = () => {
     let maxOccurrencesValue = formState.maxOccurrences ? Number(formState.maxOccurrences) : undefined;
 
     if ((!maxOccurrencesValue || Number.isNaN(maxOccurrencesValue)) && !untilIso) {
-      maxOccurrencesValue = 5;
+      maxOccurrencesValue = 10;
     }
 
     const payload = {
