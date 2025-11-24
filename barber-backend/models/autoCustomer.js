@@ -60,6 +60,7 @@ const autoCustomerSchema = new mongoose.Schema(
       type: Number,
       min: 1,
       max: 52,
+      default: 10,
     },
     notes: {
       type: String,

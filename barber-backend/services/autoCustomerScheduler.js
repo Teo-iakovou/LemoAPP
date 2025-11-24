@@ -9,7 +9,7 @@ const { sendSMS } = require("../utils/smsService");
 
 const TZ = "Europe/Athens";
 const SHIFT_OPTIONS = [0, 15, 30]; // minutes
-const CONFLICT_TYPES = new Set(["appointment", "lock", "break"]);
+const CONFLICT_TYPES = new Set(["appointment"]);
 
 const toMoment = (value) => moment.tz(value, TZ);
 

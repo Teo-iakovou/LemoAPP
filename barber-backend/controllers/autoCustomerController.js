@@ -224,7 +224,7 @@ const buildPayload = (body, { partial = false } = {}) => {
       payload.maxOccurrences = count;
     }
   } else if (!partial) {
-    payload.maxOccurrences = undefined;
+    payload.maxOccurrences = 10;
   }
 
   if (body.startFrom !== undefined || !partial) {
