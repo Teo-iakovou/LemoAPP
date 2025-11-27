@@ -183,10 +183,10 @@ const extraDaySlots = settingsDoc.extraDaySlots || {};
       const bStart = zonedMinutes(b.start);
       return overlaps(slot.start, 40, bStart, b.duration);
     }));
-    // Same-day 60' cutoff
+    // Same-day 120' cutoff
     const now = new Date();
     if (toLocalYMD(now) === ds) {
-      const cutoff = zonedMinutes(now) + 60;
+      const cutoff = zonedMinutes(now) + 120;
       for (let k = free.length - 1; k >= 0; k--) if (free[k] < cutoff) free.splice(k, 1);
     }
     result[ds] = free.length;
@@ -402,7 +402,7 @@ router.get("/availability", async (req, res, next) => {
 
     const now = new Date();
     if (toLocalYMD(now) === date) {
-      const cutoff = zonedMinutes(now) + 60;
+      const cutoff = zonedMinutes(now) + 120;
       for (let i = free.length - 1; i >= 0; i -= 1) {
         if (free[i].start < cutoff) free.splice(i, 1);
       }
