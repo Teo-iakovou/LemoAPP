@@ -10,6 +10,15 @@ import {
   updateWaitingListNote,
 } from "../utils/api";
 
+function isPastDate(dateStr) {
+  if (!dateStr) return false;
+  const parsed = new Date(`${dateStr}T23:59:59`);
+  if (Number.isNaN(parsed.getTime())) return false;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return parsed < today;
+}
+
 export default function WaitingList() {
   const [customers, setCustomers] = useState([]);
   const [waitingList, setWaitingList] = useState([]);
@@ -105,6 +114,22 @@ export default function WaitingList() {
       alert("Failed to save note. Please try again.");
     }
   };
+
+  useEffect(() => {
+    if (!waitingList.length) return;
+    const expiredEntries = waitingList.filter((entry) =>
+      isPastDate(entry?.preferredDate)
+    );
+    if (!expiredEntries.length) return;
+    expiredEntries.forEach((entry) => {
+      removeFromWaitingList(entry._id).catch((error) =>
+        console.error("Failed to auto-remove expired waiting list entry:", error)
+      );
+    });
+    setWaitingList((prev) =>
+      prev.filter((entry) => !isPastDate(entry?.preferredDate))
+    );
+  }, [waitingList]);
 
   return (
     <div className="p-6 bg-gray-900 text-white rounded-lg shadow-md">
