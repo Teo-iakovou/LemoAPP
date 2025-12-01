@@ -176,7 +176,7 @@ export default function WaitingList() {
       {isFetchingList ? (
         <Skeleton
           count={5}
-          height={60}
+          height={50}
           className="mb-4"
           style={{ borderRadius: "8px" }}
         />
@@ -184,7 +184,8 @@ export default function WaitingList() {
         <div
           className="space-y-4 overflow-y-auto"
           style={{
-            maxHeight: "300px",
+            maxHeight: "50vh",
+            minHeight: "50vh",
           }}
         >
           <ul className="space-y-4">
@@ -194,33 +195,68 @@ export default function WaitingList() {
               const displayPhone =
                 entry?.customerId?.phoneNumber || entry?.phoneNumber || "—";
               const preferredDate = entry?.preferredDate;
-              const preferredTime = entry?.preferredTime;
+              const preferredTimes =
+                Array.isArray(entry?.preferredTimes) && entry.preferredTimes.length
+                  ? entry.preferredTimes
+                  : entry?.preferredTime
+                  ? [entry.preferredTime]
+                  : [];
               const sourceLabel =
                 entry?.source === "public"
                   ? "ΔΗΜΟΣΙΟ"
                   : entry?.source === "internal"
                   ? "ΕΣΩΤΕΡΙΚΟ"
                   : "";
+              const barberLabel = entry?.barber || "";
+              const accentClasses =
+                barberLabel === "ΛΕΜΟ"
+                  ? "border-2 border-purple-500/60 shadow-[0_0_12px_rgba(168,85,247,0.35)]"
+                  : barberLabel === "ΦΟΡΟΥ"
+                  ? "border-2 border-orange-400/60 shadow-[0_0_12px_rgba(251,146,60,0.35)]"
+                  : "border border-gray-700";
               return (
                 <li
                   key={entry._id}
-                  className="p-4 bg-gray-800 rounded flex justify-between items-center"
+                  className={`p-4 bg-gray-800 rounded flex justify-between items-center ${accentClasses}`}
                 >
                   <div className="flex-1 pr-4">
-                    <p className="font-semibold flex items-center gap-2">
+                    <p className="font-semibold flex items-center gap-2 flex-wrap">
                       {displayName}
                       {sourceLabel && (
                         <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-700 text-gray-200">
                           {sourceLabel}
                         </span>
                       )}
+                      {barberLabel && (
+                        <span
+                          className={`text-[10px] px-2 py-0.5 rounded-full ${
+                            barberLabel === "ΛΕΜΟ"
+                              ? "bg-purple-500/20 text-purple-200 border border-purple-400/50"
+                              : barberLabel === "ΦΟΡΟΥ"
+                              ? "bg-orange-500/20 text-orange-200 border border-orange-400/50"
+                              : "bg-gray-700 text-gray-200 border border-gray-600"
+                          }`}
+                        >
+                          {barberLabel}
+                        </span>
+                      )}
                     </p>
                     <p className="text-sm text-gray-400">{displayPhone}</p>
-                    {(preferredDate || preferredTime) && (
+                    {(preferredDate || preferredTimes.length > 0) && (
                       <p className="text-xs text-gray-400 mt-1">
                         {preferredDate && <span>Ημ/νία: {preferredDate}</span>}
-                        {preferredDate && preferredTime && <span> • </span>}
-                        {preferredTime && <span>Ώρα: {preferredTime}</span>}
+                        {preferredDate && preferredTimes.length > 0 && (
+                          <span> • </span>
+                        )}
+                        {preferredTimes.length > 0 && (
+                          <span>
+                            Ώρες:{" "}
+                            {preferredTimes
+                              .map((slot) => slot || "")
+                              .filter(Boolean)
+                              .join(", ")}
+                          </span>
+                        )}
                       </p>
                     )}
                   </div>
