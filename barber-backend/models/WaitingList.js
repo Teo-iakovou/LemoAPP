@@ -10,6 +10,10 @@ const waitingListSchema = new mongoose.Schema({
   phoneNumber: { type: String, default: "" },
   preferredDate: { type: String, default: "" }, // YYYY-MM-DD
   preferredTime: { type: String, default: "" }, // HH:MM
+  preferredTimes: {
+    type: [String],
+    default: [],
+  },
   serviceId: { type: String, default: "" },
   barber: { type: String, default: "" },
   source: {

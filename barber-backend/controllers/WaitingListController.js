@@ -1,6 +1,8 @@
 const WaitingList = require("../models/WaitingList");
 const Customer = require("../models/customer");
 
+const HHMM_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
+
 function normalizeBarber(input = "") {
   const value = (input || "").toString().toLowerCase();
   if (value === "lemo" || value === "λεμο") return "ΛΕΜΟ";
@@ -10,6 +12,25 @@ function normalizeBarber(input = "") {
 
 function normalizePhone(phone = "") {
   return phone.replace(/[^\d+]/g, "");
+}
+
+function normalizeTimeValue(value = "") {
+  const trimmed = (value || "").trim();
+  if (!trimmed) return null;
+  if (!HHMM_RE.test(trimmed)) return null;
+  return trimmed;
+}
+
+function normalizeTimeList(timesInput = [], fallback = "") {
+  const base = Array.isArray(timesInput) ? timesInput : [];
+  const normalized = [];
+  for (const raw of base) {
+    const value = normalizeTimeValue(raw);
+    if (value) normalized.push(value);
+  }
+  const fallbackValue = normalizeTimeValue(fallback);
+  if (fallbackValue) normalized.push(fallbackValue);
+  return Array.from(new Set(normalized));
 }
 
 exports.getAllCustomers = async (req, res) => {
@@ -61,6 +82,7 @@ exports.addPublicRequest = async (req, res) => {
       phoneNumber,
       preferredDate,
       preferredTime,
+      preferredTimes,
       serviceId,
       barberId,
     } = req.body || {};
@@ -69,8 +91,9 @@ exports.addPublicRequest = async (req, res) => {
     const normalizedPhone = normalizePhone(phoneNumber || "");
     const trimmedDate = (preferredDate || "").trim();
     const trimmedTime = (preferredTime || "").trim();
+    const normalizedTimes = normalizeTimeList(preferredTimes, trimmedTime);
 
-    if (!cleanName || !normalizedPhone || !trimmedDate || !trimmedTime) {
+    if (!cleanName || !normalizedPhone || !trimmedDate || !normalizedTimes.length) {
       return res.status(400).json({ error: "Missing required fields." });
     }
 
@@ -90,7 +113,8 @@ exports.addPublicRequest = async (req, res) => {
       customerName: cleanName,
       phoneNumber: normalizedPhone,
       preferredDate: trimmedDate,
-      preferredTime: trimmedTime,
+      preferredTime: normalizedTimes[0] || "",
+      preferredTimes: normalizedTimes,
       serviceId: serviceId || "",
       barber,
       source: "public",
