@@ -70,6 +70,26 @@ function buildPhoneLookupVariants(rawInput = "") {
   };
 }
 
+const BARBER_MAP = {
+  lemo: "ΛΕΜΟ",
+  λεμο: "ΛΕΜΟ",
+  ΛΕΜΟ: "ΛΕΜΟ",
+  forou: "ΦΟΡΟΥ",
+  φορου: "ΦΟΡΟΥ",
+  ΦΟΡΟΥ: "ΦΟΡΟΥ",
+};
+
+function normalizeBarber(input = "") {
+  try {
+    const raw = String(input || "").trim();
+    if (!raw) return "";
+    const key = raw.toLowerCase();
+    return BARBER_MAP[key] || raw;
+  } catch {
+    return "";
+  }
+}
+
 const getAppointmentsForPublicUser = async (req, res, next) => {
   try {
     const { normalized: phoneNumber, variants } = buildPhoneLookupVariants(
@@ -172,7 +192,91 @@ const cancelUpcomingAppointment = async (req, res, next) => {
   }
 };
 
+const rescheduleAppointment = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { appointmentDateTime, dateTime, barber: barberInput } = req.body || {};
+    const { normalized: phoneNumber, variants } = buildPhoneLookupVariants(
+      req.publicUser?.phoneNumber || ""
+    );
+    if (!id || !phoneNumber) {
+      return res.status(400).json({ message: "Invalid request" });
+    }
+    const appointment = await Appointment.findById(id);
+    if (!appointment) {
+      return res.status(404).json({ message: "Appointment not found" });
+    }
+    const matchesPhone = variants.length
+      ? variants.some((query) => {
+          const value = query.phoneNumber;
+          if (value instanceof RegExp) {
+            return value.test(appointment.phoneNumber || "");
+          }
+          return (appointment.phoneNumber || "") === value;
+        })
+      : (appointment.phoneNumber || "") === phoneNumber;
+    if (!matchesPhone) {
+      return res.status(403).json({ message: "You cannot modify this appointment." });
+    }
+    if (appointment.type !== "appointment") {
+      return res.status(400).json({ message: "Only appointments can be rescheduled." });
+    }
+    const now = moment().utc();
+    const hoursUntilAppointment = moment(appointment.appointmentDateTime).diff(now, "hours", true);
+    if (hoursUntilAppointment < 24) {
+      return res.status(400).json({ message: "Τα ραντεβού μπορούν να αλλάξουν έως 24 ώρες πριν." });
+    }
+    const newStartIso = appointmentDateTime || dateTime;
+    const nextStart = moment(newStartIso).utc();
+    if (!nextStart.isValid()) {
+      return res.status(400).json({ message: "Invalid date." });
+    }
+    if (nextStart.isSameOrBefore(now)) {
+      return res.status(400).json({ message: "Select a future time." });
+    }
+    const nextBarber = normalizeBarber(barberInput) || appointment.barber;
+    const duration = appointment.duration || 40;
+    const nextEnd = nextStart.clone().add(duration, "minutes");
+    const conflict = await Appointment.findOne({
+      _id: { $ne: appointment._id },
+      barber: nextBarber,
+      appointmentStatus: "confirmed",
+      type: { $in: ["appointment", "break", "lock"] },
+      appointmentDateTime: { $lt: nextEnd.toDate() },
+      endTime: { $gt: nextStart.toDate() },
+    });
+    if (conflict) {
+      return res.status(409).json({ message: "Η ώρα μόλις κλείστηκε από άλλο πελάτη. Επιλέξτε άλλη ώρα." });
+    }
+    const oldFormattedDate = moment(appointment.appointmentDateTime)
+      .tz("Europe/Athens")
+      .format("DD/MM/YYYY HH:mm");
+    appointment.appointmentDateTime = nextStart.toDate();
+    appointment.endTime = nextEnd.toDate();
+    appointment.duration = duration;
+    appointment.barber = nextBarber;
+    await appointment.save();
+    const newFormattedDate = moment(appointment.appointmentDateTime)
+      .tz("Europe/Athens")
+      .format("DD/MM/YYYY HH:mm");
+    try {
+      const message = `Το ραντεβού σας στο LEMO BARBER SHOP στις ${oldFormattedDate} άλλαξε για ${newFormattedDate}.\nYour appointment at LEMO BARBER SHOP on ${oldFormattedDate} has been rescheduled to ${newFormattedDate}.`;
+      await sendSMS(appointment.phoneNumber, message);
+    } catch (smsError) {
+      console.error("Failed to send reschedule SMS:", smsError.message);
+    }
+    res.json({
+      message: "Το ραντεβού ενημερώθηκε.",
+      appointment,
+      id: appointment._id,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getAppointmentsForPublicUser,
   cancelUpcomingAppointment,
+  rescheduleAppointment,
 };
