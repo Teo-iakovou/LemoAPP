@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import Select from "react-select";
 import Skeleton from "react-loading-skeleton";
 import "react-loading-skeleton/dist/skeleton.css";
@@ -17,6 +17,16 @@ function isPastDate(dateStr) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   return parsed < today;
+}
+
+function splitExpired(list = []) {
+  const upcoming = [];
+  const expired = [];
+  (list || []).forEach((entry) => {
+    if (isPastDate(entry?.preferredDate)) expired.push(entry);
+    else upcoming.push(entry);
+  });
+  return { upcoming, expired };
 }
 
 export default function WaitingList() {
@@ -53,7 +63,15 @@ export default function WaitingList() {
     setIsFetchingList(true);
     try {
       const data = await fetchWaitingList();
-      setWaitingList(data);
+      const { upcoming, expired } = splitExpired(data || []);
+      if (expired.length) {
+        expired.forEach((entry) => {
+          removeFromWaitingList(entry._id).catch((error) =>
+            console.error("Failed to auto-remove expired waiting list entry:", error)
+          );
+        });
+      }
+      setWaitingList(upcoming);
     } catch (error) {
       console.error("Failed to fetch waiting list:", error);
     } finally {
@@ -114,22 +132,6 @@ export default function WaitingList() {
       alert("Failed to save note. Please try again.");
     }
   };
-
-  useEffect(() => {
-    if (!waitingList.length) return;
-    const expiredEntries = waitingList.filter((entry) =>
-      isPastDate(entry?.preferredDate)
-    );
-    if (!expiredEntries.length) return;
-    expiredEntries.forEach((entry) => {
-      removeFromWaitingList(entry._id).catch((error) =>
-        console.error("Failed to auto-remove expired waiting list entry:", error)
-      );
-    });
-    setWaitingList((prev) =>
-      prev.filter((entry) => !isPastDate(entry?.preferredDate))
-    );
-  }, [waitingList]);
 
   return (
     <div className="p-6 bg-gray-900 text-white rounded-lg shadow-md">
