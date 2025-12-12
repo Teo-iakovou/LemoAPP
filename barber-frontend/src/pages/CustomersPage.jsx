@@ -46,7 +46,7 @@ const CustomersPage = () => {
     dateOfBirth: "",
   });
   const [adding, setAdding] = useState(false);
-
+  const totalCustomers = customers.length;
   const editRef = useRef(null);
  
 
@@ -224,7 +224,12 @@ const CustomersPage = () => {
   return (
     <div className="p-6 relative">
       <div className="flex justify-between items-center mb-4">
-        <h1 className="text-2xl font-bold text-white">ΠΕΛΑΤΕΣ</h1>
+        <h1 className="text-2xl font-bold text-white">
+          ΠΕΛΑΤΕΣ{" "}
+          <span className="text-base text-gray-300">
+            ({totalCustomers.toLocaleString("el-GR")})
+          </span>
+        </h1>
         <button
           className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded flex items-center gap-2 shadow font-semibold"
           onClick={() => setAddMode((prev) => !prev)}

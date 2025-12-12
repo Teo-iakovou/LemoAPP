@@ -133,6 +133,21 @@ const toDateInput = (value) => {
   return "";
 };
 
+const formatDateDisplay = (value, fallback = "-") => {
+  if (!value) return fallback;
+  try {
+    const date = value instanceof Date ? value : new Date(value);
+    if (Number.isNaN(date.getTime())) return fallback;
+    return date.toLocaleDateString("el-GR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    });
+  } catch {
+    return fallback;
+  }
+};
+
 const AutoCustomersPage = () => {
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -876,10 +891,10 @@ const AutoCustomersPage = () => {
                           `${customer.cadenceWeeks} εβδομάδες`}
                       </td>
                       <td className="px-3 py-2 text-xs text-gray-400">
-                        {customer.startFrom ? toDateInput(customer.startFrom) : "-"}
+                        {formatDateDisplay(customer.startFrom)}
                       </td>
                       <td className="px-3 py-2 text-xs text-gray-400">
-                        {customer.until ? toDateInput(customer.until) : "-"}
+                        {formatDateDisplay(customer.until)}
                       </td>
                       <td className="px-3 py-2 text-right space-x-2">
                         <button
@@ -939,9 +954,9 @@ const AutoCustomersPage = () => {
                         `${customer.cadenceWeeks} εβδομάδες`}
                     </span>
                     <span className="font-medium text-gray-400">Έναρξη</span>
-                    <span>{customer.startFrom ? toDateInput(customer.startFrom) : "-"}</span>
+                    <span>{formatDateDisplay(customer.startFrom)}</span>
                     <span className="font-medium text-gray-400">Λήξη</span>
-                    <span>{customer.until ? toDateInput(customer.until) : "-"}</span>
+                    <span>{formatDateDisplay(customer.until)}</span>
                   </div>
                   <div className="flex flex-col gap-2 pt-3">
                     <button

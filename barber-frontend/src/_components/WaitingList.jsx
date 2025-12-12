@@ -19,6 +19,12 @@ function isPastDate(dateStr) {
   return parsed < today;
 }
 
+function normalizeDate(value) {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
 function splitExpired(list = []) {
   const upcoming = [];
   const expired = [];
@@ -27,6 +33,21 @@ function splitExpired(list = []) {
     else upcoming.push(entry);
   });
   return { upcoming, expired };
+}
+
+function formatDateDMY(value) {
+  if (!value) return "";
+  try {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+    return date.toLocaleDateString("el-GR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    });
+  } catch {
+    return value || "";
+  }
 }
 
 export default function WaitingList() {
@@ -71,7 +92,21 @@ export default function WaitingList() {
           );
         });
       }
-      setWaitingList(upcoming);
+      const internalEntries = [];
+      const publicEntries = [];
+      (upcoming || []).forEach((entry) => {
+        if (entry?.source === "public") publicEntries.push(entry);
+        else internalEntries.push(entry);
+      });
+      publicEntries.sort((a, b) => {
+        const aDate = normalizeDate(a?.preferredDate);
+        const bDate = normalizeDate(b?.preferredDate);
+        if (aDate && bDate) return aDate - bDate;
+        if (aDate) return -1;
+        if (bDate) return 1;
+        return 0;
+      });
+      setWaitingList([...internalEntries, ...publicEntries]);
     } catch (error) {
       console.error("Failed to fetch waiting list:", error);
     } finally {
@@ -221,7 +256,8 @@ export default function WaitingList() {
                 entry?.customerId?.name || entry?.customerName || "Χωρίς όνομα";
               const displayPhone =
                 entry?.customerId?.phoneNumber || entry?.phoneNumber || "—";
-              const preferredDate = entry?.preferredDate;
+              const preferredDateValue = entry?.preferredDate;
+              const formattedPreferredDate = formatDateDMY(preferredDateValue);
               const preferredTimes =
                 Array.isArray(entry?.preferredTimes) && entry.preferredTimes.length
                   ? entry.preferredTimes
@@ -269,10 +305,10 @@ export default function WaitingList() {
                       )}
                     </p>
                     <p className="text-sm text-gray-400">{displayPhone}</p>
-                    {(preferredDate || preferredTimes.length > 0) && (
+                    {(preferredDateValue || preferredTimes.length > 0) && (
                       <p className="text-xs text-gray-400 mt-1">
-                        {preferredDate && <span>Ημ/νία: {preferredDate}</span>}
-                        {preferredDate && preferredTimes.length > 0 && (
+                        {preferredDateValue && <span>Ημ/νία: {formattedPreferredDate}</span>}
+                        {preferredDateValue && preferredTimes.length > 0 && (
                           <span> • </span>
                         )}
                         {preferredTimes.length > 0 && (
