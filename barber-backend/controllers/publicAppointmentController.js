@@ -223,8 +223,8 @@ const rescheduleAppointment = async (req, res, next) => {
     }
     const now = moment().utc();
     const hoursUntilAppointment = moment(appointment.appointmentDateTime).diff(now, "hours", true);
-    if (hoursUntilAppointment < 24) {
-      return res.status(400).json({ message: "Τα ραντεβού μπορούν να αλλάξουν έως 24 ώρες πριν." });
+    if (hoursUntilAppointment < 2) {
+      return res.status(400).json({ message: "Τα ραντεβού μπορούν να αλλάξουν έως 2 ώρες πριν." });
     }
     const newStartIso = appointmentDateTime || dateTime;
     const nextStart = moment(newStartIso).utc();
