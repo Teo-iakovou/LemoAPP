@@ -221,10 +221,13 @@ const rescheduleAppointment = async (req, res, next) => {
     if (appointment.type !== "appointment") {
       return res.status(400).json({ message: "Only appointments can be rescheduled." });
     }
-    const now = moment().utc();
-    const hoursUntilAppointment = moment(appointment.appointmentDateTime).diff(now, "hours", true);
-    if (hoursUntilAppointment < 2) {
-      return res.status(400).json({ message: "Τα ραντεβού μπορούν να αλλάξουν έως 2 ώρες πριν." });
+    const now = moment().tz("Europe/Athens");
+    const appointmentMoment = moment(appointment.appointmentDateTime).tz("Europe/Athens");
+    const minutesUntilAppointment = appointmentMoment.diff(now, "minutes", true);
+    if (minutesUntilAppointment < 120) {
+      return res
+        .status(400)
+        .json({ message: "Τα ραντεβού μπορούν να αλλάξουν μόνο εφόσον απομένουν τουλάχιστον 2 ώρες." });
     }
     const newStartIso = appointmentDateTime || dateTime;
     const nextStart = moment(newStartIso).utc();
