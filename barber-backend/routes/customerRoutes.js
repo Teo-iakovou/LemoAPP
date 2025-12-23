@@ -5,6 +5,7 @@ const { CloudinaryStorage } = require("multer-storage-cloudinary");
 const cloudinary = require("../utils/cloudinaryConfig");
 console.log("Cloudinary config:", cloudinary.config());
 const { sendBirthdaySMS } = require("../controllers/birthdaySms");
+const { sendChristmasSMS } = require("../controllers/christmasSms");
 const {
   getCustomers,
   deleteAllCustomers,
@@ -70,6 +71,25 @@ router.post("/send-birthday-sms", async (req, res) => {
         message: "Failed to run birthday SMS script",
         error: err.message,
       });
+  }
+});
+
+// Trigger Christmas SMS broadcast (defaults to running only on 25/12)
+router.post("/send-christmas-sms", async (req, res) => {
+  try {
+    const force = Boolean(req.body?.force);
+    const result = await sendChristmasSMS({ force });
+    res.json({
+      success: true,
+      message: "Christmas SMS script executed!",
+      result,
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      message: "Failed to run Christmas SMS script",
+      error: err.message,
+    });
   }
 });
 

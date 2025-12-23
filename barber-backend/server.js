@@ -6,6 +6,7 @@ const cron = require("node-cron");
 const noteRoutes = require("./routes/noteRoutes");
 const { autoRetryFailedSMS } = require("./controllers/autoRetryFailedSMS");
 const { sendBirthdaySMS } = require("./controllers/birthdaySms");
+const { sendChristmasSMS } = require("./controllers/christmasSms");
 
 const smsStatusRoutes = require("./routes/smsStatusRoutes");
 const smsResendRoute = require("./routes/smsResendRoute");
@@ -145,6 +146,23 @@ if (process.env.NODE_ENV === "production") {
       console.error("❌ Error while sending birthday SMS:", error.message);
     }
   });
+
+  // Send the Christmas SMS broadcast on December 25th at 09:00 Athens time
+  cron.schedule(
+    "0 9 25 12 *",
+    async () => {
+      console.log(
+        `[${new Date().toISOString()}] 🎄 Running Christmas SMS scheduler...`
+      );
+      try {
+        await sendChristmasSMS();
+        console.log("🎄 Christmas SMS sent successfully.");
+      } catch (error) {
+        console.error("❌ Error while sending Christmas SMS:", error.message);
+      }
+    },
+    { timezone: "Europe/Athens" }
+  );
 }
 
 // TEMPORARY TEST ROUTE for triggering birthday SMS

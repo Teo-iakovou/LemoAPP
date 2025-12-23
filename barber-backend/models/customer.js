@@ -14,6 +14,7 @@ const customerSchema = new mongoose.Schema({
   barber: { type: String, enum: ["ΛΕΜΟ", "ΦΟΡΟΥ"], default: null },
   profilePicture: { type: String, default: null }, // New, optional
   lastBirthdaySMS: { type: Date, default: null }, // To track last year SMS was sent
+  lastChristmasSMS: { type: Date, default: null },
 
   dateOfBirth: { type: Date, default: null }, // New, optional
 });
