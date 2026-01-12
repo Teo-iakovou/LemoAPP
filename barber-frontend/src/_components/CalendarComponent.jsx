@@ -81,6 +81,11 @@ const CalendarComponent = ({
   onSelectEvent,
   onUpdateAppointment, // Call this to update on backend/state
   disabled,
+  date,
+  onNavigate,
+  view,
+  onView,
+  showToolbar = true,
 }) => {
   // Style for each event
   const eventStyleGetter = (event, start, end, isSelected) => {
@@ -131,10 +136,16 @@ const CalendarComponent = ({
   const handleEventResize = ({ event, start, end }) => {
     // Call your backend or update state here
     if (onUpdateAppointment) {
-      onUpdateAppointment({ ...event, start, end });
+      onUpdateAppointment({ event, start, end, action: "resize" });
     }
     // For demo:
     // console.log("Resized event:", { ...event, start, end });
+  };
+
+  const handleEventDrop = ({ event, start, end }) => {
+    if (onUpdateAppointment) {
+      onUpdateAppointment({ event, start, end, action: "drop" });
+    }
   };
 
   return (
@@ -142,6 +153,11 @@ const CalendarComponent = ({
       <DragAndDropCalendar
         localizer={localizer}
         events={events}
+        date={date}
+        onNavigate={onNavigate}
+        view={view}
+        onView={onView}
+        toolbar={showToolbar}
         startAccessor="start"
         endAccessor="end"
         style={{ height: "100%", width: "100%" }}
@@ -152,16 +168,17 @@ const CalendarComponent = ({
         components={{
           event: CalendarEvent,
         }}
-        className={`relative z-0 ${
-          disabled ? "pointer-events-none opacity-50" : ""
-        }`}
+        className="relative z-0"
         min={new Date(1970, 1, 1, 7, 0, 0)}
         max={new Date(1970, 1, 1, 21, 0, 0)}
         step={40}
         timeslots={1}
         defaultView={Views.WEEK}
-        resizable
+        views={[Views.MONTH, Views.WEEK, Views.DAY, Views.AGENDA]}
+        resizable={!disabled}
+        draggableAccessor={() => !disabled}
         onEventResize={handleEventResize}
+        onEventDrop={handleEventDrop}
         formats={{
           timeGutterFormat: "HH:mm",
           eventTimeRangeFormat: ({ start, end }) =>

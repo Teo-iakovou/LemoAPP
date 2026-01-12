@@ -11,7 +11,7 @@ import {
   overrideAutoCustomerOccurrence,
   fetchAutoCustomerLastAppointments,
 } from "../utils/api";
-import AutoCustomersCalendar from "../_components/AutoCustomersCalendar";
+import CalendarComponent from "../_components/CalendarComponent";
 import { toast } from "react-hot-toast";
 import Swal from "sweetalert2";
 import withReactContent from "sweetalert2-react-content";
@@ -19,6 +19,7 @@ import DatePicker, { registerLocale } from "react-datepicker";
 import { ChevronLeft, ChevronRight, CalendarClock } from "lucide-react";
 import el from "date-fns/locale/el";
 import "react-datepicker/dist/react-datepicker.css";
+import "../styles/autoCustomersPreviewCalendar.css";
 
 registerLocale("el", el);
 
@@ -154,6 +155,8 @@ const AutoCustomersPage = () => {
   const [renewing, setRenewing] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
   const [formState, setFormState] = useState(emptyForm);
+  const [formSubmitting, setFormSubmitting] = useState(false);
+  const [initialFormSnapshot, setInitialFormSnapshot] = useState(null);
   const [editingId, setEditingId] = useState(null);
   const [occurrenceContext, setOccurrenceContext] = useState(null);
   const [pushOpen, setPushOpen] = useState(false);
@@ -163,10 +166,26 @@ const AutoCustomersPage = () => {
     to: "",
   });
   const [directory, setDirectory] = useState([]);
+  const [listOpen, setListOpen] = useState(true);
   const formRef = useRef(null);
   const pushRef = useRef(null);
+  const hasAutoJumpedRef = useRef(false);
   const MySwal = useMemo(() => withReactContent(Swal), []);
   const [calendarStart, setCalendarStart] = useState(() => alignToMondayStart(new Date()));
+  const [calendarView, setCalendarView] = useState("week");
+  const previewCalHeight =
+    calendarView === "month"
+      ? 1200
+      : calendarView === "agenda"
+      ? 900
+      : calendarView === "week"
+      ? 1200
+      : 1400;
+  const hasUnsavedChanges = useMemo(() => {
+    if (!formOpen || !initialFormSnapshot) return false;
+    const currentSnapshot = toComparableSnapshot(formState);
+    return JSON.stringify(currentSnapshot) !== JSON.stringify(initialFormSnapshot);
+  }, [formOpen, formState, initialFormSnapshot]);
 
   const loadCustomers = async () => {
     setLoading(true);
@@ -310,10 +329,75 @@ const AutoCustomersPage = () => {
     return events;
   }, [customers, calendarStart]);
 
+  const previewEvents = useMemo(
+    () =>
+      calendarEvents.map((event) => {
+        const customer = customers.find((item) => item?._id === event.autoCustomerId);
+        const barber = event.barber || customer?.barber || "ΛΕΜΟ";
+        const customerName = event.title || customer?.customerName || "Ραντεβού";
+        const isOverride = Boolean(event.hasOverride);
+        const start = event.start instanceof Date ? event.start : new Date(event.start);
+        const durationMin = Number(event.durationMin) || 40;
+        const end = new Date(start.getTime() + durationMin * 60000);
+
+        return {
+          id: String(event.id),
+          title: `${customerName} • ${barber}${isOverride ? " • override" : ""}`,
+          start,
+          end,
+          type: "appointment",
+          barber,
+          isOverride,
+          isAutoCustomerPreview: true,
+          autoCustomerId: event.autoCustomerId,
+          originalStart: event.originalStart,
+          durationMin,
+        };
+      }),
+    [calendarEvents, customers]
+  );
+
+  useEffect(() => {
+    hasAutoJumpedRef.current = false;
+  }, [previewEvents.length]);
+
+  useEffect(() => {
+    if (hasAutoJumpedRef.current) return;
+    if (!previewEvents.length) return;
+
+    const rangeStart =
+      calendarView === "day"
+        ? new Date(calendarStart.getFullYear(), calendarStart.getMonth(), calendarStart.getDate(), 0, 0, 0, 0)
+        : calendarView === "month"
+        ? new Date(calendarStart.getFullYear(), calendarStart.getMonth(), 1, 0, 0, 0, 0)
+        : alignToMondayStart(calendarStart);
+
+    const rangeEnd =
+      calendarView === "day"
+        ? new Date(calendarStart.getFullYear(), calendarStart.getMonth(), calendarStart.getDate(), 23, 59, 59, 999)
+        : calendarView === "month"
+        ? new Date(calendarStart.getFullYear(), calendarStart.getMonth() + 1, 0, 23, 59, 59, 999)
+        : new Date(addDays(rangeStart, 6).setHours(23, 59, 59, 999));
+
+    const hasInRange = previewEvents.some(
+      (event) => event.start >= rangeStart && event.start <= rangeEnd
+    );
+
+    if (!hasInRange) {
+      const earliestStart = previewEvents.reduce((min, event) =>
+        event.start < min ? event.start : min
+      , previewEvents[0].start);
+      hasAutoJumpedRef.current = true;
+      setCalendarStart(alignToMondayStart(new Date(earliestStart)));
+    }
+  }, [calendarStart, calendarView, previewEvents]);
+
+
   const handleOpenCreate = () => {
     setEditingId(null);
     setOccurrenceContext(null);
     setFormState(emptyForm);
+    setInitialFormSnapshot(toComparableSnapshot(emptyForm));
     setFormOpen(true);
   };
 
@@ -348,6 +432,28 @@ const AutoCustomersPage = () => {
     if (Number.isNaN(date.getTime())) return null;
     date.setSeconds(0, 0);
     return date;
+  }
+
+  function toComparableSnapshot(state) {
+    const normalizeDateField = (value) => {
+      const input = toDateInput(value);
+      if (!input) return "";
+      const normalized = normalizeDateValue(input);
+      return normalized ? toLocalDateString(normalized) : "";
+    };
+
+    return {
+      customerName: String(state.customerName || "").trim(),
+      phoneNumber: String(state.phoneNumber || "").trim(),
+      barber: String(state.barber || "").trim(),
+      weekday: Number(state.weekday),
+      timeOfDay: normalizeTimeString(state.timeOfDay, "09:00"),
+      durationMin: Number(state.durationMin),
+      cadenceWeeks: Number(state.cadenceWeeks),
+      startFrom: normalizeDateField(state.startFrom),
+      until: normalizeDateField(state.until),
+      maxOccurrences: Number(state.maxOccurrences),
+    };
   }
 
   function combineDateAndTime(dateString, timeString) {
@@ -494,7 +600,7 @@ const AutoCustomersPage = () => {
     const effectiveBarber = options.overrideBarber || customer.barber || "ΛΕΜΟ";
     const effectiveDuration = options.overrideDuration ?? customer.durationMin ?? 40;
 
-    setFormState({
+    const nextFormState = {
       customerName: customer.customerName || "",
       phoneNumber: customer.phoneNumber || "",
       barber: effectiveBarber,
@@ -505,7 +611,9 @@ const AutoCustomersPage = () => {
       startFrom: startIso,
       until: toDateInput(customer.until),
       maxOccurrences: customer.maxOccurrences ? String(customer.maxOccurrences) : "",
-    });
+    };
+    setFormState(nextFormState);
+    setInitialFormSnapshot(toComparableSnapshot(nextFormState));
     setFormOpen(true);
   };
 
@@ -596,31 +704,37 @@ const AutoCustomersPage = () => {
   const handleFormSubmit = async (e) => {
     e.preventDefault();
 
-      if (occurrenceContext && editingId) {
-        const originalDate = normalizeDateValue(occurrenceContext.originalStart);
-        const targetDate = combineDateAndTime(formState.startFrom, formState.timeOfDay);
+    if (formSubmitting) return;
 
-        if (!originalDate || !targetDate) {
-          toast.error("Η ημερομηνία και η ώρα είναι υποχρεωτικές για την ενημέρωση.");
-          return;
-        }
+    if (occurrenceContext && editingId) {
+      const originalDate = normalizeDateValue(occurrenceContext.originalStart);
+      const targetDate = combineDateAndTime(formState.startFrom, formState.timeOfDay);
 
-        try {
-          await overrideAutoCustomerOccurrence(editingId, {
-            occurrence: originalDate.toISOString(),
-            overrideStart: targetDate.toISOString(),
-            durationMin: Number(formState.durationMin) || 40,
-            barber: formState.barber,
-          });
-          toast.success("Η εμφάνιση ενημερώθηκε μόνο για αυτή την ημερομηνία.");
-          setFormOpen(false);
-          setEditingId(null);
-          setOccurrenceContext(null);
+      if (!originalDate || !targetDate) {
+        toast.error("Η ημερομηνία και η ώρα είναι υποχρεωτικές για την ενημέρωση.");
+        return;
+      }
+
+      setFormSubmitting(true);
+      try {
+        await overrideAutoCustomerOccurrence(editingId, {
+          occurrence: originalDate.toISOString(),
+          overrideStart: targetDate.toISOString(),
+          durationMin: Number(formState.durationMin) || 40,
+          barber: formState.barber,
+        });
+        toast.success("Η εμφάνιση ενημερώθηκε μόνο για αυτή την ημερομηνία.");
+        setFormOpen(false);
+        setEditingId(null);
+        setOccurrenceContext(null);
         setFormState(emptyForm);
+        setInitialFormSnapshot(null);
         loadCustomers();
       } catch (error) {
         console.error(error);
         toast.error(error.message || "Αποτυχία ενημέρωσης εμφάνισης.");
+      } finally {
+        setFormSubmitting(false);
       }
       return;
     }
@@ -632,6 +746,7 @@ const AutoCustomersPage = () => {
       return;
     }
 
+    setFormSubmitting(true);
     try {
       if (editingId) {
         await updateAutoCustomer(editingId, payload);
@@ -644,10 +759,13 @@ const AutoCustomersPage = () => {
       setEditingId(null);
       setOccurrenceContext(null);
       setFormState(emptyForm);
+      setInitialFormSnapshot(null);
       loadCustomers();
     } catch (error) {
       console.error(error);
       toast.error(error.message || "Αποτυχία αποθήκευσης.");
+    } finally {
+      setFormSubmitting(false);
     }
   };
 
@@ -663,6 +781,7 @@ const AutoCustomersPage = () => {
         setEditingId(null);
         setOccurrenceContext(null);
         setFormState(emptyForm);
+        setInitialFormSnapshot(null);
       }
 
       if (pushOpen && pushRef.current && !pushRef.current.contains(target)) {
@@ -679,10 +798,29 @@ const AutoCustomersPage = () => {
 
     if (pushSubmitting) return;
 
+    if (formOpen || hasUnsavedChanges || formSubmitting) {
+      toast.error(
+        "Υπάρχουν μη αποθηκευμένες αλλαγές. Αποθήκευσε πρώτα και μετά κάνε Push."
+      );
+      return;
+    }
+
     if (!pushState.from) {
       toast.error("Η ημερομηνία έναρξης είναι υποχρεωτική.");
       return;
     }
+
+    const confirmPush = await MySwal.fire({
+      title: "Προσοχή",
+      text:
+        "Αυτό θα δημιουργήσει ΚΑΝΟΝΙΚΑ ραντεβού στο κύριο ημερολόγιο (Calendar page). Θέλεις να συνεχίσεις;",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonText: "Ναι, κάνε Push",
+      cancelButtonText: "Άκυρο",
+    });
+
+    if (!confirmPush.isConfirmed) return;
 
     setPushSubmitting(true);
 
@@ -752,9 +890,8 @@ const AutoCustomersPage = () => {
         console.error("Failed to fetch last saved appointments for auto customers", historyError);
       }
 
-      const updates = customers
-        .filter((customer) => customer && customer._id)
-        .map(async (customer) => {
+      const customersToUpdate = customers.filter((customer) => customer && customer._id);
+      const updatedPayloads = customersToUpdate.map((customer) => {
           const customerKey =
             customer && customer._id ? (typeof customer._id === "string" ? customer._id : String(customer._id)) : "";
           const lastEntry = customerKey ? lastAppointmentsByCustomer?.[customerKey] : undefined;
@@ -763,31 +900,27 @@ const AutoCustomersPage = () => {
             : null;
           const historicalWindow = computeNextDatesFromHistory(customer, { lastActualStart });
           const nextDate = historicalWindow?.nextStart || getNextStartFromToday(customer);
-          const payload = buildUpdatePayloadFromCustomer(customer, nextDate, {
+          return buildUpdatePayloadFromCustomer(customer, nextDate, {
             ...(historicalWindow?.newUntil ? { untilOverride: historicalWindow.newUntil } : {}),
           });
-          await updateAutoCustomer(customer._id, payload);
         });
+
+      const updates = updatedPayloads.map((payload, index) =>
+        updateAutoCustomer(customersToUpdate[index]._id, payload)
+      );
 
       await Promise.all(updates);
-      toast.success("Οι επαναλαμβανόμενοι πελάτες ανανεώθηκαν από σήμερα.");
-
-      const fromLocal = pushState.from || toLocalDateString(new Date());
-      try {
-        toast("Οι πελάτες προστίθενται στο ημερολόγιο...");
-        await pushAutoCustomers({
-          from: toUtcIsoFromLocalDate(fromLocal),
-          to: pushState.to ? toUtcIsoFromLocalDate(pushState.to) : undefined,
-          dryRun: false,
-        });
-        toast.success("Το ημερολόγιο ενημερώθηκε με τους πελάτες.");
-      } catch (pushError) {
-        console.error("Failed to push customers after renewal", pushError);
-        toast.error(pushError?.message || "Αποτυχία ενημέρωσης του ημερολογίου.");
-      }
-
       await loadCustomers();
-      setCalendarStart(alignToMondayStart(new Date()));
+      toast.success(
+        "Οι επαναλαμβανόμενοι πελάτες ανανεώθηκαν. Έλεγξε το preview και μετά κάνε Push στο κύριο ημερολόγιο."
+      );
+      const earliestNextStartFrom = updatedPayloads
+        .map((payload) => (payload?.startFrom ? new Date(payload.startFrom) : null))
+        .filter((date) => date && !Number.isNaN(date.getTime()))
+        .sort((a, b) => a.getTime() - b.getTime())[0];
+      if (earliestNextStartFrom) {
+        setCalendarStart(alignToMondayStart(new Date(earliestNextStartFrom)));
+      }
     } catch (error) {
       console.error("Failed to renew auto customers", error);
       toast.error(error?.message || "Αποτυχία ανανέωσης πελατών.");
@@ -796,52 +929,96 @@ const AutoCustomersPage = () => {
     }
   };
 
+  const pushBlocked = formOpen || formSubmitting || hasUnsavedChanges;
+  const newTooltipText = "";
+  const renewTooltipText =
+    "Η ανανέωση ενημερώνει τους recurring πελάτες και το preview. Δεν δημιουργεί κανονικά ραντεβού. Για να αποθηκευτούν στο κύριο ημερολόγιο, πάτησε Push.";
+  const pushTooltipText =
+    "Αποθήκευσε πρώτα τις αλλαγές σου για να κάνεις Push στο κύριο ημερολόγιο.";
+
   return (
-    <div className="h-full overflow-y-auto text-gray-100">
+    <div className="h-full text-gray-100">
       <div className="max-w-7xl mx-auto space-y-6 px-4 sm:px-6 lg:px-8 py-6">
-        <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <div className="space-y-1">
-            <h1 className="text-2xl font-bold">Επαναλαμβανόμενοι Πελάτες</h1>
-            <p className="text-sm text-gray-400">
-              Διαχειριστείτε τις επαναλαμβανόμενες κρατήσεις και δημιουργήστε ραντεβού μαζικά.
-            </p>
-          </div>
-          <div className="flex flex-col sm:flex-row sm:items-center gap-2 w-full sm:w-auto">
-            <button
-              onClick={handleOpenCreate}
-              className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg transition w-full sm:w-auto"
-            >
-              Νέος Πελάτης
-            </button>
-            <button
-              onClick={handleRenewAll}
-              disabled={renewing || loading}
-              className="bg-emerald-600 hover:bg-emerald-600/90 disabled:bg-gray-700 disabled:text-gray-400 text-white px-4 py-2 rounded-lg transition w-full sm:w-auto"
-            >
-              {renewing ? "Ανανέωση..." : "Ανανέωση"}
-            </button>
-            <button
-              onClick={() => {
-                setPushOpen(true);
-              }}
-              className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition w-full sm:w-auto"
-            >
-              Push στο Ημερολόγιο
-            </button>
+        <header className="rounded-xl border border-white/10 bg-white/5 p-6 flex flex-col gap-4">
+          <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
+            <div className="space-y-1">
+              <h1 className="text-2xl font-bold">Επαναλαμβανόμενοι Πελάτες</h1>
+              <p className="text-sm text-gray-400">
+                Διαχειριστείτε τις επαναλαμβανόμενες κρατήσεις και δημιουργήστε ραντεβού μαζικά.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-3 items-start justify-start lg:justify-end">
+              <div className="relative group">
+                <button
+                  onClick={handleOpenCreate}
+                  className="h-10 bg-purple-600 hover:brightness-110 text-white px-4 rounded-lg text-sm font-medium transition shadow-sm"
+                  aria-label="Νέος Πελάτης"
+                >
+                  Νέος Πελάτης
+                </button>
+                {newTooltipText && (
+                  <div className="pointer-events-none absolute left-0 top-full mt-2 w-64 rounded-lg border border-white/10 bg-black/80 px-3 py-2 text-xs leading-snug text-gray-200 opacity-0 translate-y-1 transition group-hover:opacity-100 group-hover:translate-y-0 group-focus-within:opacity-100 group-focus-within:translate-y-0 z-50">
+                    <span className="absolute -top-1 left-4 h-2 w-2 rotate-45 bg-black/80 border-l border-t border-white/10"></span>
+                    {newTooltipText}
+                  </div>
+                )}
+              </div>
+              <div className="relative group">
+                <button
+                  onClick={handleRenewAll}
+                  disabled={renewing || loading}
+                  className="h-10 bg-emerald-600 hover:brightness-110 disabled:bg-gray-700 disabled:text-gray-400 text-white px-4 rounded-lg text-sm font-medium transition shadow-sm"
+                  aria-label="Η ανανέωση ενημερώνει τους recurring πελάτες και το preview. Δεν δημιουργεί κανονικά ραντεβού. Για να αποθηκευτούν στο κύριο ημερολόγιο, πάτησε Push."
+                >
+                  {renewing ? "Ανανέωση (Preview)..." : "Ανανέωση (Preview)"}
+                </button>
+                {renewTooltipText && (
+                  <div className="pointer-events-none absolute left-0 top-full mt-2 w-64 rounded-lg border border-white/10 bg-black/80 px-3 py-2 text-xs leading-snug text-gray-200 opacity-0 translate-y-1 transition group-hover:opacity-100 group-hover:translate-y-0 group-focus-within:opacity-100 group-focus-within:translate-y-0 z-50">
+                    <span className="absolute -top-1 left-4 h-2 w-2 rotate-45 bg-black/80 border-l border-t border-white/10"></span>
+                    {renewTooltipText}
+                  </div>
+                )}
+              </div>
+              <div className="relative group">
+                <button
+                  onClick={() => {
+                    setPushOpen(true);
+                  }}
+                  disabled={pushBlocked}
+                  className="h-10 bg-blue-500 hover:brightness-110 disabled:bg-gray-700 disabled:text-gray-400 text-white px-4 rounded-lg text-sm font-medium transition shadow-sm"
+                  aria-label="Αποθήκευσε πρώτα τις αλλαγές σου για να κάνεις Push στο κύριο ημερολόγιο."
+                >
+                  Push στο Ημερολόγιο
+                </button>
+                {pushTooltipText && (
+                  <div className="pointer-events-none absolute left-0 top-full mt-2 w-64 rounded-lg border border-white/10 bg-black/80 px-3 py-2 text-xs leading-snug text-gray-200 opacity-0 translate-y-1 transition group-hover:opacity-100 group-hover:translate-y-0 group-focus-within:opacity-100 group-focus-within:translate-y-0 z-50">
+                    <span className="absolute -top-1 left-4 h-2 w-2 rotate-45 bg-black/80 border-l border-t border-white/10"></span>
+                    {pushTooltipText}
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         </header>
 
         <section className="bg-gray-800 border border-gray-700 rounded-xl shadow-lg p-3 sm:p-4">
-          <div className="flex items-center justify-between mb-4">
+          <button
+            type="button"
+            onClick={() => setListOpen((prev) => !prev)}
+            className="flex w-full items-center justify-between mb-4 text-left"
+            aria-expanded={listOpen}
+          >
             <h2 className="text-lg font-semibold">
               Λίστα Πελατών
               {!loading && (
                 <span className="ml-2 text-sm text-gray-400">({customers.length})</span>
               )}
             </h2>
-         </div>
+            <span className="text-sm text-gray-400">{listOpen ? "Κλείσιμο" : "Άνοιγμα"}</span>
+          </button>
 
-          <div className="hidden sm:block overflow-x-auto">
+          {listOpen && (
+            <div className="hidden sm:block overflow-x-auto">
             <table className="min-w-full text-left text-sm">
               <thead className="bg-gray-700 text-gray-200 uppercase text-xs">
                 <tr>
@@ -915,9 +1092,11 @@ const AutoCustomersPage = () => {
                 )}
               </tbody>
             </table>
-          </div>
+            </div>
+          )}
 
-          <div className="sm:hidden space-y-3">
+          {listOpen && (
+            <div className="sm:hidden space-y-3">
             {loading ? (
               <div className="rounded-xl border border-gray-700 bg-gray-900 p-4 text-center text-gray-400">
                 Φόρτωση...
@@ -975,14 +1154,36 @@ const AutoCustomersPage = () => {
                 </article>
               ))
             )}
-          </div>
+            </div>
+          )}
         </section>
 
         <section className="rounded-xl">
-          <div className="flex flex-col gap-3 mb-4 px-1 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-3 mb-2 px-1 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-2 text-base sm:text-lg font-semibold text-gray-100">
               <CalendarClock size={18} className="text-purple-300" />
               Προβολή στο Ημερολόγιο
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {[
+                { value: "month", label: "Μήνας" },
+                { value: "week", label: "Εβδομάδα" },
+                { value: "day", label: "Ημέρα" },
+                { value: "agenda", label: "Ατζέντα" },
+              ].map((view) => (
+                <button
+                  key={view.value}
+                  type="button"
+                  onClick={() => setCalendarView(view.value)}
+                  className={`rounded-full border px-3 py-1 text-xs uppercase tracking-wide transition ${
+                    calendarView === view.value
+                      ? "border-purple-500 text-purple-200 bg-purple-600/20"
+                      : "border-gray-600 text-gray-200 hover:bg-gray-700"
+                  }`}
+                >
+                  {view.label}
+                </button>
+              ))}
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-xs text-gray-400 sm:hidden">Υπολογισμοί βασισμένοι στους αποθηκευμένους πελάτες</span>
@@ -1014,8 +1215,55 @@ const AutoCustomersPage = () => {
               </div>
             </div>
           </div>
-          <div className="h-[520px]">
-            <AutoCustomersCalendar events={calendarEvents} startDate={calendarStart} />
+          <div
+            className="auto-customers-preview overflow-x-auto max-w-full min-h-0"
+            style={{ height: previewCalHeight, width: "100%" }}
+          >
+            <CalendarComponent
+              events={previewEvents}
+              date={calendarStart}
+              onNavigate={(nextDate) => setCalendarStart(nextDate)}
+              view={calendarView}
+              onView={setCalendarView}
+              showToolbar={false}
+              onSelectSlot={(slotInfo) => {
+                const slotStart = slotInfo?.start instanceof Date ? slotInfo.start : null;
+                if (!slotStart) return;
+                const nextFormState = {
+                  ...emptyForm,
+                  weekday: slotStart.getDay(),
+                  timeOfDay: formatTimeValue(slotStart),
+                  startFrom: toLocalDateString(slotStart),
+                };
+                setEditingId(null);
+                setOccurrenceContext(null);
+                setFormState(nextFormState);
+                setInitialFormSnapshot(toComparableSnapshot(nextFormState));
+                setFormOpen(true);
+              }}
+              onUpdateAppointment={async ({ event, start, end }) => {
+                if (!event?.autoCustomerId || !event?.originalStart) return;
+                const startDate = new Date(start);
+                const endDate = new Date(end);
+                try {
+                  await overrideAutoCustomerOccurrence(event.autoCustomerId, {
+                    occurrence: new Date(event.originalStart).toISOString(),
+                    overrideStart: startDate.toISOString(),
+                    durationMin: Math.round((endDate - startDate) / 60000),
+                    barber: event.barber,
+                  });
+                  await loadCustomers();
+                } catch (error) {
+                  console.error(error);
+                  toast.error(error.message || "Αποτυχία ενημέρωσης εμφάνισης.");
+                }
+              }}
+              onSelectEvent={(event) => {
+                const customer = customers.find((item) => item?._id === event.autoCustomerId);
+                if (!customer) return;
+                handleEdit(customer, event.originalStart);
+              }}
+            />
           </div>
         </section>
       </div>
@@ -1035,6 +1283,7 @@ const AutoCustomersPage = () => {
                 onClick={() => {
                   setFormOpen(false);
                   setEditingId(null);
+                  setInitialFormSnapshot(null);
                 }}
                 className="text-gray-400 hover:text-gray-200 text-xl"
               >
@@ -1219,6 +1468,7 @@ const AutoCustomersPage = () => {
                     setEditingId(null);
                     setOccurrenceContext(null);
                     setFormState(emptyForm);
+                    setInitialFormSnapshot(null);
                   }}
                   className="w-full sm:w-auto px-4 py-2 rounded-lg border border-gray-600 text-gray-300 hover:bg-gray-800"
                 >

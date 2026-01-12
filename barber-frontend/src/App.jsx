@@ -48,7 +48,7 @@ const App = () => {
 
   return (
     <Router>
-      <div className="h-screen flex flex-col bg-gray-900 transition-colors duration-300">
+      <div className="min-h-screen flex flex-col bg-gray-900 transition-colors duration-300">
         {/* Toasts show up globally */}
         <Toaster position="top-center" reverseOrder={false} />
         {/* Navbar Section */}
@@ -62,7 +62,7 @@ const App = () => {
         </header>
 
         {/* Main Content */}
-        <main className="flex-1 overflow-hidden p-6">
+        <main className="flex-1 overflow-y-auto p-6">
           <Suspense fallback={<div>Loading...</div>}>
             {isAuth ? (
               <Routes>
