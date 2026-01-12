@@ -15,6 +15,7 @@ const customerSchema = new mongoose.Schema({
   profilePicture: { type: String, default: null }, // New, optional
   lastBirthdaySMS: { type: Date, default: null }, // To track last year SMS was sent
   lastChristmasSMS: { type: Date, default: null },
+  lastNewYearSMS: { type: Date, default: null },
 
   dateOfBirth: { type: Date, default: null }, // New, optional
 });

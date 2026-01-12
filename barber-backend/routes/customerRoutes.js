@@ -5,7 +5,7 @@ const { CloudinaryStorage } = require("multer-storage-cloudinary");
 const cloudinary = require("../utils/cloudinaryConfig");
 console.log("Cloudinary config:", cloudinary.config());
 const { sendBirthdaySMS } = require("../controllers/birthdaySms");
-const { sendChristmasSMS } = require("../controllers/christmasSms");
+const { sendNewYearSMS } = require("../controllers/newYearSms");
 const {
   getCustomers,
   deleteAllCustomers,
@@ -64,30 +64,28 @@ router.post("/send-birthday-sms", async (req, res) => {
     await sendBirthdaySMS();
     res.json({ success: true, message: "Birthday SMS script executed!" });
   } catch (err) {
-    res
-      .status(500)
-      .json({
-        success: false,
-        message: "Failed to run birthday SMS script",
-        error: err.message,
-      });
+    res.status(500).json({
+      success: false,
+      message: "Failed to run birthday SMS script",
+      error: err.message,
+    });
   }
 });
 
-// Trigger Christmas SMS broadcast (defaults to running only on 25/12)
-router.post("/send-christmas-sms", async (req, res) => {
+// Trigger New Year SMS manually (force optional)
+router.post("/send-newyear-sms", async (req, res) => {
   try {
     const force = Boolean(req.body?.force);
-    const result = await sendChristmasSMS({ force });
+    const result = await sendNewYearSMS({ force });
     res.json({
       success: true,
-      message: "Christmas SMS script executed!",
+      message: "New Year SMS script executed!",
       result,
     });
   } catch (err) {
     res.status(500).json({
       success: false,
-      message: "Failed to run Christmas SMS script",
+      message: "Failed to run New Year SMS script",
       error: err.message,
     });
   }
