@@ -7,36 +7,92 @@ const { sendSMS } = require("./utils/smsService");
 dotenv.config();
 
 const tz = "Europe/Athens";
-const dateTargetAthens = moment.tz(tz);
 
-const startOfDayUTC = dateTargetAthens.clone().startOf("day").utc();
-const endOfDayUTC = dateTargetAthens.clone().endOf("day").utc();
+// --- tiny argv parser (no deps) ---
+function getArg(name) {
+  const prefix = `--${name}=`;
+  const hit = process.argv.find((a) => a.startsWith(prefix));
+  if (!hit) return null;
+  return hit.slice(prefix.length);
+}
+function hasFlag(name) {
+  return process.argv.includes(`--${name}`);
+}
 
-console.log(
-  `🔍 Scanning for appointments on ${dateTargetAthens.format(
-    "DD/MM/YYYY"
-  )} between ${startOfDayUTC.format()} and ${endOfDayUTC.format()} UTC`
-);
+const DRY_RUN = hasFlag("dry-run");
+const LIMIT = Number(getArg("limit") || 0); // 0 => no limit
+const ONLY_ID = getArg("id"); // appointment _id
+const ONLY_PHONE = getArg("phone"); // exact match
+const HOURS_FROM = Number(getArg("hoursFrom") || 24);
+const HOURS_TO = Number(getArg("hoursTo") || 25);
+
+// Optional: set "now" for testing
+const MOCK_NOW = getArg("now"); // ISO string
+
+const nowAthens = MOCK_NOW
+  ? moment.tz(MOCK_NOW, tz)
+  : moment.tz(tz);
+
+// Window: [now + HOURS_FROM, now + HOURS_TO] in UTC
+const windowStartUTC = nowAthens.clone().add(HOURS_FROM, "hours").utc();
+const windowEndUTC = nowAthens.clone().add(HOURS_TO, "hours").utc();
+
+console.log("🧪 Reminder test script config:", {
+  DRY_RUN,
+  LIMIT,
+  ONLY_ID,
+  ONLY_PHONE,
+  HOURS_FROM,
+  HOURS_TO,
+  nowAthens: nowAthens.format(),
+  windowStartUTC: windowStartUTC.format(),
+  windowEndUTC: windowEndUTC.format(),
+});
 
 const run = async () => {
+  if (!process.env.MONGODB_URI) {
+    throw new Error("MONGODB_URI is missing in env");
+  }
+
   await mongoose.connect(process.env.MONGODB_URI);
   console.log("✅ Connected to MongoDB");
 
-  const appointments = await Appointment.find({
+  const query = {
     appointmentDateTime: {
-      $gte: startOfDayUTC.toDate(),
-      $lte: endOfDayUTC.toDate(),
+      $gte: windowStartUTC.toDate(),
+      $lte: windowEndUTC.toDate(),
     },
     appointmentStatus: "confirmed",
     type: "appointment",
-  });
+  };
+
+  if (ONLY_ID) query._id = new mongoose.Types.ObjectId(ONLY_ID);
+  if (ONLY_PHONE) query.phoneNumber = ONLY_PHONE;
+
+  let appointments = await Appointment.find(query).sort({ appointmentDateTime: 1 });
+
+  // Apply LIMIT after find
+  if (LIMIT > 0) appointments = appointments.slice(0, LIMIT);
+
+  console.log(`🔎 Matched appointments: ${appointments.length}`);
+  if (appointments.length) {
+    console.log(
+      appointments.map((a) => ({
+        id: String(a._id),
+        customerName: a.customerName,
+        phoneNumber: a.phoneNumber,
+        appointmentDateTimeUTC: a.appointmentDateTime?.toISOString?.(),
+        appointmentDateTimeAthens: moment(a.appointmentDateTime).tz(tz).format("DD/MM/YYYY HH:mm"),
+      }))
+    );
+  }
 
   let sentCount = 0,
     skippedCount = 0,
     failedCount = 0;
 
   for (const appt of appointments) {
-    // Check for any "24-hour" reminder already sent
+    // If already has "24-hour" with status sent -> skip
     const alreadyHas24Hour = Array.isArray(appt.reminders)
       ? appt.reminders.some(
           (r) =>
@@ -44,24 +100,29 @@ const run = async () => {
             String(r?.status || "").toLowerCase() === "sent"
         )
       : false;
+
     if (alreadyHas24Hour) {
       skippedCount++;
       console.log(
-        `⏩ ${
-          appt.customerName
-        } (${appt.appointmentDateTime.toISOString()}): already has 24-hour reminder`
+        `⏩ Skip ${appt.customerName} (${String(appt._id)}): already has 24-hour reminder`
       );
       continue;
     }
 
-    // Compose Athens time for the SMS
     const formattedTime = moment(appt.appointmentDateTime)
       .tz(tz)
       .format("DD/MM/YYYY HH:mm");
+
     const message = `Υπενθύμιση για το ραντεβού σας αύριο στις ${formattedTime} στο Lemo Barber Shop.`;
 
+    if (DRY_RUN) {
+      console.log(`🟡 DRY RUN would send to ${appt.customerName} (${appt.phoneNumber}) -> ${formattedTime}`);
+      continue;
+    }
+
     try {
-      const result = await sendSMS(appt.phoneNumber, message);
+      // pass smsType for your new logs
+      const result = await sendSMS(appt.phoneNumber, message, { smsType: "24-hour" });
 
       appt.reminders.push({
         type: "24-hour",
@@ -73,7 +134,7 @@ const run = async () => {
         retryCount: 0,
       });
 
-      // 👉 PATCH: Set endTime if missing (for old records)
+      // keep your endTime patch
       if (!appt.endTime) {
         const duration = appt.duration || 40;
         appt.endTime = new Date(
@@ -93,6 +154,7 @@ const run = async () => {
         `❌ SMS failed for ${appt.customerName} (${appt.phoneNumber}):`,
         err.message
       );
+
       appt.reminders.push({
         type: "24-hour",
         sentAt: new Date(),
@@ -104,7 +166,6 @@ const run = async () => {
         error: err.message,
       });
 
-      // 👉 PATCH: Set endTime if missing (for old records)
       if (!appt.endTime) {
         const duration = appt.duration || 40;
         appt.endTime = new Date(
@@ -118,7 +179,7 @@ const run = async () => {
 
   await mongoose.disconnect();
   console.log(
-    `🎉 Done! Sent: ${sentCount}, Skipped: ${skippedCount}, Failed: ${failedCount}`
+    `🎉 Done! Sent: ${sentCount}, Skipped: ${skippedCount}, Failed: ${failedCount}, DryRun: ${DRY_RUN}`
   );
 };
 

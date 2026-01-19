@@ -3,7 +3,9 @@ const ScheduledMessage = require("../models/ScheduledMessage");
 const { sendSMS } = require("../utils/smsService");
 const moment = require("moment-timezone");
 
-const sendReminders = async () => {
+const sendReminders = async (options = {}) => {
+  const dryRun = Boolean(options?.dryRun);
+  const limit = Number(options?.limit) || 0;
   try {
     const tz = "Europe/Athens";
     const nowAthens = moment().tz(tz);
@@ -14,6 +16,13 @@ const sendReminders = async () => {
 
     const windowStartUTC = windowStart.clone().utc().toDate();
     const windowEndUTC = windowEnd.clone().utc().toDate();
+
+    console.log(
+      `[${timestamp}] 🕒 nowAthens=${nowAthens.toISOString()} nowUTC=${nowAthens.clone().utc().toISOString()}`
+    );
+    console.log(
+      `[${timestamp}] 🪟 windowAthens=${windowStart.format("YYYY-MM-DD HH:mm:ss")}..${windowEnd.format("YYYY-MM-DD HH:mm:ss")} windowUTC=${windowStart.clone().utc().toISOString()}..${windowEnd.clone().utc().toISOString()}`
+    );
 
     const appointments = await Appointment.find({
       appointmentDateTime: {
@@ -32,16 +41,34 @@ const sendReminders = async () => {
       },
     }).lean();
 
-    if (appointments.length === 0) {
+    console.log(
+      `[${timestamp}] 📦 Matched appointments: ${appointments.length}`
+    );
+
+    let selected = appointments;
+    if (limit > 0) {
+      selected = appointments.slice(0, limit);
+    }
+
+    if (selected.length === 0) {
       console.log(`[${timestamp}] 🔍 No appointments found in window.`);
       return;
     }
 
     console.log(
-      `[${timestamp}] 📋 Found ${appointments.length} appointments for reminders between ${windowStart.format("YYYY-MM-DD HH:mm")} and ${windowEnd.format("YYYY-MM-DD HH:mm")} Athens time`
+      `[${timestamp}] 📋 Found ${selected.length} appointments for reminders between ${windowStart.format("YYYY-MM-DD HH:mm")} and ${windowEnd.format("YYYY-MM-DD HH:mm")} Athens time`
     );
 
-    for (const appointment of appointments) {
+    for (const appointment of selected) {
+      console.log(
+        `[${timestamp}] ➡️ Reminder target _id=${appointment._id} name=${appointment.customerName} phone=${appointment.phoneNumber} apptUTC=${appointment.appointmentDateTime}`
+      );
+      if (dryRun) {
+        console.log(
+          `[${timestamp}] 🧪 Dry run: would send reminder for ${appointment.customerName} (${appointment.phoneNumber})`
+        );
+        continue;
+      }
       const appointmentTimeAthens = moment(appointment.appointmentDateTime)
         .tz(tz)
         .format("DD/MM/YYYY HH:mm");

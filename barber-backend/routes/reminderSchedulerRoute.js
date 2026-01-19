@@ -5,7 +5,15 @@ const router = express.Router();
 
 router.post("/send-reminders", async (req, res) => {
   try {
-    await sendReminders();
+    const dryRun = String(req.query.dryRun || "") === "1";
+    const limitRaw = Number(req.query.limit);
+    const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? limitRaw : 0;
+    if (!dryRun && !limit) {
+      return res
+        .status(400)
+        .json({ message: "Set dryRun=1 or provide limit" });
+    }
+    await sendReminders({ dryRun, limit });
     await processScheduledMessages();
     res.status(200).json({ message: "Reminders and scheduled messages processed" });
   } catch (error) {
