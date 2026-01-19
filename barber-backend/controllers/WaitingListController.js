@@ -7,6 +7,7 @@ function normalizeBarber(input = "") {
   const value = (input || "").toString().toLowerCase();
   if (value === "lemo" || value === "λεμο") return "ΛΕΜΟ";
   if (value === "forou" || value === "φορου") return "ΦΟΡΟΥ";
+  if (value === "koushis" || value === "κουσιης" || value === "κούσιης") return "ΚΟΥΣΙΗΣ";
   return input || "";
 }
 

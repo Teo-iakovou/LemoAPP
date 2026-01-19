@@ -297,6 +297,7 @@ router.get("/availability/horizon", async (req, res, next) => {
     if (!greekBarber && barberId) {
       if (String(barberId).toLowerCase() === 'lemo') greekBarber = 'ΛΕΜΟ';
       else if (String(barberId).toLowerCase() === 'forou') greekBarber = 'ΦΟΡΟΥ';
+      else if (String(barberId).toLowerCase() === 'koushis') greekBarber = 'ΚΟΥΣΙΗΣ';
     }
     const payload = await buildMonthAvailability({ from, to, barber: greekBarber, includeSlots });
     res.set('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300');
@@ -335,6 +336,7 @@ router.get("/availability", async (req, res, next) => {
       const id = String(barberId).toLowerCase();
       if (id === "lemo") greekBarber = "ΛΕΜΟ";
       else if (id === "forou") greekBarber = "ΦΟΡΟΥ";
+      else if (id === "koushis") greekBarber = "ΚΟΥΣΙΗΣ";
     }
 
     const dayStart = day;

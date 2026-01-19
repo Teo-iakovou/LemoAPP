@@ -13,6 +13,11 @@ const CONFLICT_TYPES = new Set(["appointment"]);
 
 const toMoment = (value) => moment.tz(value, TZ);
 
+const getBarberDisplayName = (barber = "") => {
+  if (barber === "ΚΟΥΣΙΗΣ") return "ΚΟΥΣΙΗ";
+  return barber;
+};
+
 const normalizeRange = ({ from, to }) => {
   const start = from ? toMoment(from) : moment.tz(TZ);
   const end = to ? toMoment(to) : start.clone().add(8, "weeks");
@@ -97,7 +102,8 @@ const sendConfirmationSMS = async (appointment, barber) => {
   }
 
   const formattedLocalTime = appointmentMoment.format("DD/MM/YYYY HH:mm");
-  const message = `Επιβεβαιώνουμε το ραντεβού σας στο LEMO BARBER SHOP με τον ${barber} για τις ${formattedLocalTime}!\nWe confirm your appointment at LEMO BARBER SHOP with ${barber} for ${formattedLocalTime}!`;
+  const displayBarber = getBarberDisplayName(barber);
+  const message = `Επιβεβαιώνουμε το ραντεβού σας στο LEMO BARBER SHOP με τον ${displayBarber} για τις ${formattedLocalTime}!\nWe confirm your appointment at LEMO BARBER SHOP with ${displayBarber} for ${formattedLocalTime}!`;
 
   try {
     const smsResponse = await sendSMS(appointment.phoneNumber, message);
@@ -435,6 +441,7 @@ const generateAutoAppointments = async ({
       const firstAppointment = events[0].appointment;
       const phoneNumber = firstAppointment.phoneNumber;
       const barber = firstAppointment.barber;
+      const displayBarber = getBarberDisplayName(barber);
 
       if (!phoneNumber) {
         totals.smsSkipped += events.length;
@@ -460,7 +467,7 @@ const generateAutoAppointments = async ({
         )
         .join(", ");
 
-      const message = `Επιβεβαιώνουμε τα ραντεβού σας στο LEMO BARBER SHOP με τον ${barber} για τις ημερομηνίες: ${formattedDates}.\nWe confirm your appointments at LEMO BARBER SHOP with ${barber} for the dates: ${formattedDates}.`;
+      const message = `Επιβεβαιώνουμε τα ραντεβού σας στο LEMO BARBER SHOP με τον ${displayBarber} για τις ημερομηνίες: ${formattedDates}.\nWe confirm your appointments at LEMO BARBER SHOP with ${displayBarber} for the dates: ${formattedDates}.`;
 
       let smsStatus = "failed";
       let smsError = null;

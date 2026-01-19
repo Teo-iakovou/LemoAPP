@@ -8,7 +8,7 @@ const AutoGenerationBatch = require("../models/autoGenerationBatch");
 
 const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
 const VALID_CADENCE = new Set([1, 2, 4]);
-const VALID_BARBERS = new Set(["ΛΕΜΟ", "ΦΟΡΟΥ"]);
+const VALID_BARBERS = new Set(["ΛΕΜΟ", "ΦΟΡΟΥ", "ΚΟΥΣΙΗΣ"]);
 
 const normalizePhone = (input = "") => String(input).replace(/\s+/g, "").trim();
 const normalizePhoneDigits = (input = "") => String(input).replace(/\D+/g, "").trim();
@@ -172,7 +172,7 @@ const buildPayload = (body, { partial = false } = {}) => {
   if (body.barber !== undefined || !partial) {
     const barber = typeof body.barber === "string" ? body.barber.trim().toUpperCase() : "";
     if (!VALID_BARBERS.has(barber)) {
-      errors.push("Barber must be one of ΛΕΜΟ or ΦΟΡΟΥ.");
+      errors.push("Barber must be one of ΛΕΜΟ, ΦΟΡΟΥ, ΚΟΥΣΙΗΣ.");
     } else {
       payload.barber = barber;
     }

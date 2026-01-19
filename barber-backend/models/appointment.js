@@ -76,7 +76,7 @@ const appointmentSchema = new mongoose.Schema({
   },
   barber: {
     type: String,
-    enum: ["ΛΕΜΟ", "ΦΟΡΟΥ"],
+    enum: ["ΛΕΜΟ", "ΦΟΡΟΥ", "ΚΟΥΣΙΗΣ"],
     required: true,
   },
   appointmentStatus: {

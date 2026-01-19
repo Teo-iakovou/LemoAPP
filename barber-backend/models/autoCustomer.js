@@ -2,7 +2,7 @@
 
 const mongoose = require("mongoose");
 
-const VALID_BARBERS = ["ΛΕΜΟ", "ΦΟΡΟΥ"];
+const VALID_BARBERS = ["ΛΕΜΟ", "ΦΟΡΟΥ", "ΚΟΥΣΙΗΣ"];
 const VALID_CADENCE = [1, 2, 3, 4, 5];
 
 const autoCustomerSchema = new mongoose.Schema(

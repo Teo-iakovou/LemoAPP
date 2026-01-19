@@ -57,6 +57,10 @@ const BARBER_MAP = {
   "λεμο": "ΛΕΜΟ",
   forou: "ΦΟΡΟΥ",
   "φορου": "ΦΟΡΟΥ",
+  koushis: "ΚΟΥΣΙΗΣ",
+  "κουσιης": "ΚΟΥΣΙΗΣ",
+  "κούσιης": "ΚΟΥΣΙΗΣ",
+  ΚΟΥΣΙΗΣ: "ΚΟΥΣΙΗΣ",
 };
 
 function normalizeBarber(input = "") {
@@ -67,6 +71,11 @@ function normalizeBarber(input = "") {
   } catch {
     return "";
   }
+}
+
+function getBarberDisplayName(barber = "") {
+  if (barber === "ΚΟΥΣΙΗΣ") return "ΚΟΥΣΙΗ";
+  return barber;
 }
 
 // Create an appointment
@@ -294,6 +303,7 @@ const createAppointment = async (req, res, next) => {
       try {
         let result;
         if (recurrence === "weekly" && maxRepeat > 1) {
+          const displayBarber = getBarberDisplayName(effectiveBarber);
           const allMoments = [
             appointmentDateAthens.clone(),
             ...additionalAppointments.map((appt) =>
@@ -306,7 +316,7 @@ const createAppointment = async (req, res, next) => {
           if (shouldSplit) {
             const firstHalf = labels.slice(0, 5);
             const secondHalf = labels.slice(5);
-            const msg1 = `Επιβεβαιώνουμε τα ραντεβού σας στο LEMO BARBER SHOP με τον ${effectiveBarber} για τις ημερομηνίες: ${firstHalf.join(", ")}.\nWe confirm your appointments at LEMO BARBER SHOP with ${effectiveBarber} for the dates: ${firstHalf.join(", ")}.`;
+            const msg1 = `Επιβεβαιώνουμε τα ραντεβού σας στο LEMO BARBER SHOP με τον ${displayBarber} για τις ημερομηνίες: ${firstHalf.join(", ")}.\nWe confirm your appointments at LEMO BARBER SHOP with ${displayBarber} for the dates: ${firstHalf.join(", ")}.`;
             result = await sendSMS(phoneNumber, msg1, { smsType: "confirmation" });
             savedAppointment.reminders.push({
               type: "confirmation",
@@ -323,7 +333,7 @@ const createAppointment = async (req, res, next) => {
             const ScheduledMessage = require("../models/ScheduledMessage");
             await ScheduledMessage.create({
               phoneNumber,
-              messageText: `Επιβεβαιώνουμε τα επιπλέον ραντεβού σας στο LEMO BARBER SHOP με τον ${effectiveBarber}: ${secondHalf.join(", ")}.\nWe confirm your additional appointments at LEMO BARBER SHOP with ${effectiveBarber}: ${secondHalf.join(", ")}.`,
+              messageText: `Επιβεβαιώνουμε τα επιπλέον ραντεβού σας στο LEMO BARBER SHOP με τον ${displayBarber}: ${secondHalf.join(", ")}.\nWe confirm your additional appointments at LEMO BARBER SHOP with ${displayBarber}: ${secondHalf.join(", ")}.`,
               sendAt,
               status: "pending",
               type: "recurrence-followup",
@@ -331,7 +341,7 @@ const createAppointment = async (req, res, next) => {
               barber: effectiveBarber,
             });
           } else {
-            const msg = `Επιβεβαιώνουμε τα ραντεβού σας στο LEMO BARBER SHOP με τον ${effectiveBarber} για τις ημερομηνίες: ${labels.join(", ")}.\nWe confirm your appointments at LEMO BARBER SHOP with ${effectiveBarber} for the dates: ${labels.join(", ")}.`;
+            const msg = `Επιβεβαιώνουμε τα ραντεβού σας στο LEMO BARBER SHOP με τον ${displayBarber} για τις ημερομηνίες: ${labels.join(", ")}.\nWe confirm your appointments at LEMO BARBER SHOP with ${displayBarber} for the dates: ${labels.join(", ")}.`;
             result = await sendSMS(phoneNumber, msg, { smsType: "confirmation" });
             savedAppointment.reminders.push({
               type: "confirmation",
@@ -345,7 +355,8 @@ const createAppointment = async (req, res, next) => {
           }
         } else {
           const formattedLocalTime = appointmentDateAthens.format("DD/MM/YYYY HH:mm");
-          const msg = `Επιβεβαιώνουμε το ραντεβού σας στο LEMO BARBER SHOP με τον ${effectiveBarber} για τις ${formattedLocalTime}!\nWe confirm your appointment at LEMO BARBER SHOP with ${effectiveBarber} for ${formattedLocalTime}!`;
+          const displayBarber = getBarberDisplayName(effectiveBarber);
+          const msg = `Επιβεβαιώνουμε το ραντεβού σας στο LEMO BARBER SHOP με τον ${displayBarber} για τις ${formattedLocalTime}!\nWe confirm your appointment at LEMO BARBER SHOP with ${displayBarber} for ${formattedLocalTime}!`;
           result = await sendSMS(phoneNumber, msg, { smsType: "confirmation" });
           savedAppointment.reminders.push({
             type: "confirmation",

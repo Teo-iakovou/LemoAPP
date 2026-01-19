@@ -76,11 +76,21 @@ const getCustomerCounts = async (req, res, next) => {
       ...typeMatch,
     });
 
+    const koushisCount = await Appointment.countDocuments({
+      barber: "ΚΟΥΣΙΗΣ",
+      appointmentDateTime: {
+        $gte: startOfMonth.toDate(),
+        $lte: endOfMonth.toDate(),
+      },
+      ...typeMatch,
+    });
+
     res.status(200).json({
       success: true,
       counts: {
         ΛΕΜΟ: lemoCount,
         ΦΟΡΟΥ: forouCount,
+        ΚΟΥΣΙΗΣ: koushisCount,
       },
     });
   } catch (error) {
@@ -139,11 +149,21 @@ const getWeeklyCustomerCounts = async (req, res, next) => {
       ...weeklyTypeMatch,
     });
 
+    const koushisWeeklyCount = await Appointment.countDocuments({
+      barber: "ΚΟΥΣΙΗΣ",
+      appointmentDateTime: {
+        $gte: startOfWeek.toDate(),
+        $lte: endOfWeek.toDate(),
+      },
+      ...weeklyTypeMatch,
+    });
+
     res.status(200).json({
       success: true,
       weeklyCounts: {
         ΛΕΜΟ: lemoWeeklyCount,
         ΦΟΡΟΥ: forouWeeklyCount,
+        ΚΟΥΣΙΗΣ: koushisWeeklyCount,
       },
     });
   } catch (error) {
@@ -200,6 +220,7 @@ const getCustomers = async (req, res, next) => {
     const barberColors = {
       ΛΕΜΟ: "text-purple-600",
       ΦΟΡΟΥ: "text-orange-500",
+      ΚΟΥΣΙΗΣ: "text-emerald-500",
     };
 
     const customersWithBarber = customers.map((customer) => {
@@ -264,10 +285,10 @@ const updateCustomer = async (req, res) => {
         .status(400)
         .json({ error: "Name and phone number are required." });
     }
-    if (barber && !["ΛΕΜΟ", "ΦΟΡΟΥ"].includes(barber)) {
+    if (barber && !["ΛΕΜΟ", "ΦΟΡΟΥ", "ΚΟΥΣΙΗΣ"].includes(barber)) {
       return res
         .status(400)
-        .json({ error: "Invalid barber value. Must be 'ΛΕΜΟ' or 'ΦΟΡΟΥ'." });
+        .json({ error: "Invalid barber value. Must be 'ΛΕΜΟ', 'ΦΟΡΟΥ', or 'ΚΟΥΣΙΗΣ'." });
     }
 
     // Build update object dynamically
