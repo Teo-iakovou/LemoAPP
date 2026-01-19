@@ -271,11 +271,16 @@ export default function WaitingList() {
                   ? "ΕΣΩΤΕΡΙΚΟ"
                   : "";
               const barberLabel = entry?.barber || "";
+              const isBreak = entry?.type === "break";
               const accentClasses =
                 barberLabel === "ΛΕΜΟ"
                   ? "border-2 border-purple-500/60 shadow-[0_0_12px_rgba(168,85,247,0.35)]"
                   : barberLabel === "ΦΟΡΟΥ"
                   ? "border-2 border-orange-400/60 shadow-[0_0_12px_rgba(251,146,60,0.35)]"
+                  : barberLabel === "ΚΟΥΣΙΗΣ" && isBreak
+                  ? "border-2 border-slate-400/60 shadow-[0_0_12px_rgba(148,163,184,0.35)]"
+                  : barberLabel === "ΚΟΥΣΙΗΣ"
+                  ? "border-2 border-teal-600/60 shadow-[0_0_12px_rgba(15,118,110,0.35)]"
                   : "border border-gray-700";
               return (
                 <li
@@ -297,6 +302,10 @@ export default function WaitingList() {
                               ? "bg-purple-500/20 text-purple-200 border border-purple-400/50"
                               : barberLabel === "ΦΟΡΟΥ"
                               ? "bg-orange-500/20 text-orange-200 border border-orange-400/50"
+                              : barberLabel === "ΚΟΥΣΙΗΣ" && isBreak
+                              ? "bg-slate-500/20 text-slate-200 border border-slate-400/50"
+                              : barberLabel === "ΚΟΥΣΙΗΣ"
+                              ? "bg-teal-600/20 text-teal-200 border border-teal-500/50"
                               : "bg-gray-700 text-gray-200 border border-gray-600"
                           }`}
                         >

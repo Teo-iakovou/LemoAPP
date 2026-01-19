@@ -74,6 +74,16 @@
   background-color: rgba(249, 115, 22, 0.12);
 }
 
+.auto-calendar-event--koushis {
+  border-color: rgba(15, 118, 110, 0.7);
+  background-color: rgba(15, 118, 110, 0.12);
+}
+
+.auto-calendar-event--koushis-break {
+  border-color: rgba(100, 116, 139, 0.7);
+  background-color: rgba(100, 116, 139, 0.2);
+}
+
 .auto-calendar-event--selected {
   box-shadow: 0 0 0 2px rgba(148, 163, 184, 0.5);
 }
@@ -84,6 +94,14 @@
 
 .auto-calendar-event--forou.auto-calendar-event--selected {
   box-shadow: 0 0 0 2px rgba(249, 115, 22, 0.6);
+}
+
+.auto-calendar-event--koushis.auto-calendar-event--selected {
+  box-shadow: 0 0 0 2px rgba(15, 118, 110, 0.6);
+}
+
+.auto-calendar-event--koushis-break.auto-calendar-event--selected {
+  box-shadow: 0 0 0 2px rgba(100, 116, 139, 0.6);
 }
 
 .auto-calendar-event__title {

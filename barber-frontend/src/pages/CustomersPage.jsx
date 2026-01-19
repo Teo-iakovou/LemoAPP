@@ -21,6 +21,7 @@ const API_BASE_URL =
 const barberOptions = [
   { value: "ΛΕΜΟ", label: "ΛΕΜΟ" },
   { value: "ΦΟΡΟΥ", label: "ΦΟΡΟΥ" },
+  { value: "ΚΟΥΣΙΗΣ", label: "ΚΟΥΣΙΗΣ" },
 ];
  const barberColors = {
     ΛΕΜΟ: "text-purple-600",

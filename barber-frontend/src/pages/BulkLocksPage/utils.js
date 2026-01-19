@@ -3,6 +3,7 @@ import { Greek as GreekLocale } from "flatpickr/dist/l10n/gr.js";
 export const BARBER_OPTIONS = [
   { value: "ΛΕΜΟ", label: "ΛΕΜΟ" },
   { value: "ΦΟΡΟΥ", label: "ΦΟΡΟΥ" },
+  { value: "ΚΟΥΣΙΗΣ", label: "ΚΟΥΣΙΗΣ" },
 ];
 
 export const DURATION_OPTIONS = [15, 30, 40, 45, 60];

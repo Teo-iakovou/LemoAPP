@@ -400,6 +400,9 @@ const handleCustomerSelect = (e) => {
               <option value="ΦΟΡΟΥ" className="text-[#a78bfa]">
                 ΦΟΡΟΥ
               </option>
+              <option value="ΚΟΥΣΙΗΣ" className="text-[#10B981]">
+                ΚΟΥΣΙΗΣ
+              </option>
             </select>
           </div>
 

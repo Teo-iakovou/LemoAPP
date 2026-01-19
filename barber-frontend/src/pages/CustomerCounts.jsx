@@ -174,11 +174,11 @@ const CustomerCounts = () => {
 
   const chartData = counts
     ? {
-        labels: ["ΛΕΜΟ", "ΦΟΡΟΥ"],
+        labels: ["ΛΕΜΟ", "ΦΟΡΟΥ", "ΚΟΥΣΙΗΣ"],
         datasets: [
           {
             label: `Monthly Customer Counts for ${months[month]} ${year}`,
-            data: [counts["ΛΕΜΟ"], counts["ΦΟΡΟΥ"]],
+            data: [counts["ΛΕΜΟ"] ?? 0, counts["ΦΟΡΟΥ"] ?? 0, counts["ΚΟΥΣΙΗΣ"] ?? 0],
             backgroundColor: ["#6A0DAD", "#9B59B6"],
           },
         ],
@@ -191,13 +191,13 @@ const CustomerCounts = () => {
 
   const weeklyChartData = weeklyCounts
     ? {
-        labels: ["ΛΕΜΟ", "ΦΟΡΟΥ"],
+        labels: ["ΛΕΜΟ", "ΦΟΡΟΥ", "ΚΟΥΣΙΗΣ"],
         datasets: [
           {
             label: `Εβδομαδιαίος Αριθμός Πελατών (${
               greekWeekLabels[week - 1]
             }, ${months[month]} ${year})`,
-            data: [weeklyCounts["ΛΕΜΟ"], weeklyCounts["ΦΟΡΟΥ"]],
+            data: [weeklyCounts["ΛΕΜΟ"] ?? 0, weeklyCounts["ΦΟΡΟΥ"] ?? 0, weeklyCounts["ΚΟΥΣΙΗΣ"] ?? 0],
             backgroundColor: ["#1E90FF", "#00CED1"],
           },
         ],

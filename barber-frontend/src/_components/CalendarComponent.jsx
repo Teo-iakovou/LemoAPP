@@ -44,11 +44,33 @@ const greekDays = [
   "Σάββατο",
 ];
 
+const APPOINTMENT_COLORS = {
+  ΛΕΜΟ: "#6B21A8",
+  ΦΟΡΟΥ: "orange",
+  ΚΟΥΣΙΗΣ: "#0F766E",
+};
+
+const BREAK_COLORS = {
+  ΛΕΜΟ: "#34D399",
+  ΦΟΡΟΥ: "#0ea5e9",
+  ΚΟΥΣΙΗΣ: "#64748B",
+};
+
+const LOCK_COLORS = {
+  ΛΕΜΟ: "#dc2626",
+  ΦΟΡΟΥ: "#2563eb",
+  ΚΟΥΣΙΗΣ: "#64748B",
+};
+
+const getEventColor = ({ barber, type }, fallback = "#9ca3af") => {
+  if (type === "break") return BREAK_COLORS[barber] || fallback;
+  if (type === "lock") return LOCK_COLORS[barber] || fallback;
+  return APPOINTMENT_COLORS[barber] || fallback;
+};
+
 const getLockColor = (event) => {
   if (event?.backgroundColor) return event.backgroundColor;
-  if (event?.barber === "ΛΕΜΟ") return "#dc2626";
-  if (event?.barber) return "#2563eb";
-  return "#9ca3af"; // fallback gray
+  return getEventColor({ barber: event?.barber, type: "lock" }, "#9ca3af");
 };
 
 const LockEvent = ({ event }) => {
@@ -117,12 +139,7 @@ const CalendarComponent = ({
       };
     }
 
-    let backgroundColor;
-    if (event.type === "break") {
-      backgroundColor = event.barber === "ΛΕΜΟ" ? "#34D399" : "#0ea5e9";
-    } else {
-      backgroundColor = event.barber === "ΛΕΜΟ" ? "#6B21A8" : "orange";
-    }
+    const backgroundColor = getEventColor(event, "#9ca3af");
     return {
       style: {
         ...baseStyle,

@@ -51,6 +51,7 @@ const alignToMondayStart = (value) => {
 const BARBER_OPTIONS = [
   { value: "ΛΕΜΟ", label: "ΛΕΜΟ" },
   { value: "ΦΟΡΟΥ", label: "ΦΟΡΟΥ" },
+  { value: "ΚΟΥΣΙΗΣ", label: "ΚΟΥΣΙΗΣ" },
 ];
 
 const WEEKDAY_OPTIONS = [

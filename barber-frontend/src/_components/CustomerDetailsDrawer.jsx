@@ -322,6 +322,10 @@ const CustomerDetailsDrawer = ({ customerId, onClose }) => {
                             className={`font-bold ml-2 ${
                               appt.barber === "ΛΕΜΟ"
                                 ? "text-[#a78bfa]"
+                                : appt.barber === "ΚΟΥΣΙΗΣ" && appt.type === "break"
+                                ? "text-slate-400"
+                                : appt.barber === "ΚΟΥΣΙΗΣ"
+                                ? "text-teal-500"
                                 : "text-orange-400"
                             }`}
                           >

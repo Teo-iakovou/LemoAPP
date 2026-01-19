@@ -101,11 +101,16 @@ const AutoCustomersCalendar = ({
                     .sort((a, b) => new Date(a.start) - new Date(b.start))
                     .map((event) => {
                       const isSelected = selectedEventId === event.id;
+                      const isBreak = event.type === "break";
                       const barberClass =
                         event.barber === "ΛΕΜΟ"
                           ? " auto-calendar-event--lemo"
                           : event.barber === "ΦΟΡΟΥ"
                           ? " auto-calendar-event--forou"
+                          : event.barber === "ΚΟΥΣΙΗΣ" && isBreak
+                          ? " auto-calendar-event--koushis-break"
+                          : event.barber === "ΚΟΥΣΙΗΣ"
+                          ? " auto-calendar-event--koushis"
                           : "";
                       return (
                         <div

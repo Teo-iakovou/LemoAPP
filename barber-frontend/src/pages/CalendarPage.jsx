@@ -25,6 +25,25 @@ const CalendarPage = ({ darkCalendar = false }) => {
   const [showForm, setShowForm] = useState(false);
   const [pastPage, setPastPage] = useState(1);
 const [isLoading, setIsLoading] = useState(true);  // ✅ Fetch appointments
+  const getEventColor = ({ barber, type }) => {
+    if (type === "break") {
+      if (barber === "ΛΕΜΟ") return "#34D399";
+      if (barber === "ΦΟΡΟΥ") return "#0ea5e9";
+      if (barber === "ΚΟΥΣΙΗΣ") return "#64748B";
+      return "#9ca3af";
+    }
+    if (type === "lock") {
+      if (barber === "ΛΕΜΟ") return "#dc2626";
+      if (barber === "ΦΟΡΟΥ") return "#2563eb";
+      if (barber === "ΚΟΥΣΙΗΣ") return "#64748B";
+      return "#9ca3af";
+    }
+    if (barber === "ΛΕΜΟ") return "#6B21A8";
+    if (barber === "ΦΟΡΟΥ") return "orange";
+    if (barber === "ΚΟΥΣΙΗΣ") return "#0F766E";
+    return "#9ca3af";
+  };
+
   useEffect(() => {
     const fetchUpcoming = async () => {
       try {
@@ -34,7 +53,6 @@ const [isLoading, setIsLoading] = useState(true);  // ✅ Fetch appointments
           const appointmentDate = new Date(appointment.appointmentDateTime);
           const isBreak = appointment.type === "break";
           const isLock = appointment.type === "lock";
-          const isLemo = appointment.barber === "ΛΕΜΟ";
 
           const duration = appointment.duration || 40;
           return {
@@ -52,17 +70,7 @@ const [isLoading, setIsLoading] = useState(true);  // ✅ Fetch appointments
             end: new Date(appointmentDate.getTime() + duration * 60 * 1000),
             barber: appointment.barber,
             type: appointment.type || "appointment",
-            backgroundColor: isBreak
-              ? isLemo
-                ? "#34D399"
-                : "#0ea5e9"
-              : isLock
-              ? isLemo
-                ? "#dc2626"
-                : "#2563eb"
-              : isLemo
-              ? "#6B21A8"
-              : "orange",
+            backgroundColor: getEventColor(appointment),
           };
         });
 
@@ -167,7 +175,6 @@ const [isLoading, setIsLoading] = useState(true);  // ✅ Fetch appointments
           const duration = appointment.duration || 40;
           const isBreak = appointment.type === "break";
           const isLock = appointment.type === "lock";
-          const isLemo = appointment.barber === "ΛΕΜΟ";
           return {
             id: appointment._id,
             title: isBreak
@@ -183,17 +190,7 @@ const [isLoading, setIsLoading] = useState(true);  // ✅ Fetch appointments
             end: new Date(startDate.getTime() + duration * 60 * 1000),
             barber: appointment.barber,
             type: appointment.type || "appointment",
-            backgroundColor: isBreak
-              ? isLemo
-                ? "#34D399"
-                : "#0ea5e9"
-              : isLock
-              ? isLemo
-                ? "#dc2626"
-                : "#2563eb"
-              : isLemo
-              ? "#6B21A8"
-              : "orange",
+            backgroundColor: getEventColor(appointment),
           };
         });
 
@@ -301,7 +298,6 @@ const [isLoading, setIsLoading] = useState(true);  // ✅ Fetch appointments
       const pastEvents = pastAppointments.map((appointment) => {
         const appointmentDate = new Date(appointment.appointmentDateTime);
         const isBreak = appointment.type === "break";
-        const isLemo = appointment.barber === "ΛΕΜΟ";
         const duration = appointment.duration || 40;
         return {
           id: appointment._id,
@@ -311,13 +307,7 @@ const [isLoading, setIsLoading] = useState(true);  // ✅ Fetch appointments
           end: new Date(appointmentDate.getTime() + duration * 60 * 1000),
           barber: appointment.barber,
           type: appointment.type || "appointment",
-          backgroundColor: isBreak
-            ? isLemo
-              ? "#34D399"
-              : "#0ea5e9"
-            : isLemo
-            ? "#6B21A8"
-            : "orange",
+          backgroundColor: getEventColor(appointment),
         };
       });
 
