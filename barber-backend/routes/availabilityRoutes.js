@@ -75,7 +75,7 @@ function hhmmToMinutes(value) {
 }
 
 // Core month availability computation reused by multiple routes
-async function buildMonthAvailability({ from, to, barber, includeSlots }) {
+async function buildMonthAvailability({ from, to, barber, includeSlots, includeAll }) {
   const start = parseYMD(from);
   const end = parseYMD(to);
   const endOfDay = new Date(end.getFullYear(), end.getMonth(), end.getDate(), 23, 59, 59, 999);
@@ -93,6 +93,7 @@ const extraDaySlots = settingsDoc.extraDaySlots || {};
 
   // Apply barber filter for both appointments and breaks. When a barber is specified,
   // only include that barber's breaks so availability stays per‑barber.
+  const allowAll = String(includeAll || "").toLowerCase() === "true";
   const match = {
     appointmentDateTime: { $gte: start, $lte: endOfDay },
     $or: barber
@@ -101,11 +102,13 @@ const extraDaySlots = settingsDoc.extraDaySlots || {};
           { type: "lock", barber },
           { type: "appointment", appointmentStatus: "confirmed", barber },
         ]
-      : [
+      : allowAll
+      ? [
           { type: "break" },
           { type: "lock" },
           { type: "appointment", appointmentStatus: "confirmed" },
-        ],
+        ]
+      : [{ type: "appointment", appointmentStatus: "confirmed" }],
   };
 
   const docs = await Appointment.find(match, {
@@ -215,11 +218,12 @@ const extraDaySlots = settingsDoc.extraDaySlots || {};
 // GET /api/appointments/range?from=YYYY-MM-DD&to=YYYY-MM-DD&barber=ΛΕΜΟ|ΦΟΡΟΥ
 router.get("/appointments/range", async (req, res, next) => {
   try {
-    const { from, to, barber } = req.query;
+    const { from, to, barber, includeAll } = req.query;
     if (!from || !to) return res.status(400).json({ error: "from and to are required" });
     const start = new Date(`${from}T00:00:00`);
     const end = new Date(`${to}T23:59:59.999`);
 
+  const allowAll = String(includeAll || "").toLowerCase() === "true";
   const match = {
     appointmentDateTime: { $gte: start, $lte: end },
     $or: barber
@@ -228,11 +232,13 @@ router.get("/appointments/range", async (req, res, next) => {
           { type: "lock", barber },
           { type: "appointment", appointmentStatus: "confirmed", barber },
         ]
-      : [
+      : allowAll
+      ? [
           { type: "break" },
           { type: "lock" },
           { type: "appointment", appointmentStatus: "confirmed" },
-        ],
+        ]
+      : [{ type: "appointment", appointmentStatus: "confirmed" }],
   };
 
     const docs = await Appointment.find(match, {
@@ -270,10 +276,10 @@ router.get("/appointments/range", async (req, res, next) => {
 // GET /api/availability/month?from=YYYY-MM-DD&to=YYYY-MM-DD&barber=ΛΕΜΟ|ΦΟΡΟΥ
 router.get("/availability/month", async (req, res, next) => {
   try {
-    const { from, to, barber, include } = req.query;
+    const { from, to, barber, include, includeAll } = req.query;
     if (!from || !to) return res.status(400).json({ error: "from and to are required" });
     const includeSlots = String(include || "").split(',').map(s=>s.trim()).includes('slots');
-    const payload = await buildMonthAvailability({ from, to, barber, includeSlots });
+    const payload = await buildMonthAvailability({ from, to, barber, includeSlots, includeAll });
     res.set('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300');
     res.json(payload);
   } catch (e) {
@@ -284,7 +290,7 @@ router.get("/availability/month", async (req, res, next) => {
 // GET /api/availability/horizon?start=YYYY-MM-DD&days=35&barberId=lemo|forou&include=slots
 router.get("/availability/horizon", async (req, res, next) => {
   try {
-    const { start, days, include, barberId, barber } = req.query;
+    const { start, days, include, barberId, barber, includeAll } = req.query;
     if (!start) return res.status(400).json({ error: "start is required" });
     const nDays = Math.max(1, Math.min(parseInt(days || '14', 10), 90));
     const startDate = parseYMD(start);
@@ -299,7 +305,7 @@ router.get("/availability/horizon", async (req, res, next) => {
       else if (String(barberId).toLowerCase() === 'forou') greekBarber = 'ΦΟΡΟΥ';
       else if (String(barberId).toLowerCase() === 'koushis') greekBarber = 'ΚΟΥΣΙΗΣ';
     }
-    const payload = await buildMonthAvailability({ from, to, barber: greekBarber, includeSlots });
+    const payload = await buildMonthAvailability({ from, to, barber: greekBarber, includeSlots, includeAll });
     res.set('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300');
     res.json(payload);
   } catch (e) {
