@@ -1,6 +1,6 @@
 const axios = require("axios");
 
-const sendSMS = async (to, message) => {
+const sendSMS = async (to, message, options = {}) => {
   const rawKey = process.env.SMS_TO_API_KEY;
 
   if (!rawKey) {
@@ -9,6 +9,8 @@ const sendSMS = async (to, message) => {
 
   const API_KEY = rawKey.trim();
   const SMS_URL = "https://api.sms.to/sms/send";
+  const smsType = options.smsType || "unknown";
+  const senderId = options.senderId || "Lemo Barber";
 
   const normalizeNumber = (input) => {
     if (!input) throw new Error("Missing recipient phone number.");
@@ -59,15 +61,15 @@ const sendSMS = async (to, message) => {
     return `+357${digits}`;
   };
 
-  const formattedNumber = normalizeNumber(to);
-
+  let formattedNumber;
   try {
+    formattedNumber = normalizeNumber(to);
     const response = await axios.post(
       SMS_URL,
       {
         to: formattedNumber,
         message,
-        sender_id: "Lemo Barber",
+        sender_id: senderId,
       },
       {
         headers: {
@@ -76,14 +78,37 @@ const sendSMS = async (to, message) => {
         },
       }
     );
-    console.log(
-      "🚀 Raw SMS.to response:",
-      JSON.stringify(response.data, null, 2)
-    );
+    const messageId = response?.data?.message_id || response?.data?.messageId;
+    if (!messageId) {
+      const body =
+        typeof response?.data === "string"
+          ? response.data
+          : JSON.stringify(response?.data);
+      console.error("SMS.to missing messageId", {
+        status: response?.status,
+        responseBody: body,
+        recipient: formattedNumber,
+        senderId,
+        messagePreview: String(message || "").slice(0, 60),
+        smsType,
+      });
+    }
     return response.data;
   } catch (error) {
-    console.error("Failed to send SMS:", error.response?.data || error.message);
-    throw new Error("Failed to send SMS");
+    const detail = error.response?.data || error.message;
+    const body =
+      typeof detail === "string" ? detail : JSON.stringify(detail);
+    console.error("Failed to send SMS", {
+      status: error.response?.status,
+      responseBody: body,
+      recipient: formattedNumber,
+      senderId,
+      messagePreview: String(message || "").slice(0, 60),
+      smsType,
+    });
+    throw new Error(
+      `Failed to send SMS${detail ? `: ${JSON.stringify(detail)}` : ""}`
+    );
   }
 };
 

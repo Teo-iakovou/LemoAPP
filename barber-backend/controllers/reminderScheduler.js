@@ -88,7 +88,9 @@ const sendReminders = async () => {
       const reminderId = reminderEntry?._id;
 
       try {
-        const result = await sendSMS(appointment.phoneNumber, message);
+        const result = await sendSMS(appointment.phoneNumber, message, {
+          smsType: "24-hour",
+        });
 
         const successStatus = result?.success ? "sent" : result?.status || "sent";
         await Appointment.updateOne(
@@ -115,6 +117,7 @@ const sendReminders = async () => {
             $set: {
               "reminders.$.status": "failed",
               "reminders.$.sentAt": new Date(),
+              "reminders.$.error": err?.message || "Failed to send SMS",
             },
             $inc: { "reminders.$.retryCount": 1 },
           }
@@ -137,7 +140,9 @@ async function processScheduledMessages() {
   if (!due.length) return;
   for (const msg of due) {
     try {
-      const result = await sendSMS(msg.phoneNumber, msg.messageText);
+      const result = await sendSMS(msg.phoneNumber, msg.messageText, {
+        smsType: "recurrence-followup",
+      });
       await ScheduledMessage.updateOne({ _id: msg._id }, { $set: { status: 'sent' } });
       // Best-effort: attach a reminder log to the first appointment in the series
       if (msg.appointmentIds && msg.appointmentIds.length) {

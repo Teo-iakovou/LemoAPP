@@ -7,7 +7,7 @@ const { sendSMS } = require("./utils/smsService");
 dotenv.config();
 
 const tz = "Europe/Athens";
-const dateTargetAthens = moment.tz("2025-07-19", tz);
+const dateTargetAthens = moment.tz(tz);
 
 const startOfDayUTC = dateTargetAthens.clone().startOf("day").utc();
 const endOfDayUTC = dateTargetAthens.clone().endOf("day").utc();
@@ -37,7 +37,13 @@ const run = async () => {
 
   for (const appt of appointments) {
     // Check for any "24-hour" reminder already sent
-    const alreadyHas24Hour = appt.reminders?.some((r) => r.type === "24-hour");
+    const alreadyHas24Hour = Array.isArray(appt.reminders)
+      ? appt.reminders.some(
+          (r) =>
+            r?.type === "24-hour" &&
+            String(r?.status || "").toLowerCase() === "sent"
+        )
+      : false;
     if (alreadyHas24Hour) {
       skippedCount++;
       console.log(

@@ -29,7 +29,9 @@ const autoRetryFailedSMS = async () => {
           const message = `Υπενθύμιση για το ραντεβού σας στις ${formattedDate} στο Lemo Barber Shop.`;
 
           try {
-            const result = await sendSMS(appointment.phoneNumber, message);
+            const result = await sendSMS(appointment.phoneNumber, message, {
+              smsType: "24-hour",
+            });
             reminder.messageId = result.message_id || null;
             reminder.status = result.success ? "sent" : "failed";
             reminder.sentAt = new Date();
