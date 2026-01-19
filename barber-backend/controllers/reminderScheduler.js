@@ -11,8 +11,8 @@ const sendReminders = async (options = {}) => {
     const nowAthens = moment().tz(tz);
     const timestamp = nowAthens.format("YYYY-MM-DD HH:mm:ss");
 
-    const windowStart = nowAthens.clone().add(24, "hours").subtract(10, "minutes");
-    const windowEnd = nowAthens.clone().add(24, "hours").add(10, "minutes");
+    const windowStart = nowAthens.clone().add(24, "hours");
+    const windowEnd = nowAthens.clone().add(25, "hours");
 
     const windowStartUTC = windowStart.clone().utc().toDate();
     const windowEndUTC = windowEnd.clone().utc().toDate();
@@ -24,7 +24,7 @@ const sendReminders = async (options = {}) => {
       `[${timestamp}] 🪟 windowAthens=${windowStart.format("YYYY-MM-DD HH:mm:ss")}..${windowEnd.format("YYYY-MM-DD HH:mm:ss")} windowUTC=${windowStart.clone().utc().toISOString()}..${windowEnd.clone().utc().toISOString()}`
     );
 
-    const appointments = await Appointment.find({
+    const query = {
       appointmentDateTime: {
         $gte: windowStartUTC,
         $lt: windowEndUTC,
@@ -39,7 +39,13 @@ const sendReminders = async (options = {}) => {
           },
         },
       },
-    }).lean();
+    };
+
+    console.log(
+      `[${timestamp}] 🧩 Reminder query: ${JSON.stringify(query)}`
+    );
+
+    const appointments = await Appointment.find(query).lean();
 
     console.log(
       `[${timestamp}] 📦 Matched appointments: ${appointments.length}`
