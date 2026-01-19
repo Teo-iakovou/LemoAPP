@@ -126,7 +126,7 @@ if (process.env.NODE_ENV === "production") {
   cron.schedule("* * * * *", async () => {
     console.log(`[${new Date().toISOString()}] ⏰ Running 1-minute reminder scheduler...`);
     try {
-      await sendReminders();
+      await sendReminders({ trigger: "cron" });
       await processScheduledMessages();
       console.log("✅ Reminders and scheduled messages processed.");
     } catch (error) {

@@ -13,7 +13,7 @@ router.post("/send-reminders", async (req, res) => {
         .status(400)
         .json({ message: "Set dryRun=1 or provide limit" });
     }
-    await sendReminders({ dryRun, limit });
+    await sendReminders({ dryRun, limit, trigger: "manual" });
     await processScheduledMessages();
     res.status(200).json({ message: "Reminders and scheduled messages processed" });
   } catch (error) {

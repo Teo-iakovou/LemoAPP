@@ -25,6 +25,9 @@ const ONLY_ID = getArg("id"); // appointment _id
 const ONLY_PHONE = getArg("phone"); // exact match
 const HOURS_FROM = Number(getArg("hoursFrom") || 24);
 const HOURS_TO = Number(getArg("hoursTo") || 25);
+const TOMORROW = hasFlag("tomorrow"); // calendar-based tomorrow mode
+const DAY = getArg("day"); // "tomorrow" optional
+const USE_TOMORROW = TOMORROW || String(DAY || "").toLowerCase() === "tomorrow";
 
 // Optional: set "now" for testing
 const MOCK_NOW = getArg("now"); // ISO string
@@ -34,13 +37,23 @@ const nowAthens = MOCK_NOW
   : moment.tz(tz);
 
 // Window: [now + HOURS_FROM, now + HOURS_TO] in UTC
-const windowStartUTC = nowAthens.clone().add(HOURS_FROM, "hours").utc();
-const windowEndUTC = nowAthens.clone().add(HOURS_TO, "hours").utc();
+let windowStartUTC, windowEndUTC;
 
+if (USE_TOMORROW) {
+  const startAthens = nowAthens.clone().add(1, "day").startOf("day");
+  const endAthens = nowAthens.clone().add(1, "day").endOf("day");
+  windowStartUTC = startAthens.clone().utc();
+  windowEndUTC = endAthens.clone().utc();
+} else {
+  // Window: [now + HOURS_FROM, now + HOURS_TO] in UTC
+  windowStartUTC = nowAthens.clone().add(HOURS_FROM, "hours").utc();
+  windowEndUTC = nowAthens.clone().add(HOURS_TO, "hours").utc();
+}
 console.log("🧪 Reminder test script config:", {
   DRY_RUN,
   LIMIT,
   ONLY_ID,
+  USE_TOMORROW,
   ONLY_PHONE,
   HOURS_FROM,
   HOURS_TO,
@@ -60,7 +73,7 @@ const run = async () => {
   const query = {
     appointmentDateTime: {
       $gte: windowStartUTC.toDate(),
-      $lte: windowEndUTC.toDate(),
+      $lt: windowEndUTC.toDate(),
     },
     appointmentStatus: "confirmed",
     type: "appointment",

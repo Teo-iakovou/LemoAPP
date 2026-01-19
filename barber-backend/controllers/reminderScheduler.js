@@ -10,9 +10,11 @@ const sendReminders = async (options = {}) => {
     const tz = "Europe/Athens";
     const nowAthens = moment().tz(tz);
     const timestamp = nowAthens.format("YYYY-MM-DD HH:mm:ss");
+    const trigger = options?.trigger || "unknown";
+    console.log(`[${timestamp}] 🔔 sendReminders trigger=${trigger}`);
 
-    const windowStart = nowAthens.clone().add(24, "hours");
-    const windowEnd = nowAthens.clone().add(25, "hours");
+    const windowStart = nowAthens.clone().add(24, "hours").subtract(10, "minutes");
+    const windowEnd = nowAthens.clone().add(24, "hours").add(10, "minutes");
 
     const windowStartUTC = windowStart.clone().utc().toDate();
     const windowEndUTC = windowEnd.clone().utc().toDate();
