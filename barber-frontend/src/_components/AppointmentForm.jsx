@@ -7,6 +7,7 @@ import el from "date-fns/locale/el";
 registerLocale("el", el);
 import Swal from "sweetalert2";
 import withReactContent from "sweetalert2-react-content";
+import { getCustomerHexColor } from "../utils/customerColors";
 const DURATION_OPTIONS = [20, 30, 40, 60, 90, 120];
 // Calendar runs from 07:00 to 21:00, so a full-day break needs 14 hours (840 minutes).
 const BREAK_FULL_DAY_MINUTES = 14 * 60;
@@ -29,7 +30,7 @@ function AppointmentForm({
   const flatpickrRef = useRef(null);
   const MySwal = withReactContent(Swal);
 
-  const { register, handleSubmit, reset, setValue ,control} = useForm({
+  const { register, handleSubmit, reset, setValue, control } = useForm({
     defaultValues: {
       customerName: appointmentData?.customerName || "",
       phoneNumber: appointmentData?.phoneNumber || "",
@@ -63,6 +64,10 @@ function AppointmentForm({
     appointmentData?.lockReason || ""
   );
   const [error, setError] = useState(null);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [customerQuery, setCustomerQuery] = useState(
+    appointmentData?.customerName || ""
+  );
 
   // Click outside = close
   useEffect(() => {
@@ -331,18 +336,67 @@ const handleCustomerSelect = (e) => {
               <label className={labelClass}>ΟΝΟΜΑ ΠΕΛΑΤΗ</label>
               <input
                 {...register("customerName")}
-                list="customerNameList"
-                onChange={handleCustomerSelect}
+                value={customerQuery}
+                onChange={(e) => {
+                  setCustomerQuery(e.target.value);
+                  setValue("customerName", e.target.value, {
+                    shouldValidate: true,
+                    shouldDirty: true,
+                  });
+                  handleCustomerSelect(e);
+                }}
+                onFocus={() => setShowSuggestions(true)}
+                onBlur={() => setTimeout(() => setShowSuggestions(false), 100)}
                 type="text"
                 className={fieldBase + " placeholder:text-[#a78bfa]"}
                 placeholder="Όνομα πελάτη"
                 required={appointmentType === "appointment"}
               />
-              <datalist id="customerNameList">
-                {customers.map((customer) => (
-                  <option key={customer.phoneNumber} value={customer.name} />
-                ))}
-              </datalist>
+              {showSuggestions && (() => {
+                const q = customerQuery.trim().toLowerCase();
+                const filteredCustomers =
+                  q.length === 0
+                    ? customers
+                    : customers
+                        .filter((c) => (c.name || "").toLowerCase().includes(q))
+                        .sort((a, b) => {
+                          const aName = (a.name || "").toLowerCase();
+                          const bName = (b.name || "").toLowerCase();
+                          const aStarts = aName.startsWith(q);
+                          const bStarts = bName.startsWith(q);
+                          if (aStarts && !bStarts) return -1;
+                          if (!aStarts && bStarts) return 1;
+                          return aName.localeCompare(bName);
+                        });
+                if (filteredCustomers.length === 0) return null;
+                return (
+                <div className="mt-2 max-h-40 overflow-y-auto rounded border border-purple-700 bg-[#181a23]">
+                  {filteredCustomers.map((customer) => (
+                    <button
+                      key={customer.phoneNumber}
+                      type="button"
+                      className="flex w-full items-center px-3 py-2 text-left text-sm text-[#ede9fe] hover:bg-[#1f2333]"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => {
+                        setCustomerQuery(customer.name);
+                        setValue("customerName", customer.name, {
+                          shouldValidate: true,
+                          shouldDirty: true,
+                        });
+                        handleCustomerSelect({ target: { value: customer.name } });
+                        setShowSuggestions(false);
+                      }}
+                    >
+                      <span
+                        className="inline-block h-2 w-2 rounded-full mr-2"
+                        style={{ backgroundColor: getCustomerHexColor(customer) }}
+                      />
+                      {customer.name}
+                    </button>
+                  ))}
+                </div>
+                );
+              })()}
             </div>
           )}
 

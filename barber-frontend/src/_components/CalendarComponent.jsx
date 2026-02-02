@@ -9,6 +9,7 @@ import withDragAndDrop from "react-big-calendar/lib/addons/dragAndDrop";
 import "react-big-calendar/lib/css/react-big-calendar.css";
 import "react-big-calendar/lib/addons/dragAndDrop/styles.css";
 import "../styles/calendar-dark.css";
+import { getCustomerHexColor } from "../utils/customerColors";
 
 // Greek locale
 moment.locale("el");
@@ -94,7 +95,15 @@ const CalendarEvent = ({ event, title }) =>
   event.type === "lock" ? (
     <LockEvent event={event} />
   ) : (
-    <span className="block truncate leading-tight">{title}</span>
+    <span className="block truncate leading-tight">
+      {event.type === "appointment" && (
+        <span
+          className="inline-block h-2 w-2 rounded-full mr-2 align-middle"
+          style={{ backgroundColor: getCustomerHexColor(event) }}
+        />
+      )}
+      <span className="align-middle">{title}</span>
+    </span>
   );
 
 const CalendarComponent = ({

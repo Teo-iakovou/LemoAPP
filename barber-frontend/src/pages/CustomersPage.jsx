@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import { fetchCustomers, addCustomer } from "../utils/api";
+import { getCustomerTextColorClass } from "../utils/customerColors";
 import Select from "react-select";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
@@ -23,10 +24,6 @@ const barberOptions = [
   { value: "ΦΟΡΟΥ", label: "ΦΟΡΟΥ" },
   { value: "ΚΟΥΣΙΗΣ", label: "ΚΟΥΣΙΗΣ" },
 ];
- const barberColors = {
-    ΛΕΜΟ: "text-purple-600",
-    ΦΟΡΟΥ: "text-orange-500",
-  };
 const CustomersPage = () => {
   const [customers, setCustomers] = useState([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState(null);
@@ -58,7 +55,7 @@ const CustomersPage = () => {
         const customerData = await fetchCustomers();
         const updatedCustomers = customerData.map((customer) => ({
           ...customer,
-          barberColor: barberColors[customer.barber] || "text-white",
+          barberColor: getCustomerTextColorClass(customer),
         }));
         setCustomers(
           updatedCustomers.sort((a, b) => a.name.localeCompare(b.name))
