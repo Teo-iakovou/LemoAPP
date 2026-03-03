@@ -168,9 +168,9 @@ const CalendarComponent = ({
     // console.log("Resized event:", { ...event, start, end });
   };
 
-  const handleEventDrop = ({ event, start, end }) => {
+  const handleEventDrop = ({ event, start, end, allDay }) => {
     if (onUpdateAppointment) {
-      onUpdateAppointment({ event, start, end, action: "drop" });
+      onUpdateAppointment({ event, start, end, allDay, action: "drop" });
     }
   };
 

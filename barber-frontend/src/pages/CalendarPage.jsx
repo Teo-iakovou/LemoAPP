@@ -19,7 +19,6 @@ const API_BASE_URL =
 const CalendarPage = ({ darkCalendar = false }) => {
   const [appointments, setAppointments] = useState([]);
   const [customers, setCustomers] = useState([]); // Add customers state
-  const [filteredAppointments, setFilteredAppointments] = useState([]);
   const [selectedDate, setSelectedDate] = useState(null);
   const [selectedAppointment, setSelectedAppointment] = useState(null);
   const [showForm, setShowForm] = useState(false);
@@ -44,45 +43,165 @@ const [isLoading, setIsLoading] = useState(true);  // ✅ Fetch appointments
     return "#9ca3af";
   };
 
+  const mapAppointmentToEvent = (appointment) => {
+    const appointmentDate = new Date(appointment.appointmentDateTime);
+    const isBreak = appointment.type === "break";
+    const isLock = appointment.type === "lock";
+    const duration = Number(appointment.duration) || 40;
+
+    return {
+      id: appointment._id,
+      title: isBreak ? "ΔΙΑΛΕΙΜΜΑ" : isLock ? "" : appointment.customerName,
+      customerName: appointment.customerName,
+      phoneNumber: appointment.type === "appointment" ? appointment.phoneNumber : "",
+      lockReason: appointment.lockReason || "",
+      start: appointmentDate,
+      end: new Date(appointmentDate.getTime() + duration * 60 * 1000),
+      barber: appointment.barber,
+      type: appointment.type || "appointment",
+      duration,
+      backgroundColor: getEventColor(appointment),
+    };
+  };
+
+  const isOverlapping = (aStart, aEnd, bStart, bEnd) => aStart < bEnd && aEnd > bStart;
+  const hasMoveConflict = ({ eventId, barber, start, end }) => {
+    return appointments.some((existing) => {
+      if (!existing || existing.id === eventId) return false;
+      if ((existing.barber || "") !== (barber || "")) return false;
+      if (!isOverlapping(start, end, existing.start, existing.end)) return false;
+
+      // breaks/locks are blocked windows and appointments can't overlap each other.
+      return existing.type === "break" || existing.type === "lock" || existing.type === "appointment";
+    });
+  };
+
+  const buildUpdatedEvent = ({ currentEvent, event, start, end, allDay, action }) => {
+    const originalDuration =
+      Number(currentEvent.duration) || Math.max(1, Math.round((currentEvent.end - currentEvent.start) / 60000));
+    if (action === "resize") {
+      const resizedDuration = Math.max(1, Math.round((end - start) / 60000));
+      const resizedEnd = new Date(start.getTime() + resizedDuration * 60 * 1000);
+      return {
+        start: new Date(start),
+        end: resizedEnd,
+        duration: resizedDuration,
+      };
+    }
+
+    // Drop: use the exact dropped timestamp when available.
+    const originalStart = new Date(currentEvent.start);
+    const originalTimestamp = originalStart.getTime();
+    const dropCandidates = [event?.start, start, end]
+      .map((value) => (value ? new Date(value) : null))
+      .filter((value) => value && !Number.isNaN(value.getTime()));
+    const changedTimestampCandidate = dropCandidates.find(
+      (candidate) => candidate.getTime() !== originalTimestamp
+    );
+    const primaryDropTarget = changedTimestampCandidate || dropCandidates[0] || originalStart;
+
+    const nextStart = allDay
+      ? new Date(
+          primaryDropTarget.getFullYear(),
+          primaryDropTarget.getMonth(),
+          primaryDropTarget.getDate(),
+          originalStart.getHours(),
+          originalStart.getMinutes(),
+          originalStart.getSeconds(),
+          originalStart.getMilliseconds()
+        )
+      : new Date(primaryDropTarget);
+
+    return {
+      start: nextStart,
+      end: new Date(nextStart.getTime() + originalDuration * 60 * 1000),
+      duration: originalDuration,
+    };
+  };
+
+  const persistEventChange = async ({ event, start, end, duration }) => {
+    const payload = {
+      customerName: event.type === "appointment" ? event.customerName || "" : "",
+      phoneNumber: event.type === "appointment" ? event.phoneNumber || "" : "",
+      barber: event.barber || "ΛΕΜΟ",
+      type: event.type || "appointment",
+      appointmentDateTime: start.toISOString(),
+      duration,
+      endTime: end.toISOString(),
+      lockReason: event.type === "lock" ? event.lockReason || "" : undefined,
+    };
+    await updateAppointment(event.id, payload);
+  };
+
+  const handleCalendarEventUpdate = async ({ event, start, end, allDay, action }) => {
+    if (!event || !event.id || !start) return;
+
+    const currentEvent = appointments.find((appointment) => appointment.id === event.id);
+    if (!currentEvent) return;
+
+    const originalStart = new Date(currentEvent.start);
+    const originalEnd = new Date(currentEvent.end);
+    const { start: nextStart, end: nextEnd, duration } = buildUpdatedEvent({
+      currentEvent,
+      event,
+      start,
+      end,
+      allDay,
+      action,
+    });
+    if (
+      nextStart.getTime() === originalStart.getTime() &&
+      nextEnd.getTime() === originalEnd.getTime()
+    ) {
+      toast.error("Η μετακίνηση δεν εντοπίστηκε. Δοκίμασε ξανά σε άλλο slot.");
+      return;
+    }
+
+    if (hasMoveConflict({ eventId: event.id, barber: currentEvent.barber, start: nextStart, end: nextEnd })) {
+      toast.error("Μη έγκυρη μετακίνηση: υπάρχει σύγκρουση με ραντεβού/κλείδωμα/διάλειμμα.");
+      return;
+    }
+
+    // Optimistic UI update.
+    setAppointments((prev) =>
+      prev.map((appointment) =>
+        appointment.id === event.id
+          ? { ...appointment, start: nextStart, end: nextEnd, duration }
+          : appointment
+      )
+    );
+
+    try {
+      await persistEventChange({ event: currentEvent, start: nextStart, end: nextEnd, duration });
+      toast.success(action === "resize" ? "Η διάρκεια ενημερώθηκε." : "Το ραντεβού μετακινήθηκε.");
+    } catch (error) {
+      // Rollback on failure.
+      setAppointments((prev) =>
+        prev.map((appointment) =>
+          appointment.id === event.id
+            ? { ...appointment, start: originalStart, end: originalEnd }
+            : appointment
+        )
+      );
+      toast.error("Αποτυχία αποθήκευσης μετακίνησης ραντεβού.");
+      console.error("Failed to persist calendar drag/drop update:", error);
+    }
+  };
+
   useEffect(() => {
-    const fetchUpcoming = async () => {
+    const loadUpcomingAppointments = async () => {
       try {
-        const upcomingAppointments = await fetchUpcomingAppointments(); // This returns an array
-
-        const events = upcomingAppointments.map((appointment) => {
-          const appointmentDate = new Date(appointment.appointmentDateTime);
-          const isBreak = appointment.type === "break";
-          const isLock = appointment.type === "lock";
-
-          const duration = appointment.duration || 40;
-          return {
-            id: appointment._id,
-            title: isBreak
-              ? "ΔΙΑΛΕΙΜΜΑ"
-              : isLock
-              ? ""
-              : appointment.customerName,
-            customerName: appointment.customerName,
-            phoneNumber:
-              appointment.type === "appointment" ? appointment.phoneNumber : "",
-            lockReason: appointment.lockReason || "",
-            start: appointmentDate,
-            end: new Date(appointmentDate.getTime() + duration * 60 * 1000),
-            barber: appointment.barber,
-            type: appointment.type || "appointment",
-            backgroundColor: getEventColor(appointment),
-          };
-        });
-
+        const upcomingAppointments = await fetchUpcomingAppointments();
+        const events = upcomingAppointments.map(mapAppointmentToEvent);
         setAppointments(events);
       } catch (error) {
         console.error("Error fetching upcoming appointments:", error);
-       
+      } finally {
+        setIsLoading(false);
       }
-      setIsLoading(false); 
     };
 
-    fetchUpcoming();
+    loadUpcomingAppointments();
   }, []);
 
   // ✅ Fetch customers
@@ -100,11 +219,6 @@ const [isLoading, setIsLoading] = useState(true);  // ✅ Fetch appointments
     loadCustomers();
   }, []);
 
-  useEffect(() => {
-    // Include all appointments, no filtering for past dates
-    setFilteredAppointments(appointments);
-    console.log("All Appointments for Calendar:", appointments); // Debug all appointments
-  }, [appointments]);
   const handleSelectSlot = (slotInfo) => {
     const selectedStartDate = new Date(slotInfo.start);
     if (selectedStartDate.getHours() === 0) {
@@ -170,29 +284,7 @@ const [isLoading, setIsLoading] = useState(true);  // ✅ Fetch appointments
           ...(response.recurringAppointments || []),
         ];
 
-        const newEvents = createdAppointments.map((appointment) => {
-          const startDate = new Date(appointment.appointmentDateTime);
-          const duration = appointment.duration || 40;
-          const isBreak = appointment.type === "break";
-          const isLock = appointment.type === "lock";
-          return {
-            id: appointment._id,
-            title: isBreak
-              ? "ΔΙΑΛΕΙΜΜΑ"
-              : isLock
-              ? ""
-              : appointment.customerName,
-            customerName: appointment.customerName,
-            phoneNumber:
-              appointment.type === "appointment" ? appointment.phoneNumber : "",
-            lockReason: appointment.lockReason || "",
-            start: startDate,
-            end: new Date(startDate.getTime() + duration * 60 * 1000),
-            barber: appointment.barber,
-            type: appointment.type || "appointment",
-            backgroundColor: getEventColor(appointment),
-          };
-        });
+        const newEvents = createdAppointments.map(mapAppointmentToEvent);
 
         setAppointments((prevAppointments) => {
           const updatedIds = createdAppointments.map((appt) => appt._id);
@@ -295,21 +387,7 @@ const [isLoading, setIsLoading] = useState(true);  // ✅ Fetch appointments
         100
       );
 
-      const pastEvents = pastAppointments.map((appointment) => {
-        const appointmentDate = new Date(appointment.appointmentDateTime);
-        const isBreak = appointment.type === "break";
-        const duration = appointment.duration || 40;
-        return {
-          id: appointment._id,
-          title: isBreak ? "ΔΙΑΛΕΙΜΜΑ" : appointment.customerName,
-          phoneNumber: appointment.phoneNumber,
-          start: appointmentDate,
-          end: new Date(appointmentDate.getTime() + duration * 60 * 1000),
-          barber: appointment.barber,
-          type: appointment.type || "appointment",
-          backgroundColor: getEventColor(appointment),
-        };
-      });
+      const pastEvents = pastAppointments.map(mapAppointmentToEvent);
 
       setAppointments((prev) => {
         const merged = [...prev, ...pastEvents];
@@ -323,46 +401,6 @@ const [isLoading, setIsLoading] = useState(true);  // ✅ Fetch appointments
     } catch (error) {
       console.error("Error loading past appointments:", error);
       toast.error("Αποτυχία φόρτωσης προηγούμενων ραντεβού.");
-    }
-  };
-
-  const handleResizeAppointment = async (updatedEvent) => {
-    // Find the original appointment by id
-    const original = appointments.find((a) => a.id === updatedEvent.id);
-    if (!original) return;
-
-    // Calculate the new duration in minutes
-    const newDuration = Math.round(
-      (updatedEvent.end - updatedEvent.start) / 60000
-    );
-
-    // Prepare payload for backend
-    const payload = {
-      ...original,
-      appointmentDateTime: updatedEvent.start, // update start time
-      duration: newDuration, // update duration
-    };
-
-    try {
-      await updateAppointment(original.id, payload);
-
-      // Update frontend state (so UI updates instantly)
-      setAppointments((prev) =>
-        prev.map((a) =>
-          a.id === updatedEvent.id
-            ? {
-                ...a,
-                start: updatedEvent.start,
-                end: updatedEvent.end,
-                duration: newDuration,
-              }
-            : a
-        )
-      );
-      toast.success("Διάρκεια ραντεβού ενημερώθηκε!");
-    } catch (error) {
-      toast.error("Αποτυχία ενημέρωσης διάρκειας.");
-      console.error(error);
     }
   };
 
@@ -396,10 +434,10 @@ const [isLoading, setIsLoading] = useState(true);  // ✅ Fetch appointments
     ) : (
       <div className={`overflow-x-auto max-w-full flex-1 min-h-0 ${darkCalendar ? "calendar-dark" : ""}`}>
         <CalendarComponent
-          events={filteredAppointments}
+          events={appointments}
           onSelectSlot={handleSelectSlot}
           onSelectEvent={handleSelectEvent}
-          onUpdateAppointment={handleResizeAppointment}
+          onUpdateAppointment={handleCalendarEventUpdate}
         />
       </div>
     )}
