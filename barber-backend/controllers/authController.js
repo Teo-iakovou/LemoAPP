@@ -99,8 +99,52 @@ const me = async (req, res) => {
     user: {
       id: user._id,
       username: user.username,
+      dob: user.dob || null,
     },
   });
+};
+
+const updateMe = async (req, res, next) => {
+  try {
+    const dob = String(req.body?.dob || "").trim();
+    if (!dob) {
+      return res.status(400).json({ message: "dob is required" });
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dob)) {
+      return res.status(400).json({ message: "dob must be in YYYY-MM-DD format" });
+    }
+
+    const parsedDob = new Date(`${dob}T00:00:00Z`);
+    if (Number.isNaN(parsedDob.getTime())) {
+      return res.status(400).json({ message: "dob is invalid" });
+    }
+    const today = new Date();
+    const todayUtc = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));
+    if (parsedDob > todayUtc) {
+      return res.status(400).json({ message: "dob cannot be in the future" });
+    }
+
+    const updatedUser = await User.findByIdAndUpdate(
+      req.userId,
+      { $set: { dob } },
+      { new: true, runValidators: true, select: "_id username dob" }
+    ).lean();
+
+    if (!updatedUser) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    return res.status(200).json({
+      message: "Profile updated",
+      user: {
+        id: updatedUser._id,
+        username: updatedUser.username,
+        dob: updatedUser.dob || null,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
 };
 
 module.exports = {
@@ -108,4 +152,5 @@ module.exports = {
   login,
   updateProfile,
   me,
+  updateMe,
 };

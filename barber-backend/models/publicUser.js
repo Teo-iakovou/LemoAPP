@@ -7,6 +7,8 @@ const publicUserSchema = new mongoose.Schema(
     displayName: { type: String, trim: true },
     password: { type: String, required: true },
     phoneNumber: { type: String, required: true, unique: true, trim: true },
+    // Stored as YYYY-MM-DD to avoid timezone shifting for birth dates.
+    dob: { type: String, default: null, trim: true },
     role: {
       type: String,
       enum: ["customer", "barber", "admin"],

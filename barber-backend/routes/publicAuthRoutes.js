@@ -3,6 +3,7 @@ const {
   signup,
   login,
   me,
+  completeProfile,
   requestPasswordReset,
   resetPasswordWithOtp,
 } = require("../controllers/publicAuthController");
@@ -13,6 +14,7 @@ const router = express.Router();
 router.post("/signup", signup);
 router.post("/login", login);
 router.get("/me", requirePublicUser, me);
+router.patch("/me", requirePublicUser, completeProfile);
 router.post("/forgot", requestPasswordReset);
 router.post("/reset", resetPasswordWithOtp);
 

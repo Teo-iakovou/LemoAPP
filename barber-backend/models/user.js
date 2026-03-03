@@ -5,6 +5,8 @@ const userSchema = new mongoose.Schema({
   username: { type: String, required: true, unique: true },
 
   password: { type: String, required: true },
+  // Stored as YYYY-MM-DD to avoid timezone shifts for birth dates.
+  dob: { type: String, default: null, trim: true },
   resetToken: String,
   resetTokenExpires: Date,
 });

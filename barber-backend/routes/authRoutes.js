@@ -4,6 +4,7 @@ const {
   login,
   updateProfile,
   me,
+  updateMe,
 } = require("../controllers/authController");
 const requireUser = require("../middlewares/requireUser");
 
@@ -18,6 +19,7 @@ router.post("/login", login);
 
 // Current user
 router.get("/me", requireUser, me);
+router.patch("/me", requireUser, updateMe);
 
 // Update user profile
 router.put("/update-profile", updateProfile);

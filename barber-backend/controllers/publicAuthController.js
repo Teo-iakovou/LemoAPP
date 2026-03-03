@@ -69,6 +69,52 @@ function buildPhoneLookupVariants(rawInput = "") {
   };
 }
 
+function normalizeDobInput(input = "") {
+  return String(input || "").trim();
+}
+
+function parseDob(input = "") {
+  const normalized = normalizeDobInput(input);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
+    return { valid: false, message: "DOB must be in YYYY-MM-DD format" };
+  }
+  const [year, month, day] = normalized.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (
+    Number.isNaN(date.getTime()) ||
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() !== month - 1 ||
+    date.getUTCDate() !== day
+  ) {
+    return { valid: false, message: "DOB is not a valid date" };
+  }
+  const minDate = new Date(Date.UTC(1900, 0, 1));
+  const today = new Date();
+  const todayUtc = new Date(
+    Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate())
+  );
+  if (date < minDate) {
+    return { valid: false, message: "DOB is out of allowed range" };
+  }
+  if (date > todayUtc) {
+    return { valid: false, message: "DOB cannot be in the future" };
+  }
+  return { valid: true, value: normalized };
+}
+
+function serializePublicUser(user) {
+  const dob = user?.dob ? String(user.dob) : null;
+  return {
+    id: user._id,
+    username: user.username,
+    displayName: user.displayName,
+    phoneNumber: user.phoneNumber,
+    role: user.role || "customer",
+    dob,
+    requiresDob: !dob,
+  };
+}
+
 const signup = async (req, res, next) => {
   try {
     const username = String(req.body?.username || req.body?.name || "").trim();
@@ -76,10 +122,16 @@ const signup = async (req, res, next) => {
     const { normalized: phoneNumber, variants } = buildPhoneLookupVariants(
       req.body?.phoneNumber || req.body?.phone || ""
     );
+    const dobInput = req.body?.dob;
     const displayName = req.body?.displayName || req.body?.name || username;
 
-    if (!username || !password || !phoneNumber) {
-      return res.status(400).json({ message: "Username, password and phone are required" });
+    if (!username || !password || !phoneNumber || !dobInput) {
+      return res.status(400).json({ message: "Username, password, phone, and dob are required" });
+    }
+
+    const parsedDob = parseDob(dobInput);
+    if (!parsedDob.valid) {
+      return res.status(400).json({ message: parsedDob.message });
     }
 
     const existingUser = await PublicUser.findOne({ username });
@@ -99,6 +151,7 @@ const signup = async (req, res, next) => {
       password,
       displayName,
       phoneNumber,
+      dob: parsedDob.value,
     });
     await user.save();
 
@@ -107,13 +160,7 @@ const signup = async (req, res, next) => {
     res.status(201).json({
       message: "Account created successfully",
       token,
-      user: {
-        id: user._id,
-        username: user.username,
-        displayName: user.displayName,
-        phoneNumber: user.phoneNumber,
-        role: user.role || "customer",
-      },
+      user: serializePublicUser(user),
     });
   } catch (error) {
     next(error);
@@ -158,13 +205,7 @@ const login = async (req, res, next) => {
 
     res.status(200).json({
       token,
-      user: {
-        id: user._id,
-        username: user.username,
-        displayName: user.displayName,
-        phoneNumber: user.phoneNumber,
-        role: user.role || "customer",
-      },
+      user: serializePublicUser(user),
     });
   } catch (error) {
     next(error);
@@ -174,14 +215,34 @@ const login = async (req, res, next) => {
 const me = async (req, res) => {
   const user = req.publicUser;
   res.status(200).json({
-    user: {
-      id: user._id,
-      username: user.username,
-      displayName: user.displayName,
-      phoneNumber: user.phoneNumber,
-      role: user.role || "customer",
-    },
+    user: serializePublicUser(user),
   });
+};
+
+const completeProfile = async (req, res, next) => {
+  try {
+    const parsedDob = parseDob(req.body?.dob);
+    if (!parsedDob.valid) {
+      return res.status(400).json({ message: parsedDob.message });
+    }
+
+    const user = await PublicUser.findByIdAndUpdate(
+      req.publicUserId,
+      { $set: { dob: parsedDob.value } },
+      { new: true }
+    );
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    res.status(200).json({
+      message: "Profile updated",
+      user: serializePublicUser(user),
+    });
+  } catch (error) {
+    next(error);
+  }
 };
 
 const requestPasswordReset = async (req, res, next) => {
@@ -257,6 +318,7 @@ module.exports = {
   signup,
   login,
   me,
+  completeProfile,
   requestPasswordReset,
   resetPasswordWithOtp,
 };
