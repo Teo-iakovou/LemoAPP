@@ -48,11 +48,11 @@ const App = () => {
 
   return (
     <Router>
-      <div className="min-h-screen flex flex-col bg-gray-900 transition-colors duration-300">
+      <div className="min-h-screen flex flex-col bg-gray-900 transition-colors duration-300 overflow-x-hidden">
         {/* Toasts show up globally */}
         <Toaster position="top-center" reverseOrder={false} />
         {/* Navbar Section */}
-        <header className="h-16 bg-purple-950">
+        <header className="h-16 shrink-0 bg-purple-950">
           <Navbar
             isAuth={isAuth}
             onLogout={handleLogout}
@@ -62,7 +62,7 @@ const App = () => {
         </header>
 
         {/* Main Content */}
-        <main className="flex-1 overflow-y-auto p-6">
+        <main className="flex-1 overflow-y-auto overflow-x-hidden px-2 py-3 sm:px-4 sm:py-4 lg:p-6">
           <Suspense fallback={<div>Loading...</div>}>
             {isAuth ? (
               <Routes>

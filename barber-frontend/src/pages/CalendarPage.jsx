@@ -432,7 +432,7 @@ const [isLoading, setIsLoading] = useState(true);  // ✅ Fetch appointments
        {isLoading ? (
       <Spinner />
     ) : (
-      <div className={`overflow-x-auto max-w-full flex-1 min-h-0 ${darkCalendar ? "calendar-dark" : ""}`}>
+      <div className={`overflow-x-hidden max-w-full flex-1 min-h-0 ${darkCalendar ? "calendar-dark" : ""}`}>
         <CalendarComponent
           events={appointments}
           onSelectSlot={handleSelectSlot}

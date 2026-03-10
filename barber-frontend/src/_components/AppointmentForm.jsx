@@ -286,29 +286,29 @@ const handleCustomerSelect = (e) => {
   const labelClass =
     "text-sm font-medium mb-1 text-purple-800 dark:text-purple-200";
   const buttonBase =
-    "rounded-xl font-bold py-2 px-6 transition-all text-base shadow-button";
+    "rounded-xl font-bold py-3 px-4 transition-all text-base shadow-button min-h-11";
   const primary = buttonBase + " bg-purple-600 text-white hover:bg-purple-700";
   const secondary = buttonBase + " bg-gray-200 text-gray-900 hover:bg-gray-300";
   const deleteBtn =
     buttonBase +
-    " bg-red-600 text-white hover:bg-red-700 focus:outline-none ml-auto";
+    " bg-red-600 text-white hover:bg-red-700 focus:outline-none";
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-2 py-6">
+    <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center bg-black/50 px-2 sm:px-3 py-3 sm:py-6 overflow-y-auto">
       <div
         ref={formRef}
         className="
-      w-full max-w-lg 
-      sm:max-w-md 
+      w-full max-w-lg
+      sm:max-w-md
       bg-[#17182a] text-white 
-      rounded-3xl shadow-2xl p-6
+      rounded-2xl sm:rounded-3xl shadow-2xl p-4 sm:p-6
       relative
       flex flex-col
       border border-purple-700
       ring-1 ring-purple-300
       transition-all
       min-h-[300px]
-      max-h-[95vh]
+      max-h-[92dvh] sm:max-h-[95vh]
       overflow-y-auto
       mx-auto
       sm:mx-0
@@ -512,7 +512,7 @@ const handleCustomerSelect = (e) => {
               <option value="weekly">Εβδομαδιαίο</option>
             </select>
             {recurrence === "weekly" && (
-              <div className="flex gap-2 mt-2">
+              <div className="mt-2 flex flex-col gap-2 sm:flex-row">
                 <select
                   className={fieldBase + " text-[#a78bfa]"}
                   value={repeatInterval}
@@ -564,9 +564,9 @@ const handleCustomerSelect = (e) => {
                 </span>
               </div>
             ) : (
-              <div className="flex gap-2 items-center">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                 <select
-                  className={fieldBase + " w-32 text-[#a78bfa]"}
+                  className={fieldBase + " w-full sm:w-32 text-[#a78bfa]"}
                   value={
                     DURATION_OPTIONS.includes(Number(duration))
                       ? duration
@@ -585,7 +585,7 @@ const handleCustomerSelect = (e) => {
                   duration === "" ||
                   duration === "custom") && (
                   <input
-                    className={fieldBase + " w-20 placeholder:text-[#a78bfa]"}
+                    className={fieldBase + " w-full sm:w-24 placeholder:text-[#a78bfa]"}
                     type="number"
                     min={
                       appointmentType === "break"
@@ -666,22 +666,28 @@ const handleCustomerSelect = (e) => {
 
 
           {/* Buttons */}
-          <div className="flex gap-2 mt-4">
-            <button type="submit" className={primary}>
-              {isEditing ? "Ενημέρωση" : "Προσθήκη"}
-            </button>
-            <button type="button" className={secondary} onClick={onClose}>
-              Άκυρο
-            </button>
-            {isEditing && onDelete && (
+          <div className="sticky bottom-0 z-10 mt-4 -mx-1 rounded-xl border border-purple-900/60 bg-[#17182a]/95 p-1 backdrop-blur-sm">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <button type="submit" className={`${primary} w-full sm:w-auto`}>
+                {isEditing ? "Ενημέρωση" : "Προσθήκη"}
+              </button>
               <button
                 type="button"
-                className={deleteBtn}
-                onClick={handleDelete}
+                className={`${secondary} w-full sm:w-auto`}
+                onClick={onClose}
               >
-                Διαγραφή
+                Άκυρο
               </button>
-            )}
+              {isEditing && onDelete && (
+                <button
+                  type="button"
+                  className={`${deleteBtn} w-full sm:w-auto sm:ml-auto`}
+                  onClick={handleDelete}
+                >
+                  Διαγραφή
+                </button>
+              )}
+            </div>
           </div>
         </form>
       </div>

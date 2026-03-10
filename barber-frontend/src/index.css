@@ -38,13 +38,139 @@ body {
 .rbc-toolbar button {
   font-size: 0.85rem; /* Smaller font for mobile */
   padding: 0.3rem 0.6rem; /* Adjust padding */
-  white-space: nowrap; /* Prevent text wrapping */
-  overflow: hidden; /* Hide overflowing text */
-  text-overflow: ellipsis; /* Add ellipsis for long text */
+  white-space: nowrap;
 }
 .rbc-toolbar label {
   font-size: 0.85rem; /* Smaller font for labels */
 }
+
+@media (max-width: 768px) {
+  .barber-calendar-viewport {
+    width: 100%;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: visible;
+  }
+
+  .barber-calendar-viewport--default {
+    overflow-y: hidden;
+  }
+
+  .barber-calendar-viewport--scroll {
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .barber-calendar-viewport--scroll .rbc-time-view {
+    min-width: 700px;
+  }
+
+  /* Month rows are flex-based and can collapse on narrow screens if parent height resolves too small. */
+  .barber-calendar-viewport--month .barber-calendar {
+    height: auto !important;
+    min-height: 64vh;
+  }
+
+  .barber-calendar-viewport--month .rbc-month-view {
+    min-height: 56vh;
+  }
+
+  .barber-calendar-viewport--month .rbc-month-row {
+    min-height: 62px;
+  }
+
+  .barber-calendar .rbc-toolbar {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas:
+      "nav label"
+      "views views";
+    gap: 0.5rem;
+    align-items: center;
+    margin-bottom: 0.5rem;
+  }
+
+  .barber-calendar .rbc-toolbar > .rbc-btn-group:first-child {
+    grid-area: nav;
+    display: inline-flex;
+    flex-wrap: nowrap;
+    gap: 0.25rem;
+  }
+
+  .barber-calendar .rbc-toolbar > .rbc-toolbar-label {
+    grid-area: label;
+    text-align: right;
+    line-height: 1.2;
+    font-size: 0.9rem;
+    min-width: 0;
+    white-space: normal;
+  }
+
+  .barber-calendar .rbc-toolbar > .rbc-btn-group:last-child {
+    grid-area: views;
+    display: flex;
+    gap: 0.35rem;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding-bottom: 0.1rem;
+  }
+
+  .barber-calendar .rbc-toolbar > .rbc-btn-group:last-child::-webkit-scrollbar {
+    display: none;
+  }
+
+  .barber-calendar .rbc-toolbar > .rbc-btn-group:last-child button {
+    flex: 0 0 auto;
+  }
+
+  .barber-calendar .rbc-time-gutter {
+    width: 42px;
+    min-width: 42px;
+  }
+
+  .barber-calendar .rbc-time-gutter .rbc-time-slot,
+  .barber-calendar .rbc-label {
+    font-size: 0.7rem;
+    line-height: 1.2;
+  }
+
+  .barber-calendar .rbc-timeslot-group {
+    min-height: 42px;
+  }
+
+  .barber-calendar .rbc-header {
+    font-size: 0.72rem;
+    line-height: 1.15;
+    padding: 0.35rem 0.2rem;
+  }
+
+  .barber-calendar .rbc-date-cell {
+    font-size: 0.72rem;
+    padding-right: 0.2rem;
+  }
+
+  .barber-calendar .rbc-event {
+    font-size: 0.72rem;
+    padding: 2px 4px;
+    border-radius: 4px;
+  }
+
+  .barber-calendar .rbc-month-view {
+    font-size: 0.76rem;
+  }
+
+  .barber-calendar .rbc-agenda-view .rbc-agenda-content {
+    overflow-x: auto;
+  }
+
+  .barber-calendar .rbc-agenda-view table.rbc-agenda-table {
+    font-size: 0.78rem;
+  }
+}
+
 .react-datepicker {
   background-color: #161a23 !important; /* deeper dark */
   color: #ede9fe !important; /* light purple text */

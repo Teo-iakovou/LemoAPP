@@ -73,7 +73,7 @@ const Navbar = ({ isAuth, onLogout, calendarDark, onToggleCalendarDark }) => {
   };
 
   return (
-    <nav className="fixed top-0 left-0 w-full bg-purple-950 flex items-center justify-between px-6 py-3 shadow-md z-50">
+    <nav className="fixed top-0 left-0 w-full bg-purple-950 flex items-center justify-between px-3 md:px-6 py-3 shadow-md z-50 overflow-x-clip">
       {/* Logo */}
       <div>
         <Link to="/">
@@ -87,7 +87,7 @@ const Navbar = ({ isAuth, onLogout, calendarDark, onToggleCalendarDark }) => {
 
       {/* Navigation Icons - Render only if authenticated */}
       {isAuth && (
-        <ul className="flex items-center space-x-6 text-white text-xl">
+        <ul className="hidden md:flex items-center space-x-6 text-white text-xl">
           <li>
             <Link
               to="/"
@@ -179,6 +179,48 @@ const Navbar = ({ isAuth, onLogout, calendarDark, onToggleCalendarDark }) => {
         </ul>
       )}
 
+      {isAuth && (
+        <ul className="flex md:hidden items-center gap-3 text-white text-lg">
+          <li>
+            <Link
+              to="/"
+              className="hover:text-blue-500 transition-colors duration-300"
+              aria-label="Αρχική"
+            >
+              <FaHome />
+            </Link>
+          </li>
+          <li>
+            <Link
+              to="/calendar"
+              className="hover:text-blue-500 transition-colors duration-300"
+              aria-label="Ημερολόγιο"
+            >
+              <FaCalendarAlt />
+            </Link>
+          </li>
+          <li>
+            <Link
+              to="/customers"
+              className="hover:text-blue-500 transition-colors duration-300"
+              aria-label="Πελάτες"
+            >
+              <FaUsers />
+            </Link>
+          </li>
+          <li>
+            <button
+              onClick={onToggleCalendarDark}
+              className="text-white/90 hover:text-white transition-colors duration-300"
+              title={calendarDark ? "Switch calendar to light" : "Switch calendar to dark"}
+              aria-label={calendarDark ? "Light Calendar" : "Dark Calendar"}
+            >
+              {calendarDark ? <FaSun className="text-yellow-300" /> : <FaMoon className="text-blue-300" />}
+            </button>
+          </li>
+        </ul>
+      )}
+
       {/* Profile Dropdown - Render only if authenticated */}
       {isAuth && (
         <div className="relative" ref={dropdownRef}>
@@ -190,6 +232,62 @@ const Navbar = ({ isAuth, onLogout, calendarDark, onToggleCalendarDark }) => {
           </button>
           {isDropdownOpen && (
             <div className="absolute top-12 right-0 bg-white shadow-lg rounded-3xl py-3 px-4 w-40 z-50 border border-gray-200">
+              <Link
+                to="/"
+                className="block px-4 py-2 text-gray-700 hover:bg-gray-100 rounded md:hidden"
+                onClick={() => setIsDropdownOpen(false)}
+              >
+                ΑΡΧΙΚΗ
+              </Link>
+              <Link
+                to="/calendar"
+                className="block px-4 py-2 text-gray-700 hover:bg-gray-100 rounded md:hidden"
+                onClick={() => setIsDropdownOpen(false)}
+              >
+                ΗΜΕΡΟΛΟΓΙΟ
+              </Link>
+              <Link
+                to="/customers"
+                className="block px-4 py-2 text-gray-700 hover:bg-gray-100 rounded md:hidden"
+                onClick={() => setIsDropdownOpen(false)}
+              >
+                ΠΕΛΑΤΕΣ
+              </Link>
+              <Link
+                to="/CustomerCounts"
+                className="block px-4 py-2 text-gray-700 hover:bg-gray-100 rounded"
+                onClick={() => setIsDropdownOpen(false)}
+              >
+                CUSTOMER COUNTS
+              </Link>
+              <Link
+                to="/NotePage"
+                className="block px-4 py-2 text-gray-700 hover:bg-gray-100 rounded"
+                onClick={() => setIsDropdownOpen(false)}
+              >
+                ΣΗΜΕΙΩΣΕΙΣ
+              </Link>
+              <Link
+                to="/sms-status"
+                className="block px-4 py-2 text-gray-700 hover:bg-gray-100 rounded"
+                onClick={() => setIsDropdownOpen(false)}
+              >
+                SMS STATUS
+              </Link>
+              <Link
+                to="/auto-customers"
+                className="block px-4 py-2 text-gray-700 hover:bg-gray-100 rounded"
+                onClick={() => setIsDropdownOpen(false)}
+              >
+                AUTO CUSTOMERS
+              </Link>
+              <Link
+                to="/bulk-locks"
+                className="block px-4 py-2 text-gray-700 hover:bg-gray-100 rounded"
+                onClick={() => setIsDropdownOpen(false)}
+              >
+                BULK LOCKS
+              </Link>
               <Link
                 to="/profile"
                 className="block px-4 py-2 text-gray-700 hover:bg-gray-100 rounded"

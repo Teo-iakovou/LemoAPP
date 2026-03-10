@@ -10,6 +10,7 @@ import "react-big-calendar/lib/css/react-big-calendar.css";
 import "react-big-calendar/lib/addons/dragAndDrop/styles.css";
 import "../styles/calendar-dark.css";
 import { getCustomerHexColor } from "../utils/customerColors";
+import { useEffect, useState } from "react";
 
 // Greek locale
 moment.locale("el");
@@ -118,6 +119,36 @@ const CalendarComponent = ({
   onView,
   showToolbar = true,
 }) => {
+  const [isMobile, setIsMobile] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.matchMedia("(max-width: 768px)").matches;
+  });
+  const defaultCalendarView = isMobile ? Views.DAY : Views.WEEK;
+  const [internalView, setInternalView] = useState(() => view || defaultCalendarView);
+  const activeView = view || internalView;
+  const shouldUseHorizontalScroll = isMobile && activeView === Views.WEEK;
+  const isMobileMonthView = isMobile && activeView === Views.MONTH;
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    const media = window.matchMedia("(max-width: 768px)");
+    const update = (event) => setIsMobile(event.matches);
+    setIsMobile(media.matches);
+    if (typeof media.addEventListener === "function") {
+      media.addEventListener("change", update);
+      return () => media.removeEventListener("change", update);
+    }
+    media.addListener(update);
+    return () => media.removeListener(update);
+  }, []);
+
+  const handleViewChange = (nextView) => {
+    if (!view) {
+      setInternalView(nextView);
+    }
+    if (onView) onView(nextView);
+  };
+
   // Style for each event
   const eventStyleGetter = (event, start, end, isSelected) => {
     const baseStyle = {
@@ -176,76 +207,84 @@ const CalendarComponent = ({
 
   return (
     <div className="h-full w-full">
-      <DragAndDropCalendar
-        localizer={localizer}
-        events={events}
-        date={date}
-        onNavigate={onNavigate}
-        view={view}
-        onView={onView}
-        toolbar={showToolbar}
-        startAccessor="start"
-        endAccessor="end"
-        style={{ height: "100%", width: "100%" }}
-        selectable={!disabled}
-        onSelectSlot={onSelectSlot}
-        onSelectEvent={onSelectEvent}
-        eventPropGetter={eventStyleGetter}
-        components={{
-          event: CalendarEvent,
-        }}
-        className="relative z-0"
-        min={new Date(1970, 1, 1, 7, 0, 0)}
-        max={new Date(1970, 1, 1, 21, 0, 0)}
-        step={40}
-        timeslots={1}
-        defaultView={Views.WEEK}
-        views={[Views.MONTH, Views.WEEK, Views.DAY, Views.AGENDA]}
-        resizable={!disabled}
-        draggableAccessor={() => !disabled}
-        onEventResize={handleEventResize}
-        onEventDrop={handleEventDrop}
-        formats={{
-          timeGutterFormat: "HH:mm",
-          eventTimeRangeFormat: ({ start, end }) =>
-            `${moment(start).format("HH:mm")} - ${moment(end).format("HH:mm")}`,
-          agendaTimeRangeFormat: ({ start, end }) =>
-            `${moment(start).format("HH:mm")} - ${moment(end).format("HH:mm")}`,
-          dayFormat: (date) =>
-            `${greekDays[new Date(date).getDay()]} ${moment(date).format(
-              "DD/MM"
-            )}`,
-          weekdayFormat: (date) =>
-            `${greekDays[new Date(date).getDay()]} ${moment(date).format(
-              "DD/MM"
-            )}`,
-          monthHeaderFormat: (date) =>
-            `${greekMonths[new Date(date).getMonth()]} ${new Date(
-              date
-            ).getFullYear()}`,
-          dayHeaderFormat: (date) =>
-            `${greekDays[new Date(date).getDay()]} ${moment(date).format(
-              "DD/MM"
-            )}`,
-          weekHeaderFormat: ({ start, end }) =>
-            `${moment(start).format("DD/MM")} - ${moment(end).format("DD/MM")}`,
-        }}
-        messages={{
-          today: "Σήμερα",
-          previous: "Προηγούμενο",
-          next: "Επόμενο",
-          month: "Μήνας",
-          week: "Εβδομάδα",
-          day: "Ημέρα",
-          agenda: "Ατζέντα",
-          date: "Ημερομηνία",
-          time: "Ώρα",
-          event: "Γεγονός",
-          allDay: "Ολοήμερο",
-          noEventsInRange: "Δεν υπάρχουν γεγονότα σε αυτή την περιοχή.",
-          showMore: (count) => `+ Δείτε περισσότερα (${count})`,
-        }}
-      />
+      <div
+        className={`barber-calendar-viewport ${
+          shouldUseHorizontalScroll ? "barber-calendar-viewport--scroll" : ""
+        } ${isMobileMonthView ? "barber-calendar-viewport--month" : ""} ${
+          !shouldUseHorizontalScroll ? "barber-calendar-viewport--default" : ""
+        }`}
+      >
+        <DragAndDropCalendar
+          localizer={localizer}
+          events={events}
+          date={date}
+          onNavigate={onNavigate}
+          view={activeView}
+          onView={handleViewChange}
+          toolbar={showToolbar}
+          startAccessor="start"
+          endAccessor="end"
+          style={{ height: "100%", width: "100%" }}
+          selectable={!disabled}
+          onSelectSlot={onSelectSlot}
+          onSelectEvent={onSelectEvent}
+          eventPropGetter={eventStyleGetter}
+          components={{
+            event: CalendarEvent,
+          }}
+          className="relative z-0 barber-calendar"
+          min={new Date(1970, 1, 1, 7, 0, 0)}
+          max={new Date(1970, 1, 1, 21, 0, 0)}
+          step={40}
+          timeslots={1}
+          defaultView={defaultCalendarView}
+          views={[Views.MONTH, Views.WEEK, Views.DAY, Views.AGENDA]}
+          resizable={!disabled}
+          draggableAccessor={() => !disabled}
+          onEventResize={handleEventResize}
+          onEventDrop={handleEventDrop}
+          formats={{
+            timeGutterFormat: "HH:mm",
+            eventTimeRangeFormat: ({ start, end }) =>
+              `${moment(start).format("HH:mm")} - ${moment(end).format("HH:mm")}`,
+            agendaTimeRangeFormat: ({ start, end }) =>
+              `${moment(start).format("HH:mm")} - ${moment(end).format("HH:mm")}`,
+            dayFormat: (date) =>
+              `${greekDays[new Date(date).getDay()]} ${moment(date).format(
+                "DD/MM"
+              )}`,
+            weekdayFormat: (date) =>
+              `${greekDays[new Date(date).getDay()]} ${moment(date).format(
+                "DD/MM"
+              )}`,
+            monthHeaderFormat: (date) =>
+              `${greekMonths[new Date(date).getMonth()]} ${new Date(
+                date
+              ).getFullYear()}`,
+            dayHeaderFormat: (date) =>
+              `${greekDays[new Date(date).getDay()]} ${moment(date).format(
+                "DD/MM"
+              )}`,
+            weekHeaderFormat: ({ start, end }) =>
+              `${moment(start).format("DD/MM")} - ${moment(end).format("DD/MM")}`,
+          }}
+          messages={{
+            today: "Σήμερα",
+            previous: "Προηγούμενο",
+            next: "Επόμενο",
+            month: "Μήνας",
+            week: "Εβδομάδα",
+            day: "Ημέρα",
+            agenda: "Ατζέντα",
+            date: "Ημερομηνία",
+            time: "Ώρα",
+            event: "Γεγονός",
+            allDay: "Ολοήμερο",
+            noEventsInRange: "Δεν υπάρχουν γεγονότα σε αυτή την περιοχή.",
+            showMore: (count) => `+ Δείτε περισσότερα (${count})`,
+          }}
+        />
+      </div>
     </div>
   );
 };
