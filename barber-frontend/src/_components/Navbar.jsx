@@ -73,7 +73,7 @@ const Navbar = ({ isAuth, onLogout, calendarDark, onToggleCalendarDark }) => {
   };
 
   return (
-    <nav className="fixed top-0 left-0 w-full bg-purple-950 flex items-center justify-between px-3 md:px-6 py-3 shadow-md z-[1200] overflow-x-clip">
+    <nav className="fixed top-0 left-0 w-full bg-purple-950 flex items-center justify-between px-3 md:px-6 py-3 shadow-md z-[1200] overflow-visible">
       {/* Logo */}
       <div>
         <Link to="/">
@@ -231,7 +231,7 @@ const Navbar = ({ isAuth, onLogout, calendarDark, onToggleCalendarDark }) => {
             <FaBars />
           </button>
           {isDropdownOpen && (
-            <div className="absolute top-12 right-0 bg-white shadow-lg rounded-3xl py-3 px-4 w-40 z-[1210] border border-gray-200">
+            <div className="absolute top-12 right-0 bg-white shadow-lg rounded-3xl py-3 px-4 w-40 z-[1300] border border-gray-200">
               <Link
                 to="/"
                 className="block px-4 py-2 text-gray-700 hover:bg-gray-100 rounded md:hidden"
