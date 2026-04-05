@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
+import Swal from "sweetalert2";
+import withReactContent from "sweetalert2-react-content";
 import CalendarComponent from "../_components/CalendarComponent";
 import AppointmentForm from "../_components/AppointmentForm";
 import Spinner from "../_components/Spinner";
@@ -15,6 +17,8 @@ import {
 // Base API URL
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:5002/api";
+
+const MySwal = withReactContent(Swal);
 
 const CalendarPage = ({ darkCalendar = false }) => {
   const [appointments, setAppointments] = useState([]);
@@ -149,6 +153,7 @@ const [isLoading, setIsLoading] = useState(true);  // ✅ Fetch appointments
       allDay,
       action,
     });
+
     if (
       nextStart.getTime() === originalStart.getTime() &&
       nextEnd.getTime() === originalEnd.getTime()
@@ -162,25 +167,61 @@ const [isLoading, setIsLoading] = useState(true);  // ✅ Fetch appointments
       return;
     }
 
-    // Optimistic UI update.
+    // Resize: persist immediately, no confirmation needed.
+    if (action === "resize") {
+      setAppointments((prev) =>
+        prev.map((appt) =>
+          appt.id === event.id ? { ...appt, start: nextStart, end: nextEnd, duration } : appt
+        )
+      );
+      try {
+        await persistEventChange({ event: currentEvent, start: nextStart, end: nextEnd, duration });
+        toast.success("Η διάρκεια ενημερώθηκε.");
+      } catch (error) {
+        setAppointments((prev) =>
+          prev.map((appt) =>
+            appt.id === event.id ? { ...appt, start: originalStart, end: originalEnd } : appt
+          )
+        );
+        toast.error("Αποτυχία αποθήκευσης μετακίνησης ραντεβού.");
+        console.error("Failed to persist calendar drag/drop update:", error);
+      }
+      return;
+    }
+
+    // Drop: ask for confirmation before doing anything.
+    const typeLabel =
+      currentEvent.type === "appointment" ? "ραντεβού" :
+      currentEvent.type === "break" ? "διάλειμμα" :
+      currentEvent.type === "lock" ? "κλείδωμα" : "στοιχείο";
+
+    const result = await MySwal.fire({
+      title: "Είστε σίγουροι;",
+      text: `Θέλετε να μετακινήσετε το ${typeLabel};`,
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#a78bfa",
+      cancelButtonColor: "#64748b",
+      confirmButtonText: "Ναι, μετακίνηση!",
+      cancelButtonText: "Ακύρωση",
+    });
+
+    if (!result.isConfirmed) return;
+
+    // Optimistic UI update only after confirmation.
     setAppointments((prev) =>
-      prev.map((appointment) =>
-        appointment.id === event.id
-          ? { ...appointment, start: nextStart, end: nextEnd, duration }
-          : appointment
+      prev.map((appt) =>
+        appt.id === event.id ? { ...appt, start: nextStart, end: nextEnd, duration } : appt
       )
     );
 
     try {
       await persistEventChange({ event: currentEvent, start: nextStart, end: nextEnd, duration });
-      toast.success(action === "resize" ? "Η διάρκεια ενημερώθηκε." : "Το ραντεβού μετακινήθηκε.");
+      toast.success("Το ραντεβού μετακινήθηκε.");
     } catch (error) {
-      // Rollback on failure.
       setAppointments((prev) =>
-        prev.map((appointment) =>
-          appointment.id === event.id
-            ? { ...appointment, start: originalStart, end: originalEnd }
-            : appointment
+        prev.map((appt) =>
+          appt.id === event.id ? { ...appt, start: originalStart, end: originalEnd } : appt
         )
       );
       toast.error("Αποτυχία αποθήκευσης μετακίνησης ραντεβού.");
