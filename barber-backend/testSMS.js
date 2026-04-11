@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 const dotenv = require("dotenv");
 const moment = require("moment-timezone");
 const Appointment = require("./models/appointment");
+const Customer = require("./models/customer");
 const { sendSMS } = require("./utils/smsService");
 
 dotenv.config();
@@ -23,6 +24,7 @@ const DRY_RUN = hasFlag("dry-run");
 const LIMIT = Number(getArg("limit") || 0); // 0 => no limit
 const ONLY_ID = getArg("id"); // appointment _id
 const ONLY_PHONE = getArg("phone"); // exact match
+const ALL_CUSTOMERS = hasFlag("all-customers"); // broadcast mode
 const HOURS_FROM = Number(getArg("hoursFrom") || 24);
 const HOURS_TO = Number(getArg("hoursTo") || 25);
 const TOMORROW = hasFlag("tomorrow"); // calendar-based tomorrow mode
@@ -35,6 +37,11 @@ const MOCK_NOW = getArg("now"); // ISO string
 const nowAthens = MOCK_NOW
   ? moment.tz(MOCK_NOW, tz)
   : moment.tz(tz);
+
+const EASTER_MESSAGE = `✂️ Χριστός Ανέστη! 🐣
+
+Από όλη την ομάδα του LemoBarberShop, ευχόμαστε σε εσάς και τις οικογένειές σας υγεία, χαρά και όμορφες στιγμές!
+`;
 
 // Window: [now + HOURS_FROM, now + HOURS_TO] in UTC
 let windowStartUTC, windowEndUTC;
@@ -52,6 +59,7 @@ if (USE_TOMORROW) {
 console.log("🧪 Reminder test script config:", {
   DRY_RUN,
   LIMIT,
+  ALL_CUSTOMERS,
   ONLY_ID,
   USE_TOMORROW,
   ONLY_PHONE,
@@ -69,6 +77,46 @@ const run = async () => {
 
   await mongoose.connect(process.env.MONGODB_URI);
   console.log("✅ Connected to MongoDB");
+
+  if (ALL_CUSTOMERS) {
+    const customerQuery = {
+      phoneNumber: { $exists: true, $ne: null },
+    };
+
+    if (ONLY_PHONE) customerQuery.phoneNumber = ONLY_PHONE;
+
+    let customers = await Customer.find(customerQuery).sort({ name: 1 }).lean();
+    if (LIMIT > 0) customers = customers.slice(0, LIMIT);
+
+    console.log(`🔎 Matched customers: ${customers.length}`);
+
+    let sentCount = 0;
+    let failedCount = 0;
+
+    for (const customer of customers) {
+      const customerName = customer?.name || "Πελάτης";
+      const phone = customer?.phoneNumber;
+      if (!phone) continue;
+
+      if (DRY_RUN) {
+        console.log(`🟡 DRY RUN would send to ${customerName} (${phone})`);
+        continue;
+      }
+
+      try {
+        await sendSMS(phone, EASTER_MESSAGE, { smsType: "easter-broadcast" });
+        sentCount++;
+        console.log(`✅ Easter SMS sent to ${customerName} (${phone})`);
+      } catch (err) {
+        failedCount++;
+        console.error(`❌ Easter SMS failed for ${customerName} (${phone}):`, err.message);
+      }
+    }
+
+    await mongoose.disconnect();
+    console.log(`🎉 Broadcast done! Sent: ${sentCount}, Failed: ${failedCount}, DryRun: ${DRY_RUN}`);
+    return;
+  }
 
   const query = {
     appointmentDateTime: {

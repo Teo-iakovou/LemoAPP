@@ -1,7 +1,39 @@
 const Customer = require("../models/customer");
 const Appointment = require("../models/appointment");
+const User = require("../models/user");
 const moment = require("moment");
 const jwt = require("jsonwebtoken");
+
+const ALLOWED_COUNTS_USERNAMES = new Set(["lemo"]);
+
+async function ensureCountsAccess(req, res) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader) {
+    res.status(401).json({ message: "Authorization header is required" });
+    return null;
+  }
+
+  const token = authHeader.split(" ")[1];
+  const decoded = jwt.verify(token, process.env.JWT_SECRET);
+  if (!decoded?.userId) {
+    res.status(401).json({ message: "Invalid token" });
+    return null;
+  }
+
+  const user = await User.findById(decoded.userId).select("username").lean();
+  if (!user?.username) {
+    res.status(401).json({ message: "User not found" });
+    return null;
+  }
+
+  const username = String(user.username || "").trim().toLowerCase();
+  if (!ALLOWED_COUNTS_USERNAMES.has(username)) {
+    res.status(403).json({ message: "Access restricted for this page" });
+    return null;
+  }
+
+  return user;
+}
 
 
 // Create (Add) a new customer
@@ -25,23 +57,8 @@ const createCustomer = async (req, res) => {
 
 const getCustomerCounts = async (req, res, next) => {
   try {
-    // Validate JWT token and extract user ID
-    const authHeader = req.headers.authorization;
-    if (!authHeader) {
-      return res
-        .status(401)
-        .json({ message: "Authorization header is required" });
-    }
-
-    const token = authHeader.split(" ")[1];
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-
-    // Restrict access to a specific user (e.g., user with _id: 676581f2a97ae0e3cf8375e7)
-    if (decoded.userId !== "676581f2a97ae0e3cf8375e7") {
-      return res
-        .status(403)
-        .json({ message: "Access restricted to authorized user only" });
-    }
+    const accessUser = await ensureCountsAccess(req, res);
+    if (!accessUser) return;
 
     // Fetch counts for the given month and year
     const { month, year } = req.query;
@@ -101,21 +118,8 @@ const getCustomerCounts = async (req, res, next) => {
 
 const getWeeklyCustomerCounts = async (req, res, next) => {
   try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader) {
-      return res
-        .status(401)
-        .json({ message: "Authorization header is required" });
-    }
-
-    const token = authHeader.split(" ")[1];
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-
-    if (decoded.userId !== "676581f2a97ae0e3cf8375e7") {
-      return res
-        .status(403)
-        .json({ message: "Access restricted to authorized user only" });
-    }
+    const accessUser = await ensureCountsAccess(req, res);
+    if (!accessUser) return;
 
     const { year, week } = req.query;
 

@@ -1,5 +1,6 @@
 const jwt = require("jsonwebtoken");
 const PublicUser = require("../models/publicUser");
+const Customer = require("../models/customer");
 const { sendSMS } = require("../utils/smsService");
 
 function getPublicJwtSecret() {
@@ -115,6 +116,45 @@ function serializePublicUser(user) {
   };
 }
 
+async function syncCustomerDobFromPublicUser(user) {
+  const phoneNumber = user?.phoneNumber || "";
+  const dob = user?.dob || "";
+  if (!phoneNumber || !dob) return;
+
+  const { normalized, variants } = buildPhoneLookupVariants(phoneNumber);
+  const phoneQuery = variants.length ? { $or: variants } : { phoneNumber: normalized || phoneNumber };
+  const dobDate = new Date(`${dob}T00:00:00.000Z`);
+  if (Number.isNaN(dobDate.getTime())) return;
+
+  const fallbackName = String(user?.displayName || user?.username || normalized || phoneNumber).trim() || "Πελάτης";
+  let customer = await Customer.findOne(phoneQuery);
+
+  if (!customer) {
+    try {
+      customer = await Customer.create({
+        name: fallbackName,
+        phoneNumber: normalized || phoneNumber,
+        dateOfBirth: dobDate,
+      });
+      return customer;
+    } catch (error) {
+      // Handle rare race/duplicate-key paths by retrying as update.
+      if (error?.code !== 11000) throw error;
+      customer = await Customer.findOne(phoneQuery);
+      if (!customer) throw error;
+    }
+  }
+
+  const currentDobIso = customer.dateOfBirth
+    ? new Date(customer.dateOfBirth).toISOString().slice(0, 10)
+    : "";
+  if (currentDobIso !== dob) {
+    customer.dateOfBirth = dobDate;
+    await customer.save();
+  }
+  return customer;
+}
+
 const signup = async (req, res, next) => {
   try {
     const username = String(req.body?.username || req.body?.name || "").trim();
@@ -154,6 +194,7 @@ const signup = async (req, res, next) => {
       dob: parsedDob.value,
     });
     await user.save();
+    await syncCustomerDobFromPublicUser(user);
 
     const token = signPublicToken(user._id);
 
@@ -200,6 +241,9 @@ const login = async (req, res, next) => {
     if (!isMatch) {
       return res.status(400).json({ message: "Invalid credentials" });
     }
+    if (user?.dob) {
+      await syncCustomerDobFromPublicUser(user);
+    }
 
     const token = signPublicToken(user._id);
 
@@ -235,6 +279,7 @@ const completeProfile = async (req, res, next) => {
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
+    await syncCustomerDobFromPublicUser(user);
 
     res.status(200).json({
       message: "Profile updated",
