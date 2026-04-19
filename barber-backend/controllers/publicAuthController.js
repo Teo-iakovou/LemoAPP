@@ -1,7 +1,11 @@
 const jwt = require("jsonwebtoken");
 const PublicUser = require("../models/publicUser");
-const Customer = require("../models/customer");
 const { sendSMS } = require("../utils/smsService");
+const {
+  normalizePhone,
+  buildPhoneLookupVariants,
+  upsertCustomerFromIdentity,
+} = require("../utils/customerSync");
 
 function getPublicJwtSecret() {
   const { PUBLIC_JWT_SECRET, JWT_SECRET } = process.env;
@@ -18,56 +22,6 @@ function signPublicToken(userId) {
 
 function generateOtpCode() {
   return Math.floor(100000 + Math.random() * 900000).toString();
-}
-
-function normalizePhone(input = "") {
-  try {
-    return String(input)
-      .trim()
-      .replace(/\s+/g, "")
-      .replace(/^00/, "+");
-  } catch {
-    return String(input || "");
-  }
-}
-
-function normalizePhoneDigits(input = "") {
-  try {
-    return String(input).replace(/\D+/g, "");
-  } catch {
-    return "";
-  }
-}
-
-function escapeForRegex(value = "") {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-function buildPhoneLookupVariants(rawInput = "") {
-  const normalized = normalizePhone(rawInput);
-  const digits = normalizePhoneDigits(normalized);
-  const variants = [];
-
-  if (normalized) variants.push({ phoneNumber: normalized });
-
-  if (digits) {
-    variants.push({ phoneNumber: digits });
-    variants.push({
-      phoneNumber: new RegExp(`${escapeForRegex(digits)}$`, "i"),
-    });
-    if (digits.length >= 8) {
-      const lastEight = digits.slice(-8);
-      variants.push({ phoneNumber: lastEight });
-      variants.push({
-        phoneNumber: new RegExp(`${escapeForRegex(lastEight)}$`, "i"),
-      });
-    }
-  }
-
-  return {
-    normalized,
-    variants,
-  };
 }
 
 function normalizeDobInput(input = "") {
@@ -121,38 +75,19 @@ async function syncCustomerDobFromPublicUser(user) {
   const dob = user?.dob || "";
   if (!phoneNumber || !dob) return;
 
-  const { normalized, variants } = buildPhoneLookupVariants(phoneNumber);
-  const phoneQuery = variants.length ? { $or: variants } : { phoneNumber: normalized || phoneNumber };
   const dobDate = new Date(`${dob}T00:00:00.000Z`);
   if (Number.isNaN(dobDate.getTime())) return;
 
-  const fallbackName = String(user?.displayName || user?.username || normalized || phoneNumber).trim() || "Πελάτης";
-  let customer = await Customer.findOne(phoneQuery);
+  const fallbackName =
+    String(
+      user?.displayName || user?.username || normalizePhone(phoneNumber) || phoneNumber
+    ).trim() || "Πελάτης";
 
-  if (!customer) {
-    try {
-      customer = await Customer.create({
-        name: fallbackName,
-        phoneNumber: normalized || phoneNumber,
-        dateOfBirth: dobDate,
-      });
-      return customer;
-    } catch (error) {
-      // Handle rare race/duplicate-key paths by retrying as update.
-      if (error?.code !== 11000) throw error;
-      customer = await Customer.findOne(phoneQuery);
-      if (!customer) throw error;
-    }
-  }
-
-  const currentDobIso = customer.dateOfBirth
-    ? new Date(customer.dateOfBirth).toISOString().slice(0, 10)
-    : "";
-  if (currentDobIso !== dob) {
-    customer.dateOfBirth = dobDate;
-    await customer.save();
-  }
-  return customer;
+  return upsertCustomerFromIdentity({
+    name: fallbackName,
+    phoneNumber,
+    dateOfBirth: dobDate,
+  });
 }
 
 const signup = async (req, res, next) => {

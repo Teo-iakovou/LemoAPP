@@ -5,6 +5,7 @@ const AutoCustomer = require("../models/autoCustomer");
 const Appointment = require("../models/appointment");
 const { generateAutoAppointments } = require("../services/autoCustomerScheduler");
 const AutoGenerationBatch = require("../models/autoGenerationBatch");
+const { upsertCustomerFromIdentity } = require("../utils/customerSync");
 
 const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
 const VALID_CADENCE = new Set([1, 2, 4]);
@@ -283,6 +284,11 @@ const createAutoCustomer = async (req, res, next) => {
     payload.updatedBy = req.user?._id || undefined;
 
     const autoCustomer = await AutoCustomer.create(payload);
+    await upsertCustomerFromIdentity({
+      name: autoCustomer.customerName,
+      phoneNumber: autoCustomer.phoneNumber,
+      barber: autoCustomer.barber,
+    });
     res.status(201).json({ success: true, data: autoCustomer });
   } catch (error) {
     console.error("Error creating auto customer:", error);
@@ -435,6 +441,11 @@ const updateAutoCustomer = async (req, res, next) => {
     autoCustomer.updatedBy = req.user?._id || autoCustomer.updatedBy;
 
     await autoCustomer.save();
+    await upsertCustomerFromIdentity({
+      name: autoCustomer.customerName,
+      phoneNumber: autoCustomer.phoneNumber,
+      barber: autoCustomer.barber,
+    });
     res.json({ success: true, data: autoCustomer });
   } catch (error) {
     console.error("Error updating auto customer:", error);

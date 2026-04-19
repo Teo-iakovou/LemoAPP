@@ -5,6 +5,7 @@ const moment = require("moment-timezone");
 const Appointment = require("../models/appointment");
 const AutoCustomer = require("../models/autoCustomer");
 const AutoGenerationBatch = require("../models/autoGenerationBatch");
+const { upsertCustomerFromIdentity } = require("../utils/customerSync");
 const { sendSMS } = require("../utils/smsService");
 
 const TZ = "Europe/Athens";
@@ -218,6 +219,14 @@ const generateAutoAppointments = async ({
     if (customer.active === false) continue;
     if (customer.recursive === false) continue;
     if (!customer.timeOfDay) continue;
+
+    if (!dryRun) {
+      await upsertCustomerFromIdentity({
+        name: customer.customerName,
+        phoneNumber: customer.phoneNumber,
+        barber: customer.barber,
+      });
+    }
 
     const cadence = customer.cadenceWeeks || 1;
     const defaultDuration = customer.durationMin || 40;
