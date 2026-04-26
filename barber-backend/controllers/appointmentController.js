@@ -1,6 +1,7 @@
 const Appointment = require("../models/appointment");
 const Customer = require("../models/customer");
 const { sendSMS } = require("../utils/smsService")
+const { upsertCustomerFromIdentity } = require("../utils/customerSync");
 
 const moment = require("moment-timezone");
 const { getUserIdFromRequest } = require("../utils/auth");
@@ -153,38 +154,32 @@ const createAppointment = async (req, res, next) => {
       buildPhoneLookupVariants(phoneNumber);
     let canonicalPhone = normalizedPhoneInput;
 
-    // Check if customer exists, otherwise create a new one
+    // Keep customer table in sync for appointment writes.
     let customer = null;
     if (appointmentType === "appointment") {
-      if (phoneLookupVariants.length) {
-        customer = await Customer.findOne({ $or: phoneLookupVariants });
+      const fallbackPhone = canonicalPhone || String(phoneNumber || "").trim();
+      if (!fallbackPhone) {
+        return res
+          .status(400)
+          .json({ error: "Valid phone number is required." });
       }
+
+      await upsertCustomerFromIdentity({
+        name: incomingName || fallbackPhone,
+        phoneNumber: fallbackPhone,
+        barber: effectiveBarber,
+        dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
+      });
+
+      customer = phoneLookupVariants.length
+        ? await Customer.findOne({ $or: phoneLookupVariants })
+        : await Customer.findOne({ phoneNumber: fallbackPhone });
+
       if (!customer) {
-        if (!canonicalPhone) {
-          canonicalPhone = String(phoneNumber || "").trim();
-        }
-        if (!canonicalPhone) {
-          return res
-            .status(400)
-            .json({ error: "Valid phone number is required." });
-        }
-        customer = new Customer({
-          name: incomingName || canonicalPhone,
-          phoneNumber: canonicalPhone,
-          dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
-        });
-        await customer.save();
-      } else {
-        // Optionally update DOB if provided and different
-        if (
-          dateOfBirth &&
-          (!customer.dateOfBirth ||
-            customer.dateOfBirth.toISOString().slice(0, 10) !== dateOfBirth)
-        ) {
-          customer.dateOfBirth = new Date(dateOfBirth);
-          await customer.save();
-        }
+        return res.status(500).json({ error: "Failed to sync customer record." });
       }
+
+      canonicalPhone = customer.phoneNumber;
     }
 
     const phone =
@@ -266,8 +261,8 @@ const createAppointment = async (req, res, next) => {
     if (recurrence === "weekly" && maxRepeat > 1) {
       if (appointmentType === "appointment") {
         additionalAppointments = await generateRecurringAppointments({
-          customerName,
-          phoneNumber,
+          customerName: effectiveName,
+          phoneNumber: phone,
           barber: effectiveBarber,
           initialAppointmentDate: appointmentDateUTC,
           duration,
@@ -613,12 +608,23 @@ const updateAppointment = async (req, res, next) => {
         appointment.barber = updatedBarber;
       }
     }
+    if (phoneNumber && appointment.type === "appointment") {
+      appointment.phoneNumber = normalizePhone(phoneNumber);
+    }
 
     Object.assign(appointment, updateData);
 
     // ✅ Ensure 'type' is present for reminder compatibility
     if (!appointment.type) {
       appointment.type = "appointment";
+    }
+
+    if (appointment.type === "appointment") {
+      await upsertCustomerFromIdentity({
+        name: String(appointment.customerName || "").trim(),
+        phoneNumber: String(appointment.phoneNumber || "").trim(),
+        barber: appointment.barber,
+      });
     }
 
     const newFormattedDate = moment(appointment.appointmentDateTime)

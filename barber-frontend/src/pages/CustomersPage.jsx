@@ -46,6 +46,7 @@ const CustomersPage = () => {
   const [adding, setAdding] = useState(false);
   const totalCustomers = customers.length;
   const editRef = useRef(null);
+  const customerRowRefs = useRef({});
  
 
   // Fetch customers from backend
@@ -144,7 +145,7 @@ const CustomersPage = () => {
     const updatedCustomer = await response.json();
     const updatedCustomerWithColor = {
       ...updatedCustomer,
-      barberColor: barberColors[updatedCustomer.barber] || "text-white",
+      barberColor: getCustomerTextColorClass(updatedCustomer),
     };
 
     setCustomers((prev) =>
@@ -185,7 +186,7 @@ const CustomersPage = () => {
    setCustomers((prev) =>
   [...prev, {
     ...newCustomer,
-    barberColor: barberColors[newCustomer.barber] || "text-white",
+    barberColor: getCustomerTextColorClass(newCustomer),
   }].sort((a, b) => a.name.localeCompare(b.name))
 );
 
@@ -217,6 +218,14 @@ const CustomersPage = () => {
     value: customer._id,
     label: `${customer.name} - ${customer.phoneNumber}`,
   }));
+
+  const scrollToCustomerRow = (customerId) => {
+    if (!customerId) return;
+    const row = customerRowRefs.current[customerId];
+    if (row && typeof row.scrollIntoView === "function") {
+      row.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  };
 
   // -----
   return (
@@ -354,6 +363,9 @@ className="w-44 bg-[#181c2b] text-[#ede9fe] border border-[#a78bfa] px-3 py-2 ro
               onChange={(option) => {
                 setSelectedCustomerOption(option);
                 setSelectedCustomerId(option ? option.value : null);
+                if (option?.value) {
+                  setTimeout(() => scrollToCustomerRow(option.value), 0);
+                }
               }}
               styles={{
                 control: (base) => ({
@@ -399,6 +411,9 @@ className="w-44 bg-[#181c2b] text-[#ede9fe] border border-[#a78bfa] px-3 py-2 ro
             {customers.map((customer) => (
               <li
                 key={customer._id}
+                ref={(el) => {
+                  if (el) customerRowRefs.current[customer._id] = el;
+                }}
                 className={`flex justify-between items-center border-b pb-2 ${customer.barberColor}`}
               >
                 {editMode === customer._id ? (

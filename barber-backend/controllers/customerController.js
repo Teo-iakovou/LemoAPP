@@ -6,6 +6,38 @@ const jwt = require("jsonwebtoken");
 
 const ALLOWED_COUNTS_USERNAMES = new Set(["lemo"]);
 
+function parseDateOfBirthInput(rawValue) {
+  if (rawValue === undefined) {
+    return { ok: true, value: undefined };
+  }
+
+  if (rawValue === null || rawValue === "") {
+    return { ok: true, value: null };
+  }
+
+  if (rawValue instanceof Date && !Number.isNaN(rawValue.getTime())) {
+    return { ok: true, value: rawValue };
+  }
+
+  if (typeof rawValue === "string") {
+    const value = rawValue.trim();
+    const yyyyMmDd = moment(value, "YYYY-MM-DD", true);
+    if (yyyyMmDd.isValid()) {
+      return { ok: true, value: yyyyMmDd.startOf("day").toDate() };
+    }
+
+    const ddMmYyyy = moment(value, "DD/MM/YYYY", true);
+    if (ddMmYyyy.isValid()) {
+      return { ok: true, value: ddMmYyyy.startOf("day").toDate() };
+    }
+  }
+
+  return {
+    ok: false,
+    error: "Invalid dateOfBirth format. Use YYYY-MM-DD or DD/MM/YYYY.",
+  };
+}
+
 async function ensureCountsAccess(req, res) {
   const authHeader = req.headers.authorization;
   if (!authHeader) {
@@ -44,12 +76,27 @@ const createCustomer = async (req, res) => {
     if (!name || !phoneNumber) {
       return res.status(400).json({ error: "Name and phone number are required." });
     }
+
+    const parsedDob = parseDateOfBirthInput(dateOfBirth);
+    if (!parsedDob.ok) {
+      return res.status(400).json({ error: parsedDob.error });
+    }
    
     // Create new customer
-    const customer = new Customer({ name, phoneNumber, barber, dateOfBirth });
+    const customerPayload = { name, phoneNumber, barber };
+    if (parsedDob.value !== undefined) {
+      customerPayload.dateOfBirth = parsedDob.value;
+    }
+
+    const customer = new Customer(customerPayload);
     await customer.save();
     res.status(201).json(customer);
   } catch (error) {
+    if (error?.code === 11000) {
+      return res.status(409).json({
+        error: "Customer with this phone number already exists.",
+      });
+    }
     console.error("Error creating customer:", error);
     res.status(500).json({ error: "Failed to create customer." });
   }
@@ -295,11 +342,16 @@ const updateCustomer = async (req, res) => {
         .json({ error: "Invalid barber value. Must be 'ΛΕΜΟ', 'ΦΟΡΟΥ', or 'ΚΟΥΣΙΗΣ'." });
     }
 
+    const parsedDob = parseDateOfBirthInput(dateOfBirth);
+    if (!parsedDob.ok) {
+      return res.status(400).json({ error: parsedDob.error });
+    }
+
     // Build update object dynamically
     const updateFields = { name, phoneNumber, barber };
     if (profilePicture !== undefined)
       updateFields.profilePicture = profilePicture;
-    if (dateOfBirth !== undefined) updateFields.dateOfBirth = dateOfBirth;
+    if (parsedDob.value !== undefined) updateFields.dateOfBirth = parsedDob.value;
 
     const updatedCustomer = await Customer.findByIdAndUpdate(id, updateFields, {
       new: true,
@@ -312,6 +364,11 @@ const updateCustomer = async (req, res) => {
 
     res.status(200).json(updatedCustomer);
   } catch (error) {
+    if (error?.code === 11000) {
+      return res.status(409).json({
+        error: "Customer with this phone number already exists.",
+      });
+    }
     console.error("Error updating customer:", error);
     res.status(500).json({ error: "Failed to update customer." });
   }

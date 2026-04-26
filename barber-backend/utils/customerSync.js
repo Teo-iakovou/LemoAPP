@@ -86,7 +86,7 @@ async function upsertCustomerFromIdentity({
     changed = true;
   }
 
-  if (barber && !customer.barber) {
+  if (barber && customer.barber !== barber) {
     customer.barber = barber;
     changed = true;
   }

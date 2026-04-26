@@ -1,6 +1,10 @@
 const BARBER_TEXT_COLOR_MAP = {
   ΛΕΜΟ: "text-purple-600",
   ΦΟΡΟΥ: "text-orange-500",
+  ΚΟΥΣΙΗΣ: "text-teal-600",
+  KOUSHIS: "text-teal-600",
+  Koushis: "text-teal-600",
+  koushis: "text-teal-600",
 };
 
 const BARBER_HEX_COLOR_MAP = {
