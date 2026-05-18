@@ -7,6 +7,11 @@ const CY_TIMEZONE = "Europe/Athens";
 const DEFAULT_OPEN_MINUTES = 9 * 60;
 const DEFAULT_CLOSE_MINUTES = 19 * 60 + 40;
 const DEFAULT_STEP_MINUTES = 40;
+const GREEK_TO_BARBER_KEY = {
+  "ΛΕΜΟ": "LEMO",
+  "ΦΟΡΟΥ": "FOROU",
+  "ΚΟΥΣΙΗΣ": "KOUSHIS",
+};
 
 function toLocalYMD(d) {
   const parts = new Intl.DateTimeFormat("en-CA", {
@@ -74,14 +79,33 @@ function hhmmToMinutes(value) {
   return Number(match[1]) * 60 + Number(match[2]);
 }
 
+function getScopedSettingList(doc, listName, scopedName, barberGreekValue) {
+  const globalList = Array.isArray(doc?.[listName]) ? doc[listName] : [];
+  const scopedMap = doc?.[scopedName] && typeof doc[scopedName] === "object" ? doc[scopedName] : null;
+  const barberKey = GREEK_TO_BARBER_KEY[String(barberGreekValue || "").trim().toUpperCase()];
+  if (!barberKey || !scopedMap) return globalList;
+  if (Object.prototype.hasOwnProperty.call(scopedMap, barberKey)) {
+    const scoped = scopedMap[barberKey];
+    return Array.isArray(scoped) ? scoped : [];
+  }
+  return globalList;
+}
+
 // Core month availability computation reused by multiple routes
 async function buildMonthAvailability({ from, to, barber, includeSlots, includeAll }) {
   const start = parseYMD(from);
   const end = parseYMD(to);
   const endOfDay = new Date(end.getFullYear(), end.getMonth(), end.getDate(), 23, 59, 59, 999);
   const settingsDoc = await PublicBookingSettings.getSingleton();
-  const closedMonths = Array.isArray(settingsDoc.closedMonths) ? settingsDoc.closedMonths : [];
-  const blockedDates = new Set(settingsDoc.blockedDates || []);
+  const closedMonths = getScopedSettingList(
+    settingsDoc,
+    "closedMonths",
+    "barberClosedMonths",
+    barber
+  );
+  const blockedDates = new Set(
+    getScopedSettingList(settingsDoc, "blockedDates", "barberBlockedDates", barber)
+  );
   const allowedDates = new Set(settingsDoc.allowedDates || []);
 const specialDayHours = settingsDoc.specialDayHours || {};
 const extraDaySlots = settingsDoc.extraDaySlots || {};
@@ -320,8 +344,23 @@ router.get("/availability", async (req, res, next) => {
     if (!date) return res.status(400).json({ error: "date is required" });
 
     const settingsDoc = await PublicBookingSettings.getSingleton();
-    const closedMonths = Array.isArray(settingsDoc.closedMonths) ? settingsDoc.closedMonths : [];
-    const blockedDates = new Set(settingsDoc.blockedDates || []);
+    let greekBarber = barber || "";
+    if (!greekBarber && barberId) {
+      const id = String(barberId).toLowerCase();
+      if (id === "lemo") greekBarber = "ΛΕΜΟ";
+      else if (id === "forou") greekBarber = "ΦΟΡΟΥ";
+      else if (id === "koushis") greekBarber = "ΚΟΥΣΙΗΣ";
+    }
+
+    const closedMonths = getScopedSettingList(
+      settingsDoc,
+      "closedMonths",
+      "barberClosedMonths",
+      greekBarber
+    );
+    const blockedDates = new Set(
+      getScopedSettingList(settingsDoc, "blockedDates", "barberBlockedDates", greekBarber)
+    );
     const allowedDates = new Set(settingsDoc.allowedDates || []);
     const specialDayHours = settingsDoc.specialDayHours || {};
     const extraDaySlots = settingsDoc.extraDaySlots || {};
@@ -336,14 +375,6 @@ router.get("/availability", async (req, res, next) => {
     const manualOpen = manualOpenDates.has(date);
     const manualClosed = blockedDates.has(date) || (monthClosed && !manualOpen);
     if (manualClosed) return res.json({ slots: [] });
-
-    let greekBarber = barber || "";
-    if (!greekBarber && barberId) {
-      const id = String(barberId).toLowerCase();
-      if (id === "lemo") greekBarber = "ΛΕΜΟ";
-      else if (id === "forou") greekBarber = "ΦΟΡΟΥ";
-      else if (id === "koushis") greekBarber = "ΚΟΥΣΙΗΣ";
-    }
 
     const dayStart = day;
     const dayEnd = new Date(dayStart.getTime() + 86400000 - 1);

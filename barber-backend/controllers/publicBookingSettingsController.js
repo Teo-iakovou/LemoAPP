@@ -3,6 +3,7 @@ const PublicBookingSettings = require("../models/publicBookingSettings");
 const MIN_VISIBLE_MONTHS = 1;
 const MAX_VISIBLE_MONTHS = 6;
 const DEFAULT_VISIBLE_MONTH_COUNT = 2;
+const BARBER_KEYS = ["LEMO", "FOROU", "KOUSHIS"];
 
 function clampVisibleMonthCount(value) {
   const num = Number(value);
@@ -28,7 +29,9 @@ function serializeSettings(doc) {
   }
   return {
     closedMonths: Array.isArray(doc.closedMonths) ? doc.closedMonths : [],
+    barberClosedMonths: normalizeScopedMonths(doc.barberClosedMonths),
     blockedDates: Array.isArray(doc.blockedDates) ? doc.blockedDates : [],
+    barberBlockedDates: normalizeScopedDates(doc.barberBlockedDates),
     allowedDates: Array.isArray(doc.allowedDates) ? doc.allowedDates : [],
     specialDayHours:
       doc.specialDayHours && typeof doc.specialDayHours === "object"
@@ -52,6 +55,11 @@ function serializeSettings(doc) {
     updatedAt: doc.updatedAt || null,
     updatedBy: doc.updatedBy || null,
   };
+}
+
+function normalizeBarberKey(value = "") {
+  const key = String(value || "").trim().toUpperCase();
+  return BARBER_KEYS.includes(key) ? key : null;
 }
 
 function normalizeMonths(value) {
@@ -128,6 +136,28 @@ function normalizeVisibleMonthCount(value) {
   return clampVisibleMonthCount(value);
 }
 
+function normalizeScopedMonths(value) {
+  if (!value || typeof value !== "object") return {};
+  const out = {};
+  BARBER_KEYS.forEach((key) => {
+    if (value[key] !== undefined) {
+      out[key] = normalizeMonths(value[key]);
+    }
+  });
+  return out;
+}
+
+function normalizeScopedDates(value) {
+  if (!value || typeof value !== "object") return {};
+  const out = {};
+  BARBER_KEYS.forEach((key) => {
+    if (value[key] !== undefined) {
+      out[key] = normalizeDates(value[key]);
+    }
+  });
+  return out;
+}
+
 const getSettings = async (req, res, next) => {
   try {
     const doc = await PublicBookingSettings.getSingleton();
@@ -140,6 +170,35 @@ const getSettings = async (req, res, next) => {
 const updateSettings = async (req, res, next) => {
   try {
     const doc = await PublicBookingSettings.getSingleton();
+    const barberKey = normalizeBarberKey(req.body?.barberKey);
+    if (req.body?.barberKey && !barberKey) {
+      return res.status(400).json({ message: "Invalid barberKey. Use LEMO, FOROU, KOUSHIS." });
+    }
+
+    if (barberKey) {
+      const scopedClosedMonths = normalizeMonths(req.body?.closedMonths || []);
+      const scopedBlockedDates = normalizeDates(req.body?.blockedDates || []);
+
+      const nextClosedMonths = {
+        ...(doc.barberClosedMonths && typeof doc.barberClosedMonths === "object"
+          ? doc.barberClosedMonths
+          : {}),
+        [barberKey]: scopedClosedMonths,
+      };
+      const nextBlockedDates = {
+        ...(doc.barberBlockedDates && typeof doc.barberBlockedDates === "object"
+          ? doc.barberBlockedDates
+          : {}),
+        [barberKey]: scopedBlockedDates,
+      };
+
+      doc.barberClosedMonths = nextClosedMonths;
+      doc.barberBlockedDates = nextBlockedDates;
+      doc.updatedBy = req.publicUserId || null;
+      await doc.save();
+      return res.json({ settings: serializeSettings(doc) });
+    }
+
     const closedMonths = normalizeMonths(req.body?.closedMonths || []);
     const blockedDates = normalizeDates(req.body?.blockedDates || []);
     const allowedDates = normalizeDates(req.body?.allowedDates || []);
@@ -161,6 +220,8 @@ const updateSettings = async (req, res, next) => {
     doc.specialDayHours = specialDayHours;
     doc.extraDaySlots = extraDaySlots;
     doc.visibleMonthCount = visibleMonthCount;
+    doc.barberClosedMonths = normalizeScopedMonths(req.body?.barberClosedMonths || doc.barberClosedMonths);
+    doc.barberBlockedDates = normalizeScopedDates(req.body?.barberBlockedDates || doc.barberBlockedDates);
     doc.updatedBy = req.publicUserId || null;
     await doc.save();
 

@@ -7,9 +7,17 @@ const publicBookingSettingsSchema = new mongoose.Schema(
       type: [Number],
       default: [11],
     },
+    barberClosedMonths: {
+      type: mongoose.Schema.Types.Mixed,
+      default: () => ({}),
+    },
     blockedDates: {
       type: [String],
       default: [],
+    },
+    barberBlockedDates: {
+      type: mongoose.Schema.Types.Mixed,
+      default: () => ({}),
     },
     allowedDates: {
       type: [String],
