@@ -22,6 +22,7 @@ function serializeSettings(doc) {
       allowedDates: [],
       specialDayHours: {},
       extraDaySlots: {},
+      barberPrices: {},
       visibleMonthCount: DEFAULT_VISIBLE_MONTH_COUNT,
       updatedAt: null,
       updatedBy: null,
@@ -51,6 +52,7 @@ function serializeSettings(doc) {
             ])
           )
         : {},
+    barberPrices: normalizeBarberPrices(doc.barberPrices),
     visibleMonthCount: clampVisibleMonthCount(doc.visibleMonthCount),
     updatedAt: doc.updatedAt || null,
     updatedBy: doc.updatedBy || null,
@@ -136,6 +138,20 @@ function normalizeVisibleMonthCount(value) {
   return clampVisibleMonthCount(value);
 }
 
+function normalizeBarberPrices(value) {
+  if (!value || typeof value !== "object") return {};
+  const out = {};
+  BARBER_KEYS.forEach((key) => {
+    if (value[key] === undefined) return;
+    const n = Number(value[key]);
+    if (!Number.isFinite(n)) return;
+    const rounded = Math.round(n * 100) / 100;
+    if (rounded < 0) return;
+    out[key] = rounded;
+  });
+  return out;
+}
+
 function normalizeScopedMonths(value) {
   if (!value || typeof value !== "object") return {};
   const out = {};
@@ -178,6 +194,14 @@ const updateSettings = async (req, res, next) => {
     if (barberKey) {
       const scopedClosedMonths = normalizeMonths(req.body?.closedMonths || []);
       const scopedBlockedDates = normalizeDates(req.body?.blockedDates || []);
+      const nextBarberPrices = normalizeBarberPrices(doc.barberPrices);
+      if (req.body?.price !== undefined) {
+        const incomingPrice = Number(req.body.price);
+        if (!Number.isFinite(incomingPrice) || incomingPrice < 0) {
+          return res.status(400).json({ message: "Invalid price. Use a non-negative number." });
+        }
+        nextBarberPrices[barberKey] = Math.round(incomingPrice * 100) / 100;
+      }
 
       const nextClosedMonths = {
         ...(doc.barberClosedMonths && typeof doc.barberClosedMonths === "object"
@@ -194,6 +218,7 @@ const updateSettings = async (req, res, next) => {
 
       doc.barberClosedMonths = nextClosedMonths;
       doc.barberBlockedDates = nextBlockedDates;
+      doc.barberPrices = nextBarberPrices;
       doc.updatedBy = req.publicUserId || null;
       await doc.save();
       return res.json({ settings: serializeSettings(doc) });
@@ -219,6 +244,7 @@ const updateSettings = async (req, res, next) => {
     doc.allowedDates = allowedDates;
     doc.specialDayHours = specialDayHours;
     doc.extraDaySlots = extraDaySlots;
+    doc.barberPrices = normalizeBarberPrices(req.body?.barberPrices || doc.barberPrices);
     doc.visibleMonthCount = visibleMonthCount;
     doc.barberClosedMonths = normalizeScopedMonths(req.body?.barberClosedMonths || doc.barberClosedMonths);
     doc.barberBlockedDates = normalizeScopedDates(req.body?.barberBlockedDates || doc.barberBlockedDates);

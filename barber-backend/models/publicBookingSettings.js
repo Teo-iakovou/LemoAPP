@@ -31,6 +31,10 @@ const publicBookingSettingsSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.Mixed,
       default: () => ({}),
     },
+    barberPrices: {
+      type: mongoose.Schema.Types.Mixed,
+      default: () => ({}),
+    },
     visibleMonthCount: {
       type: Number,
       default: 2,
