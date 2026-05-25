@@ -665,12 +665,38 @@ const pushAutoCustomers = async (req, res, next) => {
             .map((id) => id.trim())
             .filter(Boolean);
 
-      if (ids.length) {
-        filter._id = { $in: ids };
+      if (!Array.isArray(customerIds)) {
+        return res.status(400).json({
+          success: false,
+          message: "customerIds must be a non-empty array when provided.",
+        });
       }
+
+      if (!ids.length) {
+        return res.status(400).json({
+          success: false,
+          message: "customerIds cannot be empty when provided.",
+        });
+      }
+
+      const invalidIds = ids.filter((id) => !mongoose.Types.ObjectId.isValid(id));
+      if (invalidIds.length) {
+        return res.status(400).json({
+          success: false,
+          message: `Invalid customerIds provided: ${invalidIds.join(", ")}`,
+        });
+      }
+
+      filter._id = { $in: ids.map((id) => new mongoose.Types.ObjectId(id)) };
     }
 
     const customers = await AutoCustomer.find(filter).lean();
+    if (Array.isArray(customerIds) && customers.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "No matching auto customers found for the provided customerIds.",
+      });
+    }
 
     const result = await generateAutoAppointments({
       customers,
