@@ -166,6 +166,7 @@ const AutoCustomersPage = () => {
     from: toLocalDateString(new Date()),
     to: "",
   });
+  const [selectedCustomerIds, setSelectedCustomerIds] = useState(() => new Set());
   const [directory, setDirectory] = useState([]);
   const [listOpen, setListOpen] = useState(true);
   const formRef = useRef(null);
@@ -187,6 +188,31 @@ const AutoCustomersPage = () => {
     const currentSnapshot = toComparableSnapshot(formState);
     return JSON.stringify(currentSnapshot) !== JSON.stringify(initialFormSnapshot);
   }, [formOpen, formState, initialFormSnapshot]);
+  const selectedCount = selectedCustomerIds.size;
+  const visibleCustomerIds = useMemo(
+    () => customers.map((customer) => String(customer?._id || "")).filter(Boolean),
+    [customers]
+  );
+  const allVisibleSelected = useMemo(
+    () => visibleCustomerIds.length > 0 && visibleCustomerIds.every((id) => selectedCustomerIds.has(id)),
+    [visibleCustomerIds, selectedCustomerIds]
+  );
+  const toggleCustomerSelection = (customerId) => {
+    if (!customerId) return;
+    const key = String(customerId);
+    setSelectedCustomerIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+  const selectAllVisibleCustomers = () => {
+    setSelectedCustomerIds(new Set(visibleCustomerIds));
+  };
+  const clearCustomerSelection = () => {
+    setSelectedCustomerIds(new Set());
+  };
 
   const loadCustomers = async () => {
     setLoading(true);
@@ -199,6 +225,14 @@ const AutoCustomersPage = () => {
           timeOfDay: normalizeTimeString(customer.timeOfDay, "09:00"),
         }))
       );
+      const availableIds = new Set(list.map((customer) => String(customer?._id || "")).filter(Boolean));
+      setSelectedCustomerIds((prev) => {
+        const next = new Set();
+        prev.forEach((id) => {
+          if (availableIds.has(id)) next.add(id);
+        });
+        return next;
+      });
     } catch (error) {
       console.error(error);
       toast.error(error.message || "Αποτυχία φόρτωσης επαναλαμβανόμενων πελατών.");
@@ -810,6 +844,10 @@ const AutoCustomersPage = () => {
       toast.error("Η ημερομηνία έναρξης είναι υποχρεωτική.");
       return;
     }
+    if (selectedCount === 0) {
+      toast.error("Επίλεξε τουλάχιστον έναν πελάτη για Push.");
+      return;
+    }
 
     const confirmPush = await MySwal.fire({
       title: "Προσοχή",
@@ -830,11 +868,13 @@ const AutoCustomersPage = () => {
         from: toUtcIsoFromLocalDate(pushState.from),
         to: pushState.to ? toUtcIsoFromLocalDate(pushState.to) : undefined,
         dryRun: false,
+        customerIds: Array.from(selectedCustomerIds),
       };
       toast("Οι πελάτες προστίθενται στο ημερολόγιο...");
       setPushOpen(false);
       await pushAutoCustomers(payload);
-      toast.success("Οι επαναλαμβανόμενοι πελάτες προστέθηκαν.");
+      toast.success(`Προστέθηκαν στο ημερολόγιο οι επιλεγμένοι πελάτες (${selectedCount}).`);
+      clearCustomerSelection();
 
       loadCustomers();
     } catch (error) {
@@ -930,7 +970,7 @@ const AutoCustomersPage = () => {
     }
   };
 
-  const pushBlocked = formOpen || formSubmitting || hasUnsavedChanges;
+  const pushBlocked = formOpen || formSubmitting || hasUnsavedChanges || selectedCount === 0;
   const newTooltipText = "";
   const renewTooltipText =
     "Η ανανέωση ενημερώνει τους recurring πελάτες και το preview. Δεν δημιουργεί κανονικά ραντεβού. Για να αποθηκευτούν στο κύριο ημερολόγιο, πάτησε Push.";
@@ -1000,6 +1040,29 @@ const AutoCustomersPage = () => {
               </div>
             </div>
           </div>
+          <div className="flex flex-wrap items-center gap-3 text-sm text-gray-300">
+            <label className="inline-flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={allVisibleSelected}
+                onChange={(e) => (e.target.checked ? selectAllVisibleCustomers() : clearCustomerSelection())}
+                className="h-4 w-4 accent-purple-500"
+              />
+              Επιλογή όλων των ορατών
+            </label>
+            {selectedCount > 0 && (
+              <>
+                <span className="text-purple-300 font-medium">{selectedCount} selected</span>
+                <button
+                  type="button"
+                  onClick={clearCustomerSelection}
+                  className="text-xs underline text-gray-300 hover:text-white"
+                >
+                  Καθαρισμός επιλογής
+                </button>
+              </>
+            )}
+          </div>
         </header>
 
         <section className="bg-gray-800 border border-gray-700 rounded-xl shadow-lg p-3 sm:p-4">
@@ -1023,6 +1086,15 @@ const AutoCustomersPage = () => {
             <table className="min-w-full text-left text-sm">
               <thead className="bg-gray-700 text-gray-200 uppercase text-xs">
                 <tr>
+                  <th className="px-3 py-2">
+                    <input
+                      type="checkbox"
+                      checked={allVisibleSelected}
+                      onChange={(e) => (e.target.checked ? selectAllVisibleCustomers() : clearCustomerSelection())}
+                      className="h-4 w-4 accent-purple-500"
+                      aria-label="Επιλογή όλων"
+                    />
+                  </th>
                   <th className="px-3 py-2">Πελάτης</th>
                   <th className="px-3 py-2">Barber</th>
                   <th className="px-3 py-2">Ημέρα</th>
@@ -1036,13 +1108,13 @@ const AutoCustomersPage = () => {
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={8} className="px-4 py-6 text-center text-gray-400">
+                    <td colSpan={9} className="px-4 py-6 text-center text-gray-400">
                       Φόρτωση...
                     </td>
                   </tr>
                 ) : customers.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-4 py-6 text-center text-gray-400">
+                    <td colSpan={9} className="px-4 py-6 text-center text-gray-400">
                       Δεν υπάρχουν επαναλαμβανόμενοι πελάτες.
                     </td>
                   </tr>
@@ -1052,6 +1124,15 @@ const AutoCustomersPage = () => {
                       key={customer._id}
                       className="border-t border-gray-700 hover:bg-gray-750 transition"
                     >
+                      <td className="px-3 py-2">
+                        <input
+                          type="checkbox"
+                          checked={selectedCustomerIds.has(String(customer._id))}
+                          onChange={() => toggleCustomerSelection(customer._id)}
+                          className="h-4 w-4 accent-purple-500"
+                          aria-label={`Επιλογή ${customer.customerName || "πελάτη"}`}
+                        />
+                      </td>
                       <td className="px-3 py-2">
                         <div className="font-medium text-gray-100">{customer.customerName}</div>
                         <div className="text-xs text-gray-400">{customer.phoneNumber}</div>
@@ -1113,8 +1194,15 @@ const AutoCustomersPage = () => {
                   className="rounded-xl border border-gray-700 bg-gray-900 p-4 space-y-3 shadow-inner"
                 >
                   <div>
-                    <div className="text-base font-semibold text-gray-100">
-                      {customer.customerName}
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="text-base font-semibold text-gray-100">{customer.customerName}</div>
+                      <input
+                        type="checkbox"
+                        checked={selectedCustomerIds.has(String(customer._id))}
+                        onChange={() => toggleCustomerSelection(customer._id)}
+                        className="mt-1 h-4 w-4 accent-purple-500"
+                        aria-label={`Επιλογή ${customer.customerName || "πελάτη"}`}
+                      />
                     </div>
                     <div className="text-xs text-gray-400">{customer.phoneNumber}</div>
                   </div>
@@ -1495,7 +1583,7 @@ const AutoCustomersPage = () => {
             className="w-full max-w-lg bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl p-6"
           >
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-semibold">Push στο Ημερολόγιο</h2>
+              <h2 className="text-xl font-semibold">Push στο Ημερολόγιο ({selectedCount} selected)</h2>
               <button
                 onClick={() => setPushOpen(false)}
                 className="text-gray-400 hover:text-gray-200 text-xl"
@@ -1504,6 +1592,9 @@ const AutoCustomersPage = () => {
               </button>
             </div>
             <form className="space-y-4" onSubmit={handlePushSubmit}>
+              <p className="text-sm text-gray-300">
+                Θα δημιουργηθούν ραντεβού μόνο για τους επιλεγμένους πελάτες.
+              </p>
               <label className="flex flex-col text-sm gap-1">
                 Από
               <DatePicker
