@@ -167,6 +167,7 @@ const AutoCustomersPage = () => {
     to: "",
   });
   const [selectedCustomerIds, setSelectedCustomerIds] = useState(() => new Set());
+  const [customerSearch, setCustomerSearch] = useState("");
   const [directory, setDirectory] = useState([]);
   const [listOpen, setListOpen] = useState(true);
   const formRef = useRef(null);
@@ -189,9 +190,26 @@ const AutoCustomersPage = () => {
     return JSON.stringify(currentSnapshot) !== JSON.stringify(initialFormSnapshot);
   }, [formOpen, formState, initialFormSnapshot]);
   const selectedCount = selectedCustomerIds.size;
+  const filteredCustomers = useMemo(() => {
+    const query = customerSearch.trim().toLowerCase();
+    if (!query) return customers;
+    return customers.filter((customer) => {
+      const weekdayLabel =
+        WEEKDAY_OPTIONS.find((opt) => opt.value === customer.weekday)?.label || "";
+      return [
+        customer.customerName,
+        customer.phoneNumber,
+        customer.barber,
+        customer.timeOfDay,
+        weekdayLabel,
+      ]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(query));
+    });
+  }, [customers, customerSearch]);
   const visibleCustomerIds = useMemo(
-    () => customers.map((customer) => String(customer?._id || "")).filter(Boolean),
-    [customers]
+    () => filteredCustomers.map((customer) => String(customer?._id || "")).filter(Boolean),
+    [filteredCustomers]
   );
   const allVisibleSelected = useMemo(
     () => visibleCustomerIds.length > 0 && visibleCustomerIds.every((id) => selectedCustomerIds.has(id)),
@@ -1075,11 +1093,25 @@ const AutoCustomersPage = () => {
             <h2 className="text-lg font-semibold">
               Λίστα Πελατών
               {!loading && (
-                <span className="ml-2 text-sm text-gray-400">({customers.length})</span>
+                <span className="ml-2 text-sm text-gray-400">
+                  ({filteredCustomers.length}/{customers.length})
+                </span>
               )}
             </h2>
             <span className="text-sm text-gray-400">{listOpen ? "Κλείσιμο" : "Άνοιγμα"}</span>
           </button>
+
+          {listOpen && (
+            <div className="mb-4">
+              <input
+                type="search"
+                value={customerSearch}
+                onChange={(e) => setCustomerSearch(e.target.value)}
+                placeholder="Αναζήτηση με όνομα, τηλέφωνο, barber ή ώρα"
+                className="w-full rounded-lg border border-gray-600 bg-gray-900 px-3 py-2 text-sm text-gray-100 placeholder:text-gray-500 focus:border-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-500/20"
+              />
+            </div>
+          )}
 
           {listOpen && (
             <div className="hidden sm:block overflow-x-auto">
@@ -1112,14 +1144,16 @@ const AutoCustomersPage = () => {
                       Φόρτωση...
                     </td>
                   </tr>
-                ) : customers.length === 0 ? (
+                ) : filteredCustomers.length === 0 ? (
                   <tr>
                     <td colSpan={9} className="px-4 py-6 text-center text-gray-400">
-                      Δεν υπάρχουν επαναλαμβανόμενοι πελάτες.
+                      {customerSearch.trim()
+                        ? "Δεν βρέθηκαν πελάτες για αυτή την αναζήτηση."
+                        : "Δεν υπάρχουν επαναλαμβανόμενοι πελάτες."}
                     </td>
                   </tr>
                 ) : (
-                  customers.map((customer) => (
+                  filteredCustomers.map((customer) => (
                     <tr
                       key={customer._id}
                       className="border-t border-gray-700 hover:bg-gray-750 transition"
@@ -1183,12 +1217,14 @@ const AutoCustomersPage = () => {
               <div className="rounded-xl border border-gray-700 bg-gray-900 p-4 text-center text-gray-400">
                 Φόρτωση...
               </div>
-            ) : customers.length === 0 ? (
+            ) : filteredCustomers.length === 0 ? (
               <div className="rounded-xl border border-gray-700 bg-gray-900 p-4 text-center text-gray-400">
-                Δεν υπάρχουν επαναλαμβανόμενοι πελάτες.
+                {customerSearch.trim()
+                  ? "Δεν βρέθηκαν πελάτες για αυτή την αναζήτηση."
+                  : "Δεν υπάρχουν επαναλαμβανόμενοι πελάτες."}
               </div>
             ) : (
-              customers.map((customer) => (
+              filteredCustomers.map((customer) => (
                 <article
                   key={customer._id}
                   className="rounded-xl border border-gray-700 bg-gray-900 p-4 space-y-3 shadow-inner"
