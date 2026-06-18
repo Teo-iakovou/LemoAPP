@@ -164,12 +164,17 @@ const createAppointment = async (req, res, next) => {
           .json({ error: "Valid phone number is required." });
       }
 
-      await upsertCustomerFromIdentity({
-        name: incomingName || fallbackPhone,
-        phoneNumber: fallbackPhone,
-        barber: effectiveBarber,
-        dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
-      });
+      try {
+        await upsertCustomerFromIdentity({
+          name: incomingName || fallbackPhone,
+          phoneNumber: fallbackPhone,
+          barber: effectiveBarber,
+          dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
+        });
+      } catch (upsertError) {
+        if (upsertError.code !== 11000) throw upsertError;
+        // concurrent request already created this customer — re-fetch below will find it
+      }
 
       customer = phoneLookupVariants.length
         ? await Customer.findOne({ $or: phoneLookupVariants })
@@ -230,6 +235,21 @@ const createAppointment = async (req, res, next) => {
       endTimeUTC = appointmentDateUTC.clone().add(duration, "minutes").toDate();
     }
 
+    // Prevent creating an appointment that overlaps an existing confirmed slot for the same barber.
+    // This is the same check used in rescheduleAppointment and catches double-submits and race conditions.
+    if (appointmentType !== "break" || duration > 0) {
+      const conflict = await Appointment.findOne({
+        barber: effectiveBarber,
+        appointmentStatus: "confirmed",
+        type: { $in: ["appointment", "break", "lock"] },
+        appointmentDateTime: { $lt: endTimeUTC },
+        endTime: { $gt: appointmentDateUTC.toDate() },
+      });
+      if (conflict) {
+        return res.status(409).json({ error: "Η ώρα μόλις κλείστηκε από άλλο πελάτη. Επιλέξτε άλλη ώρα." });
+      }
+    }
+
     const effectiveName = customer ? customer.name : incomingName || customerName;
     const userId = getUserIdFromRequest(req);
     const newAppointment = new Appointment({
@@ -254,7 +274,15 @@ const createAppointment = async (req, res, next) => {
       createdBy: createdBy || undefined,
     });
 
-    const savedAppointment = await newAppointment.save();
+    let savedAppointment;
+    try {
+      savedAppointment = await newAppointment.save();
+    } catch (saveError) {
+      if (saveError.code === 11000) {
+        return res.status(409).json({ message: "Το ραντεβού υπάρχει ήδη / This appointment already exists" });
+      }
+      throw saveError;
+    }
 
     // Generate recurring appointments if applicable
     let additionalAppointments = [];

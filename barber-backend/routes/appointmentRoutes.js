@@ -10,13 +10,24 @@ const {
 } = require("../controllers/appointmentController");
 const requireUser = require("../middlewares/requireUser");
 // const validatePassword = require("../middlewares/validatePassword");
+const rateLimit = require("express-rate-limit");
 
 const router = express.Router();
 
-router.post("/", createAppointment);
+const bookingLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (req, res) => {
+    res.status(429).json({ error: "Πάρα πολλές προσπάθειες. Δοκιμάστε ξανά σε λίγο / Too many attempts. Please try again shortly." });
+  },
+});
+
+router.post("/", bookingLimiter, createAppointment);
 router.get("/", getAppointments);
-router.put("/:id", updateAppointment); //, validatePassword it used to be here
-router.delete("/:id", deleteAppointment); //, validatePassword it used to be here
+router.put("/:id", requireUser, updateAppointment); //, validatePassword it used to be here
+router.delete("/:id", requireUser, deleteAppointment); //, validatePassword it used to be here
 router.get("/upcoming", getUpcomingAppointments);
 router.get("/past", getPastAppointments);
 router.get("/mine", requireUser, getMyAppointments);
