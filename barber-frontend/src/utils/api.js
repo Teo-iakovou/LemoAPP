@@ -1,9 +1,17 @@
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:5002/api";
 
+let on401Handler = null;
+export const setOn401Handler = (fn) => { on401Handler = fn; };
+async function apiFetch(url, options = {}) {
+  const res = await fetch(url, options);
+  if (res.status === 401 && on401Handler) on401Handler();
+  return res;
+}
+
 export const fetchCustomerAppointments = async (customerId) => {
   try {
-    const res = await fetch(
+    const res = await apiFetch(
       `${API_BASE_URL}/customers/${customerId}/appointments`
     );
     if (!res.ok) throw new Error("Failed to fetch appointment history.");
@@ -16,7 +24,7 @@ export const fetchCustomerAppointments = async (customerId) => {
 
 // ADD NEW CUSTOMER
 export const addCustomer = async (customerData) => {
-  const response = await fetch(`${API_BASE_URL}/customers`, {
+  const response = await apiFetch(`${API_BASE_URL}/customers`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(customerData),
@@ -34,7 +42,7 @@ export const uploadCustomerPhoto = async (customerId, file) => {
   const formData = new FormData();
   formData.append("profilePicture", file);
 
-  const response = await fetch(
+  const response = await apiFetch(
     `${API_BASE_URL}/customers/${customerId}/profile-picture`,
     {
       method: "POST",
@@ -50,7 +58,7 @@ export const uploadCustomerPhoto = async (customerId, file) => {
 
 export const fetchCustomer = async (customerId) => {
   try {
-    const response = await fetch(`${API_BASE_URL}/customers/${customerId}`);
+    const response = await apiFetch(`${API_BASE_URL}/customers/${customerId}`);
     if (!response.ok) {
       throw new Error("Failed to fetch customer.");
     }
@@ -62,7 +70,7 @@ export const fetchCustomer = async (customerId) => {
 };
 
 export const fetchCustomerCounts = async (month, year, token) => {
-  const response = await fetch(
+  const response = await apiFetch(
     `${API_BASE_URL}/customers/CustomerCounts?month=${month}&year=${year}`,
     {
       headers: { Authorization: `Bearer ${token}` },
@@ -76,7 +84,7 @@ export const fetchCustomerCounts = async (month, year, token) => {
 
 
 export const fetchWeeklyCustomerCounts = async (week, year, token) => {
-  const response = await fetch(
+  const response = await apiFetch(
     `${API_BASE_URL}/customers/WeeklyCustomerCounts?week=${week}&year=${year}`,
     {
       headers: { Authorization: `Bearer ${token}` },
@@ -91,7 +99,7 @@ export const fetchWeeklyCustomerCounts = async (week, year, token) => {
 
 export const fetchCustomers = async () => {
   try {
-    const response = await fetch(`${API_BASE_URL}/customers`);
+    const response = await apiFetch(`${API_BASE_URL}/customers`);
     if (!response.ok) {
       throw new Error("Failed to fetch customers.");
     }
@@ -104,7 +112,7 @@ export const fetchCustomers = async () => {
 
 export const fetchAppointments = async (page = 1, limit = 100) => {
   try {
-    const response = await fetch(
+    const response = await apiFetch(
       `${API_BASE_URL}/appointments?page=${page}&limit=${limit}`
     );
     if (!response.ok) {
@@ -119,7 +127,7 @@ export const fetchAppointments = async (page = 1, limit = 100) => {
 
 export const fetchUpcomingAppointments = async () => {
   try {
-    const response = await fetch(`${API_BASE_URL}/appointments/upcoming`);
+    const response = await apiFetch(`${API_BASE_URL}/appointments/upcoming`);
     if (!response.ok) {
       throw new Error("Failed to fetch upcoming appointments.");
     }
@@ -132,7 +140,7 @@ export const fetchUpcomingAppointments = async () => {
 
 export const fetchPastAppointments = async (page = 1, limit = 100) => {
   try {
-    const response = await fetch(
+    const response = await apiFetch(
       `${API_BASE_URL}/appointments/past?page=${page}&limit=${limit}`
     );
     if (!response.ok) {
@@ -145,14 +153,15 @@ export const fetchPastAppointments = async (page = 1, limit = 100) => {
   }
 };
 
-export const updateAppointment = async (appointmentId, updatedData) => {
+export const updateAppointment = async (appointmentId, updatedData, token) => {
   try {
-    const response = await fetch(
+    const response = await apiFetch(
       `${API_BASE_URL}/appointments/${appointmentId}`,
       {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify(updatedData),
       }
@@ -176,7 +185,7 @@ export const updateAppointment = async (appointmentId, updatedData) => {
 
 // Fetch the entire waiting list
 export async function fetchWaitingList() {
-  const res = await fetch(`${API_BASE_URL}/waitingList`);
+  const res = await apiFetch(`${API_BASE_URL}/waitingList`);
   if (!res.ok) {
     const error = await res.json();
     throw new Error(error.error || "Failed to fetch the waiting list.");
@@ -186,7 +195,7 @@ export async function fetchWaitingList() {
 
 // Add a customer to the waiting list
 export async function addToWaitingList(customerId) {
-  const response = await fetch(`${API_BASE_URL}/waitingList`, {
+  const response = await apiFetch(`${API_BASE_URL}/waitingList`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ customerId }),
@@ -205,7 +214,7 @@ export async function addToWaitingList(customerId) {
 export const fetchAutoCustomers = async (params = {}) => {
   const query = new URLSearchParams(params).toString();
   const url = query ? `${API_BASE_URL}/auto-customers?${query}` : `${API_BASE_URL}/auto-customers`;
-  const res = await fetch(url);
+  const res = await apiFetch(url);
   if (!res.ok) throw new Error("Failed to fetch recurring customers.");
   const data = await res.json();
   return data?.data ?? [];
@@ -217,7 +226,7 @@ export const fetchAutoCustomerLastAppointments = async (autoCustomerIds = []) =>
     params.set("ids", autoCustomerIds.join(","));
   }
   const query = params.toString() ? `?${params.toString()}` : "";
-  const res = await fetch(`${API_BASE_URL}/auto-customers/last-appointments${query}`);
+  const res = await apiFetch(`${API_BASE_URL}/auto-customers/last-appointments${query}`);
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     throw new Error(data?.message || "Failed to fetch last auto customer appointments.");
@@ -226,7 +235,7 @@ export const fetchAutoCustomerLastAppointments = async (autoCustomerIds = []) =>
 };
 
 export const createAutoCustomer = async (payload) => {
-  const res = await fetch(`${API_BASE_URL}/auto-customers`, {
+  const res = await apiFetch(`${API_BASE_URL}/auto-customers`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -239,7 +248,7 @@ export const createAutoCustomer = async (payload) => {
 };
 
 export const updateAutoCustomer = async (id, payload) => {
-  const res = await fetch(`${API_BASE_URL}/auto-customers/${id}`, {
+  const res = await apiFetch(`${API_BASE_URL}/auto-customers/${id}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -252,7 +261,7 @@ export const updateAutoCustomer = async (id, payload) => {
 };
 
 export const deleteAutoCustomer = async (id) => {
-  const res = await fetch(`${API_BASE_URL}/auto-customers/${id}`, {
+  const res = await apiFetch(`${API_BASE_URL}/auto-customers/${id}`, {
     method: "DELETE",
   });
   if (!res.ok) {
@@ -263,7 +272,7 @@ export const deleteAutoCustomer = async (id) => {
 };
 
 export const pushAutoCustomers = async (payload) => {
-  const res = await fetch(`${API_BASE_URL}/auto-customers/push`, {
+  const res = await apiFetch(`${API_BASE_URL}/auto-customers/push`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -278,19 +287,19 @@ export const pushAutoCustomers = async (payload) => {
 export const fetchAutoCustomerBatches = async (params = {}) => {
   const query = new URLSearchParams(params).toString();
   const url = query ? `${API_BASE_URL}/auto-customers/batches?${query}` : `${API_BASE_URL}/auto-customers/batches`;
-  const res = await fetch(url);
+  const res = await apiFetch(url);
   if (!res.ok) throw new Error("Failed to fetch auto-generation history.");
   return res.json();
 };
 
 export const fetchAutoCustomerBatch = async (batchId) => {
-  const res = await fetch(`${API_BASE_URL}/auto-customers/batches/${batchId}`);
+  const res = await apiFetch(`${API_BASE_URL}/auto-customers/batches/${batchId}`);
   if (!res.ok) throw new Error("Failed to fetch batch details.");
   return res.json();
 };
 
 export const undoAutoCustomerBatch = async (batchId, reason) => {
-  const res = await fetch(`${API_BASE_URL}/auto-customers/batches/${batchId}/undo`, {
+  const res = await apiFetch(`${API_BASE_URL}/auto-customers/batches/${batchId}/undo`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(reason ? { reason } : {}),
@@ -303,7 +312,7 @@ export const undoAutoCustomerBatch = async (batchId, reason) => {
 };
 
 export const overrideAutoCustomerOccurrence = async (id, payload) => {
-  const res = await fetch(`${API_BASE_URL}/auto-customers/${id}/occurrences/override`, {
+  const res = await apiFetch(`${API_BASE_URL}/auto-customers/${id}/occurrences/override`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -316,7 +325,7 @@ export const overrideAutoCustomerOccurrence = async (id, payload) => {
 };
 
 export const skipAutoCustomerOccurrence = async (id, payload) => {
-  const res = await fetch(`${API_BASE_URL}/auto-customers/${id}/occurrences/skip`, {
+  const res = await apiFetch(`${API_BASE_URL}/auto-customers/${id}/occurrences/skip`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -330,7 +339,7 @@ export const skipAutoCustomerOccurrence = async (id, payload) => {
 
 // Remove a customer from the waiting list
 export async function removeFromWaitingList(id) {
-  const response = await fetch(`${API_BASE_URL}/waitingList/${id}`, {
+  const response = await apiFetch(`${API_BASE_URL}/waitingList/${id}`, {
     method: "DELETE",
   });
   if (!response.ok) {
@@ -342,7 +351,7 @@ export async function removeFromWaitingList(id) {
 export async function updateWaitingListNote(id, note) {
   console.log("Updating note for ID:", id, "Note:", note);
 
-  const response = await fetch(`${API_BASE_URL}/waitingList/${id}/note`, {
+  const response = await apiFetch(`${API_BASE_URL}/waitingList/${id}/note`, {
     method: "PATCH",
     headers: {
       "Content-Type": "application/json",
@@ -359,13 +368,13 @@ export async function updateWaitingListNote(id, note) {
   return response.json();
 }
 export async function getSmsStatuses() {
-  const res = await fetch(`${API_BASE_URL}/sms-statuses`);
+  const res = await apiFetch(`${API_BASE_URL}/sms-statuses`);
   if (!res.ok) throw new Error("Failed to fetch SMS statuses");
   return res.json();
 }
 
 export async function resendSMS(appointmentId) {
-  const res = await fetch(`${API_BASE_URL}/sms-resend/${appointmentId}`, {
+  const res = await apiFetch(`${API_BASE_URL}/sms-resend/${appointmentId}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
   });
@@ -388,7 +397,7 @@ export const loginUser = async (credentials) => {
   return response.json(); // Returns the JWT token
 };
 export const createAppointment = async (appointmentData) => {
-  const response = await fetch(`${API_BASE_URL}/appointments`, {
+  const response = await apiFetch(`${API_BASE_URL}/appointments`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(appointmentData),
@@ -401,10 +410,10 @@ export const createAppointment = async (appointmentData) => {
   return response.json();
 };
 
-export const deleteAppointment = async (appointmentId) => {
-  const response = await fetch(`${API_BASE_URL}/appointments/${appointmentId}`, {
+export const deleteAppointment = async (appointmentId, token) => {
+  const response = await apiFetch(`${API_BASE_URL}/appointments/${appointmentId}`, {
     method: "DELETE",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
   });
 
   if (!response.ok) {
@@ -417,7 +426,7 @@ export const deleteAppointment = async (appointmentId) => {
 
 export const fetchAllCustomerAppointments = async (customerId) => {
   try {
-    const res = await fetch(
+    const res = await apiFetch(
       `${API_BASE_URL}/customers/${customerId}/all-appointments`
     );
     if (!res.ok) throw new Error("Failed to fetch all appointment history.");
@@ -430,7 +439,7 @@ export const fetchAllCustomerAppointments = async (customerId) => {
 
 // PATCH single customer
 export const patchCustomer = async (id, data) => {
-  const res = await fetch(`${API_BASE_URL}/customers/${id}`, {
+  const res = await apiFetch(`${API_BASE_URL}/customers/${id}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),

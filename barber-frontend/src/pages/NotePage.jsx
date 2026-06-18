@@ -14,6 +14,20 @@ const NotePage = () => {
     import.meta.env.VITE_API_BASE_URL || "http://localhost:5002/api";
 
   useEffect(() => {
+    const id = axios.interceptors.response.use(
+      (response) => response,
+      (error) => {
+        if (error.response?.status === 401) {
+          localStorage.removeItem("token");
+          window.location.reload();
+        }
+        return Promise.reject(error);
+      }
+    );
+    return () => axios.interceptors.response.eject(id);
+  }, []);
+
+  useEffect(() => {
     const fetchFolders = async () => {
       try {
         const response = await axios.get(`${API_BASE_URL}/folders`);

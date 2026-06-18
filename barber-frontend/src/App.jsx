@@ -1,9 +1,10 @@
 import { useState, useEffect, lazy, Suspense } from "react";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import Navbar from "./_components/Navbar";
-import { Toaster } from "react-hot-toast";
+import { Toaster, toast } from "react-hot-toast";
 import "./index.css";
 import UpdatePasswordForm from "./pages/UpdatePasswordForm";
+import { setOn401Handler } from "./utils/api";
 
 // Lazy load pages
 // const PaymentPage = lazy(() => import("./pages/PaymentPage"));
@@ -33,6 +34,14 @@ const App = () => {
   useEffect(() => {
     const token = localStorage.getItem("token");
     setAuth(!!token); // Set auth state based on token existence
+  }, []);
+
+  useEffect(() => {
+    setOn401Handler(() => {
+      localStorage.removeItem("token");
+      setAuth(false);
+      toast.error("Η σύνδεση έληξε. Συνδεθείτε ξανά.");
+    });
   }, []);
 
   // Persist calendar dark mode

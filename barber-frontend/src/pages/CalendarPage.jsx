@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import Swal from "sweetalert2";
@@ -26,8 +26,10 @@ const CalendarPage = ({ darkCalendar = false }) => {
   const [selectedDate, setSelectedDate] = useState(null);
   const [selectedAppointment, setSelectedAppointment] = useState(null);
   const [showForm, setShowForm] = useState(false);
+  const [selectedDuration, setSelectedDuration] = useState(40);
   const [pastPage, setPastPage] = useState(1);
 const [isLoading, setIsLoading] = useState(true);  // ✅ Fetch appointments
+  const submittingRef = useRef(false);
   const getEventColor = ({ barber, type }) => {
     if (type === "break") {
       if (barber === "ΛΕΜΟ") return "#34D399";
@@ -134,7 +136,10 @@ const [isLoading, setIsLoading] = useState(true);  // ✅ Fetch appointments
       endTime: end.toISOString(),
       lockReason: event.type === "lock" ? event.lockReason || "" : undefined,
     };
-    await updateAppointment(event.id, payload);
+    const token = localStorage.getItem("token");
+    console.log("🔧 RESIZE PAYLOAD:", { id: event.id, duration: payload.duration, appointmentDateTime: payload.appointmentDateTime, endTime: payload.endTime });
+    const response = await updateAppointment(event.id, payload, token);
+    console.log("🔧 RESIZE RESPONSE:", response);
   };
 
   const handleCalendarEventUpdate = async ({ event, start, end, allDay, action }) => {
@@ -266,6 +271,8 @@ const [isLoading, setIsLoading] = useState(true);  // ✅ Fetch appointments
       selectedStartDate.setHours(7, 0, 0, 0); // Default to 7:00 AM
     }
     console.log("Clicked Hour:", selectedStartDate);
+    const draggedMinutes = Math.round((new Date(slotInfo.end) - new Date(slotInfo.start)) / 60000);
+    setSelectedDuration(draggedMinutes >= 40 ? draggedMinutes : 40);
     setSelectedDate(selectedStartDate);
     setSelectedAppointment(null);
     setShowForm(true);
@@ -295,6 +302,8 @@ const [isLoading, setIsLoading] = useState(true);  // ✅ Fetch appointments
   };
 
   const handleFormSubmit = async (appointmentData) => {
+    if (submittingRef.current) return;
+    submittingRef.current = true;
     try {
       console.log("📤 Form Data Before Processing:", appointmentData);
 
@@ -309,9 +318,11 @@ const [isLoading, setIsLoading] = useState(true);  // ✅ Fetch appointments
           "🚀 Final Payload Before API Request:",
           updatedAppointmentData
         );
+        const token = localStorage.getItem("token");
         response = await updateAppointment(
           appointmentData._id,
-          updatedAppointmentData
+          updatedAppointmentData,
+          token
         );
       } else {
         response = await createAppointment(appointmentData);
@@ -357,6 +368,8 @@ const [isLoading, setIsLoading] = useState(true);  // ✅ Fetch appointments
     } catch (error) {
       console.error("Error submitting appointment data:", error);
       toast.error("An error occurred while processing the appointment.");
+    } finally {
+      submittingRef.current = false;
     }
   };
 
@@ -393,12 +406,14 @@ const [isLoading, setIsLoading] = useState(true);  // ✅ Fetch appointments
     console.log("Deleting appointment with ID:", appointmentId);
 
     try {
+      const token = localStorage.getItem("token");
       const response = await fetch(
         `${API_BASE_URL}/appointments/${appointmentId}`,
         {
           method: "DELETE",
           headers: {
             "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
           },
         }
       );
@@ -411,13 +426,21 @@ const [isLoading, setIsLoading] = useState(true);  // ✅ Fetch appointments
 
         // ✅ Close the form after successful deletion
         setShowForm(false);
+        return true;
       } else {
+        if (response.status === 401) {
+          localStorage.removeItem("token");
+          window.location.reload();
+          return false;
+        }
         const errorData = await response.json();
         toast.error("Failed to delete the appointment: " + errorData.message);
+        return false;
       }
     } catch (error) {
       console.error("Error deleting appointment:", error);
       toast.error("An error occurred while deleting the appointment.");
+      return false;
     }
   };
 
@@ -486,6 +509,7 @@ const [isLoading, setIsLoading] = useState(true);  // ✅ Fetch appointments
     {showForm && !isLoading && (
       <AppointmentForm
         initialDate={selectedDate}
+        initialDuration={selectedDuration}
         isEditing={!!selectedAppointment}
         appointmentData={selectedAppointment}
         onClose={() => setShowForm(false)}

@@ -19,6 +19,7 @@ const BREAK_MIN_MINUTES = 5;
 
 function AppointmentForm({
   initialDate,
+  initialDuration = 40,
   onClose,
   onSubmit,
   onDelete,
@@ -46,11 +47,17 @@ function AppointmentForm({
   const [appointmentType, setAppointmentType] = useState(
     appointmentData?.type || "appointment"
   );
-  const [duration, setDuration] = useState(appointmentData?.duration || 40);
+  const [duration, setDuration] = useState(appointmentData?.duration || initialDuration || 40);
   const [durationCustom, setDurationCustom] = useState(
-    DURATION_OPTIONS.includes(appointmentData?.duration)
+    appointmentData
+      ? DURATION_OPTIONS.includes(appointmentData.duration)
+        ? ""
+        : appointmentData.duration || ""
+      : DURATION_OPTIONS.includes(initialDuration)
       ? ""
-      : appointmentData?.duration || ""
+      : initialDuration
+      ? String(initialDuration)
+      : ""
   );
   const [recurrence, setRecurrence] = useState("none");
   const [repeatInterval, setRepeatInterval] = useState(1);
@@ -58,7 +65,7 @@ function AppointmentForm({
   const [breakFullDay, setBreakFullDay] = useState(() =>
     appointmentData?.type === "break"
       ? (appointmentData.duration || 0) >= BREAK_FULL_DAY_MINUTES
-      : true
+      : false
   );
   const [lockReasonValue, setLockReasonValue] = useState(
     appointmentData?.lockReason || ""
@@ -112,7 +119,7 @@ function AppointmentForm({
       setBreakFullDay(
         appointmentData.type === "break"
           ? (appointmentData.duration || 0) >= BREAK_FULL_DAY_MINUTES
-          : true
+          : false
       );
       setLockReasonValue(appointmentData.lockReason || "");
     }
@@ -265,17 +272,27 @@ const handleCustomerSelect = (e) => {
       cancelButtonColor: "#64748b",
       confirmButtonText: "Ναι, διαγραφή!",
       cancelButtonText: "Ακύρωση",
-    }).then((result) => {
+    }).then(async (result) => {
       if (result.isConfirmed) {
-        onDelete(appointmentData?._id);
-        onClose();
-        MySwal.fire({
-          title: "✅ Διαγραφή",
-          text: "Το ραντεβού διαγράφηκε με επιτυχία.",
-          icon: "success",
-          timer: 1500,
-          showConfirmButton: false,
-        });
+        const success = await onDelete(appointmentData?._id);
+        if (success) {
+          onClose();
+          MySwal.fire({
+            title: "✅ Διαγραφή",
+            text: "Το ραντεβού διαγράφηκε με επιτυχία.",
+            icon: "success",
+            timer: 1500,
+            showConfirmButton: false,
+          });
+        } else {
+          MySwal.fire({
+            title: "❌ Σφάλμα",
+            text: "Η διαγραφή απέτυχε. Δοκιμάστε ξανά. / Delete failed. Please try again.",
+            icon: "error",
+            timer: 2500,
+            showConfirmButton: false,
+          });
+        }
       }
     });
   };

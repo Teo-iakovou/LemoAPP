@@ -570,11 +570,12 @@ const BulkLocksPage = () => {
     }
 
     setUnlocking(true);
+    const token = localStorage.getItem("token");
     const failed = [];
 
     for (const id of uniqueIds) {
       try {
-        await deleteAppointment(id);
+        await deleteAppointment(id, token);
       } catch (error) {
         console.error("Failed to delete lock", error);
         failed.push({ id, error });
@@ -819,8 +820,9 @@ const BulkLocksPage = () => {
     };
 
     setUpdatingSaved(true);
+    const token = localStorage.getItem("token");
     try {
-      await updateAppointment(responseId, payload);
+      await updateAppointment(responseId, payload, token);
       toast.success("Το κλείδωμα ενημερώθηκε.");
       setSavedEditState(null);
       setExpandedLockIds((prev) => {
@@ -846,8 +848,9 @@ const BulkLocksPage = () => {
       setSavedEditState(null);
     }
     setUnlockingOccurrenceId(responseId);
+    const token = localStorage.getItem("token");
     try {
-      await deleteAppointment(responseId);
+      await deleteAppointment(responseId, token);
       toast.success("Το κλείδωμα αφαιρέθηκε.");
       setExpandedLockIds((prev) => {
         const next = new Set(prev instanceof Set ? prev : []);
