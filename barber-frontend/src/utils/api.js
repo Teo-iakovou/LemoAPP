@@ -397,9 +397,15 @@ export const loginUser = async (credentials) => {
   return response.json(); // Returns the JWT token
 };
 export const createAppointment = async (appointmentData) => {
+  // Attach the logged-in barber's token so the backend can recognise staff
+  // bookings (barbers may book on top of a "lock"; the public site may not).
+  const token = localStorage.getItem("token");
   const response = await apiFetch(`${API_BASE_URL}/appointments`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
     body: JSON.stringify(appointmentData),
   });
 
