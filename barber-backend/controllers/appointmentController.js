@@ -235,13 +235,24 @@ const createAppointment = async (req, res, next) => {
       endTimeUTC = appointmentDateUTC.clone().add(duration, "minutes").toDate();
     }
 
+    // Identify whether this request comes from an authenticated LemoApp user
+    // (barber/admin). Public-website requests either carry no token or a
+    // public-user token, which is signed with a different secret and therefore
+    // never resolves to a userId here.
+    const userId = getUserIdFromRequest(req);
+    const isStaff = Boolean(userId);
+
     // Prevent creating an appointment that overlaps an existing confirmed slot for the same barber.
     // This is the same check used in rescheduleAppointment and catches double-submits and race conditions.
+    // Staff (barbers) are allowed to book on top of a "lock" block; the public website is not.
+    const conflictTypes = isStaff
+      ? ["appointment", "break"]
+      : ["appointment", "break", "lock"];
     if (appointmentType !== "break" || duration > 0) {
       const conflict = await Appointment.findOne({
         barber: effectiveBarber,
         appointmentStatus: "confirmed",
-        type: { $in: ["appointment", "break", "lock"] },
+        type: { $in: conflictTypes },
         appointmentDateTime: { $lt: endTimeUTC },
         endTime: { $gt: appointmentDateUTC.toDate() },
       });
@@ -251,7 +262,6 @@ const createAppointment = async (req, res, next) => {
     }
 
     const effectiveName = customer ? customer.name : incomingName || customerName;
-    const userId = getUserIdFromRequest(req);
     const newAppointment = new Appointment({
       customerName: effectiveName,
       phoneNumber: appointmentType === "appointment" ? phone : undefined,
