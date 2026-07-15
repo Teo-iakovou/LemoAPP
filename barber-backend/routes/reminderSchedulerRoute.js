@@ -1,9 +1,12 @@
 const express = require("express");
 const { sendReminders, processScheduledMessages } = require("../controllers/reminderScheduler");
+const requireUser = require("../middlewares/requireUser");
 
 const router = express.Router();
 
-router.post("/send-reminders", async (req, res) => {
+// Manual trigger only — the cron scheduler calls sendReminders() in-process, not
+// this HTTP route, so admin auth is the right gate (no shared-secret cron path).
+router.post("/send-reminders", requireUser, async (req, res) => {
   try {
     const dryRun = String(req.query.dryRun || "") === "1";
     const limitRaw = Number(req.query.limit);

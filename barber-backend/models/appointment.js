@@ -109,6 +109,16 @@ const appointmentSchema = new mongoose.Schema({
     type: appointmentSourceSchema,
     default: () => ({ kind: "manual" }),
   },
+  // Who created this appointment: 'admin' = authenticated LemoApp user (any account),
+  // 'public' = public booking site. Drives conflict-validation bypass for admins and
+  // membership of the public-only partial unique index (see scripts/migrate-origin-and-index.js).
+  // NOTE: the unique index is created by that migration, NOT declared here, because
+  // autoIndex is on and would build it out of order / before the backfill.
+  origin: {
+    type: String,
+    enum: ["admin", "public"],
+    default: "public",
+  },
   meta: {
     type: Map,
     of: mongoose.Schema.Types.Mixed,
@@ -194,6 +204,22 @@ appointmentSchema.index({
 // Compound index used by range/month availability lookups
 appointmentSchema.index({ appointmentDateTime: 1, barber: 1, type: 1, appointmentStatus: 1 });
 appointmentSchema.index({ "source.kind": 1, "source.autoCustomerId": 1, appointmentDateTime: 1 });
+
+// PUBLIC-ONLY partial UNIQUE index (atomic race backstop): prevents two PUBLIC
+// confirmed bookings from occupying the exact same (barber, appointmentDateTime,
+// type). Admin rows (origin:'admin') are excluded from the partial filter, so
+// admins may create overlapping / same-time appointments freely. This was created
+// out-of-band by scripts/migrate-origin-and-index.js; declared here (exact-match
+// name + spec) so fresh databases get it — autoIndex is a no-op when it already
+// exists. See that migration for the origin backfill + duplicate resolution.
+appointmentSchema.index(
+  { barber: 1, appointmentDateTime: 1, type: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { origin: "public", appointmentStatus: "confirmed" },
+    name: "uniq_public_confirmed_slot",
+  }
+);
 
 // --- Log Reminder Utility (needed for reminders and scripts) ---
 appointmentSchema.methods.logReminder = async function (type, data = {}) {

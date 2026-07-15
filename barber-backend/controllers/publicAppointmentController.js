@@ -262,7 +262,19 @@ const rescheduleAppointment = async (req, res, next) => {
     appointment.endTime = nextEnd.toDate();
     appointment.duration = duration;
     appointment.barber = nextBarber;
-    await appointment.save();
+    try {
+      await appointment.save();
+    } catch (saveError) {
+      // Reschedule race caught atomically by the public partial unique index
+      // (uniq_public_confirmed_slot). Return the same 409 as the create path
+      // instead of surfacing a 500 — identical UX, consistent with create.
+      if (saveError.code === 11000) {
+        return res
+          .status(409)
+          .json({ error: "Η ώρα μόλις κλείστηκε από άλλο πελάτη. Επιλέξτε άλλη ώρα." });
+      }
+      throw saveError;
+    }
     const newFormattedDate = moment(appointment.appointmentDateTime)
       .tz("Europe/Athens")
       .format("DD/MM/YYYY HH:mm");

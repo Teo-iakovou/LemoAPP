@@ -382,6 +382,7 @@ const generateAutoAppointments = async ({
           endTime: appointmentEnd,
           duration,
           type: "appointment",
+          origin: "admin",
           source: {
             kind: "auto-customer",
             autoCustomerId: customer._id,

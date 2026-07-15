@@ -6,7 +6,11 @@ const {
   updateNote,
   deleteNote,
 } = require("../controllers/noteController");
+const requireUser = require("../middlewares/requireUser");
 const router = express.Router();
+
+// Notes are admin-only.
+router.use(requireUser);
 
 // POST /api/notes - Create a new note
 router.post("/", createNote);

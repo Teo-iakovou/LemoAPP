@@ -293,18 +293,6 @@ const getCustomers = async (req, res, next) => {
   }
 };
 
-// Delete all customers
-const deleteAllCustomers = async (req, res, next) => {
-  try {
-    await Customer.deleteMany();
-    res
-      .status(200)
-      .json({ message: "All customers have been deleted successfully." });
-  } catch (error) {
-    next(error);
-  }
-};
-
 const deleteCustomer = async (req, res, next) => {
   try {
     const { id } = req.params;
@@ -478,7 +466,6 @@ const getAllCustomerAppointments = async (req, res) => {
 
 module.exports = {
   getCustomers,
-  deleteAllCustomers,
   deleteCustomer,
   updateCustomer,
   getCustomerCounts,

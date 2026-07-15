@@ -4,7 +4,7 @@ const { sendSMS } = require("../utils/smsService")
 const { upsertCustomerFromIdentity } = require("../utils/customerSync");
 
 const moment = require("moment-timezone");
-const { getUserIdFromRequest } = require("../utils/auth");
+const { getUserIdFromRequest, getPublicUserIdFromRequest, hasBearerToken } = require("../utils/auth");
 function normalizePhone(input = "") {
   try {
     return String(input)
@@ -83,6 +83,23 @@ function getBarberDisplayName(barber = "") {
 const createAppointment = async (req, res, next) => {
   try {
     console.log("📥 Received Payload on Server:", req.body);
+
+    // Identify the caller up front (before any DB side effects). A LemoApp user
+    // (barber/admin) resolves to a userId; public-site requests carry no token or a
+    // public-user token (different secret) and resolve to null here.
+    const userId = getUserIdFromRequest(req);
+    const isStaff = Boolean(userId);
+
+    // Fail fast on a broken session: a Bearer token that is valid as NEITHER an admin
+    // NOR a public session means the caller's session has lapsed. Return 401 so the
+    // client logs out cleanly, instead of silently downgrading a stale admin to public
+    // rules (which produced confusing 409s). No Authorization header = genuine
+    // anonymous public booking → allowed through.
+    if (!isStaff && hasBearerToken(req) && !getPublicUserIdFromRequest(req)) {
+      return res
+        .status(401)
+        .json({ error: "Η συνεδρία έληξε, συνδεθείτε ξανά." });
+    }
 
     const {
       customerName,
@@ -235,24 +252,16 @@ const createAppointment = async (req, res, next) => {
       endTimeUTC = appointmentDateUTC.clone().add(duration, "minutes").toDate();
     }
 
-    // Identify whether this request comes from an authenticated LemoApp user
-    // (barber/admin). Public-website requests either carry no token or a
-    // public-user token, which is signed with a different secret and therefore
-    // never resolves to a userId here.
-    const userId = getUserIdFromRequest(req);
-    const isStaff = Boolean(userId);
-
-    // Prevent creating an appointment that overlaps an existing confirmed slot for the same barber.
-    // This is the same check used in rescheduleAppointment and catches double-submits and race conditions.
-    // Staff (barbers) are allowed to book on top of a "lock" block; the public website is not.
-    const conflictTypes = isStaff
-      ? ["appointment", "break"]
-      : ["appointment", "break", "lock"];
-    if (appointmentType !== "break" || duration > 0) {
+    // ADMIN (any authenticated LemoApp user) bypasses ALL conflict validation:
+    // they may create overlapping appointments and even multiple at the exact same
+    // time for the same barber. PUBLIC requests keep the full overlap check (incl.
+    // locks) and can never book over an existing slot — regardless of who created it,
+    // because this query is not filtered by origin.
+    if (!isStaff && (appointmentType !== "break" || duration > 0)) {
       const conflict = await Appointment.findOne({
         barber: effectiveBarber,
         appointmentStatus: "confirmed",
-        type: { $in: conflictTypes },
+        type: { $in: ["appointment", "break", "lock"] },
         appointmentDateTime: { $lt: endTimeUTC },
         endTime: { $gt: appointmentDateUTC.toDate() },
       });
@@ -275,6 +284,7 @@ const createAppointment = async (req, res, next) => {
       repeatInterval: recurrence === "weekly" ? intervalWeeks : null,
       repeatCount: recurrence === "weekly" ? maxRepeat : null,
       user: userId || undefined,
+      origin: isStaff ? "admin" : "public",
       lockReason:
         appointmentType === "lock" && typeof lockReason === "string"
           ? lockReason.trim()
@@ -289,7 +299,11 @@ const createAppointment = async (req, res, next) => {
       savedAppointment = await newAppointment.save();
     } catch (saveError) {
       if (saveError.code === 11000) {
-        return res.status(409).json({ message: "Το ραντεβού υπάρχει ήδη / This appointment already exists" });
+        // Public double-book race caught atomically by the partial unique index
+        // (uniq_public_confirmed_slot). Same 409 + message as the overlap check above,
+        // so the user experience is identical. Admin rows have origin:'admin' and are
+        // excluded from that index, so this never blocks admin.
+        return res.status(409).json({ error: "Η ώρα μόλις κλείστηκε από άλλο πελάτη. Επιλέξτε άλλη ώρα." });
       }
       throw saveError;
     }
@@ -307,6 +321,7 @@ const createAppointment = async (req, res, next) => {
           intervalWeeks,
           repeatCount: maxRepeat - 1, // Since the first appointment is already created
           user: userId || undefined,
+          origin: isStaff ? "admin" : "public",
         });
       } else if (appointmentType === "break") {
         additionalAppointments = await generateRecurringBreaks({
@@ -433,6 +448,7 @@ const generateRecurringAppointments = async ({
   intervalWeeks,
   repeatCount,
   user,
+  origin,
 }) => {
   const appointments = [];
   let currentDateUTC = initialAppointmentDate.clone();
@@ -455,6 +471,7 @@ const generateRecurringAppointments = async ({
       appointmentStatus: "confirmed",
       type: "appointment",
       user: user || undefined,
+      origin: origin === "admin" ? "admin" : "public",
     });
 
     const savedAppointment = await additionalAppointment.save();

@@ -1,6 +1,30 @@
 const axios = require("axios");
 
+// Real SMS delivery is OFF by default and only turns on when explicitly enabled.
+// Rules (first match wins):
+//   SMS_ENABLED = true/1/yes   → send (real providers)
+//   SMS_ENABLED = false/0/no   → simulate (log only), even in production
+//   SMS_ENABLED unset          → send ONLY when NODE_ENV === "production"; otherwise simulate
+// This makes it impossible to hit sms.to from dev/test/curl unless you opt in.
+function smsSendingEnabled() {
+  const flag = String(process.env.SMS_ENABLED ?? "").trim().toLowerCase();
+  if (["true", "1", "yes", "on"].includes(flag)) return true;
+  if (["false", "0", "no", "off"].includes(flag)) return false;
+  return process.env.NODE_ENV === "production";
+}
+
 const sendSMS = async (to, message, options = {}) => {
+  const smsType = options.smsType || "unknown";
+  const senderId = options.senderId || "Lemo Barber";
+
+  // GUARDRAIL: outside an explicitly-enabled context, log instead of sending.
+  if (!smsSendingEnabled()) {
+    console.log(
+      `📵 [SMS SIMULATED — not sent] env=${process.env.NODE_ENV || "unset"} SMS_ENABLED=${process.env.SMS_ENABLED ?? "unset"} | to=${to} | type=${smsType} | sender=${senderId} | preview="${String(message || "").slice(0, 80)}"`
+    );
+    return { success: true, simulated: true, message_id: "SIMULATED", status: "ok" };
+  }
+
   const smsToRawKey = process.env.SMS_TO_API_KEY;
   const webSmsRawKey = process.env.WEBSMS_API_KEY;
 
@@ -12,8 +36,6 @@ const sendSMS = async (to, message, options = {}) => {
   const WEBSMS_API_KEY = webSmsRawKey?.trim();
   const SMS_TO_URL = "https://api.sms.to/sms/send";
   const WEBSMS_URL = "https://websms.com.cy/api/send-sm";
-  const smsType = options.smsType || "unknown";
-  const senderId = options.senderId || "Lemo Barber";
 
   const normalizeNumber = (input) => {
     if (!input) throw new Error("Missing recipient phone number.");

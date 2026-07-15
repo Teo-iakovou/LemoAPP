@@ -21,7 +21,7 @@ router.post("/login", login);
 router.get("/me", requireUser, me);
 router.patch("/me", requireUser, updateMe);
 
-// Update user profile
-router.put("/update-profile", updateProfile);
+// Update user profile (admin-only)
+router.put("/update-profile", requireUser, updateProfile);
 
 module.exports = router;

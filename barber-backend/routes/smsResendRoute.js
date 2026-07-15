@@ -2,8 +2,10 @@ const express = require("express");
 const router = express.Router();
 const Appointment = require("../models/appointment");
 const { sendSMS } = require("../utils/smsService");
+const requireUser = require("../middlewares/requireUser");
 
-router.post("/sms-resend/:appointmentId", async (req, res) => {
+// Admin-only: resends an SMS (triggers the SMS provider), so it must be gated.
+router.post("/sms-resend/:appointmentId", requireUser, async (req, res) => {
   const { appointmentId } = req.params;
 
   try {
