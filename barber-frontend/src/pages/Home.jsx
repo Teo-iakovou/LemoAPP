@@ -6,7 +6,7 @@ const Home = () => {
 
   return (
     <div
-      className="flex flex-col rounded-none sm:rounded-3xl items-center justify-center h-full w-full text-center bg-cover bg-center p-4 sm:p-8"
+      className="flex flex-col rounded-none sm:rounded-3xl items-center justify-center min-h-[calc(100dvh-7rem)] w-full text-center bg-cover bg-center bg-no-repeat overflow-hidden p-4 sm:p-8"
       style={{
         backgroundImage: `url(${barbershopBg})`,
         backgroundSize: "cover",

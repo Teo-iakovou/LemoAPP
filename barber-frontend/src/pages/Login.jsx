@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import LemoLogo from "../assets/LemoLogo.png";
 
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:5002/api";
@@ -61,66 +60,80 @@ const Login = ({ setAuth }) => {
   };
 
   return (
-    <div className="flex min-h-[80vh] items-center justify-center px-4">
+    <div className="login-glass-root fixed inset-0 z-50 flex items-center justify-center overflow-hidden px-4 py-8">
+      {/* Animated gradient base + drifting violet glows (decorative) */}
+      <div className="login-glass-bg" aria-hidden="true" />
+      <div className="login-glow login-glow--1" aria-hidden="true" />
+      <div className="login-glow login-glow--2" aria-hidden="true" />
+      <div className="login-glow login-glow--3" aria-hidden="true" />
+
       <form
         onSubmit={handleLogin}
-        className={`w-full max-w-sm rounded-3xl border border-[#8B2FF0]/30 bg-gray-950/80 p-8 shadow-2xl shadow-[#8B2FF0]/10 backdrop-blur transition-all duration-500 ease-out ${
-          mounted ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0"
+        className={`relative z-10 w-full max-w-sm rounded-2xl border border-white/15 bg-white/5 p-8 backdrop-blur-xl transition-all duration-700 ease-out ${
+          mounted
+            ? "translate-y-0 scale-100 opacity-100"
+            : "translate-y-5 scale-95 opacity-0"
         }`}
+        style={{
+          boxShadow:
+            "0 24px 70px -20px rgba(0,0,0,0.65), inset 0 1px 0 0 rgba(255,255,255,0.06)",
+        }}
       >
-        <div className="mb-6 text-center">
-          <div className="mx-auto mb-3 flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl bg-[#8B2FF0]/15 ring-1 ring-[#8B2FF0]/40">
-            <img
-              src={LemoLogo}
-              alt="Lemo Barber Shop"
-              className="h-12 w-12 object-contain"
-            />
-          </div>
-          <h1 className="text-2xl font-bold tracking-wide text-white">ΣΥΝΔΕΣΗ</h1>
-          <p className="mt-1 text-sm text-gray-400">LEMO BARBER · Admin</p>
-        </div>
+        <h1 className="mb-7 text-center text-2xl font-semibold tracking-wide text-white">
+          Σύνδεση
+        </h1>
 
         {error && (
-          <p className="mb-4 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+          <p className="mb-4 rounded-xl border border-red-400/30 bg-red-500/10 px-3 py-2 text-sm text-red-200">
             {error}
           </p>
         )}
 
-        <div className="mb-4">
-          <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-300">
-            Όνομα χρήστη
-          </label>
+        {/* Username — floating label */}
+        <div className="relative mb-4">
           <input
+            id="login-username"
             type="text"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
-            className="w-full rounded-xl border border-gray-700 bg-gray-900/70 px-4 py-2.5 text-white placeholder:text-gray-500 transition focus:border-[#8B2FF0] focus:outline-none focus:ring-2 focus:ring-[#8B2FF0]/40"
-            placeholder="Εισάγετε όνομα χρήστη"
+            placeholder=" "
             required
+            className="peer w-full rounded-xl border border-white/10 bg-white/5 px-4 pb-2 pt-5 text-white outline-none transition-all duration-200 focus:border-[#8B2FF0]/70 focus:bg-white/[0.07] focus:ring-2 focus:ring-[#8B2FF0]/40"
           />
+          <label
+            htmlFor="login-username"
+            className="pointer-events-none absolute left-4 top-2 text-xs text-[#c9a3ff] transition-all duration-200 peer-placeholder-shown:top-4 peer-placeholder-shown:text-sm peer-placeholder-shown:text-white/50 peer-focus:top-2 peer-focus:text-xs peer-focus:text-[#c9a3ff]"
+          >
+            Όνομα χρήστη
+          </label>
         </div>
 
-        <div className="mb-6">
-          <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-300">
-            Κωδικός
-          </label>
+        {/* Password — floating label */}
+        <div className="relative mb-6">
           <input
+            id="login-password"
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full rounded-xl border border-gray-700 bg-gray-900/70 px-4 py-2.5 text-white placeholder:text-gray-500 transition focus:border-[#8B2FF0] focus:outline-none focus:ring-2 focus:ring-[#8B2FF0]/40"
-            placeholder="Εισάγετε κωδικό"
+            placeholder=" "
             required
+            className="peer w-full rounded-xl border border-white/10 bg-white/5 px-4 pb-2 pt-5 text-white outline-none transition-all duration-200 focus:border-[#8B2FF0]/70 focus:bg-white/[0.07] focus:ring-2 focus:ring-[#8B2FF0]/40"
           />
+          <label
+            htmlFor="login-password"
+            className="pointer-events-none absolute left-4 top-2 text-xs text-[#c9a3ff] transition-all duration-200 peer-placeholder-shown:top-4 peer-placeholder-shown:text-sm peer-placeholder-shown:text-white/50 peer-focus:top-2 peer-focus:text-xs peer-focus:text-[#c9a3ff]"
+          >
+            Κωδικός
+          </label>
         </div>
 
         <button
           type="submit"
           disabled={isLoading}
-          className={`flex w-full items-center justify-center gap-2 rounded-xl px-4 py-2.5 font-semibold text-white transition active:scale-[.98] ${
+          className={`flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 font-semibold text-white transition-all duration-200 active:scale-[.97] ${
             isLoading
               ? "cursor-not-allowed bg-[#8B2FF0]/50"
-              : "bg-[#8B2FF0] hover:bg-[#7a29d6]"
+              : "bg-[#8B2FF0] shadow-lg shadow-[#8B2FF0]/30 hover:bg-[#7a29d6] hover:shadow-[#8B2FF0]/50"
           }`}
         >
           {isLoading && (
@@ -140,9 +153,66 @@ const Login = ({ setAuth }) => {
               />
             </svg>
           )}
-          {isLoading ? "Σύνδεση..." : "ΣΥΝΔΕΣΗ"}
+          {isLoading ? "Σύνδεση..." : "Σύνδεση"}
         </button>
       </form>
+
+      {/* Self-contained styles for the animated glass background */}
+      <style>{`
+        .login-glass-root { background: #05050a; }
+        .login-glass-bg {
+          position: absolute;
+          inset: 0;
+          background: linear-gradient(130deg, #0a0a14 0%, #140a24 45%, #0a0a14 100%);
+          background-size: 220% 220%;
+          animation: loginGradientShift 20s ease-in-out infinite;
+        }
+        .login-glow {
+          position: absolute;
+          border-radius: 9999px;
+          filter: blur(90px);
+          opacity: 0.55;
+          will-change: transform;
+          pointer-events: none;
+        }
+        .login-glow--1 {
+          width: 440px; height: 440px;
+          background: rgba(139, 47, 240, 0.45);
+          top: -130px; left: -110px;
+          animation: loginFloat1 15s ease-in-out infinite;
+        }
+        .login-glow--2 {
+          width: 380px; height: 380px;
+          background: rgba(139, 47, 240, 0.30);
+          bottom: -150px; right: -90px;
+          animation: loginFloat2 17s ease-in-out infinite;
+        }
+        .login-glow--3 {
+          width: 320px; height: 320px;
+          background: rgba(96, 32, 190, 0.28);
+          top: 42%; left: 55%;
+          animation: loginFloat3 22s ease-in-out infinite;
+        }
+        @keyframes loginGradientShift {
+          0%, 100% { background-position: 0% 50%; }
+          50% { background-position: 100% 50%; }
+        }
+        @keyframes loginFloat1 {
+          0%, 100% { transform: translate(0, 0) scale(1); }
+          50% { transform: translate(45px, 35px) scale(1.08); }
+        }
+        @keyframes loginFloat2 {
+          0%, 100% { transform: translate(0, 0) scale(1); }
+          50% { transform: translate(-35px, -45px) scale(1.1); }
+        }
+        @keyframes loginFloat3 {
+          0%, 100% { transform: translate(-50%, -50%) scale(1); }
+          50% { transform: translate(-45%, -55%) scale(1.12); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .login-glass-bg, .login-glow { animation: none; }
+        }
+      `}</style>
     </div>
   );
 };
