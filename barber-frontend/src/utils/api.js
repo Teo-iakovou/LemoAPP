@@ -3,10 +3,59 @@ const API_BASE_URL =
 
 let on401Handler = null;
 export const setOn401Handler = (fn) => { on401Handler = fn; };
-async function apiFetch(url, options = {}) {
+export async function apiFetch(url, options = {}) {
+  // Auto-attach the admin JWT so protected routes work without every call site
+  // wiring the header. If the stored token is expired, end the session (logout +
+  // redirect) rather than sending a stale token to a newly-protected route.
+  const token = localStorage.getItem("token");
+  if (token && isTokenExpired(token)) {
+    endSessionIfExpired(); // clears token + fires on401Handler
+  } else if (token) {
+    const headers = new Headers(options.headers || {});
+    if (!headers.has("Authorization")) headers.set("Authorization", `Bearer ${token}`);
+    options = { ...options, headers };
+  }
   const res = await fetch(url, options);
-  if (res.status === 401 && on401Handler) on401Handler();
+  // Only react to 401 while a token is still present, so we don't double-fire the
+  // logout after endSessionIfExpired already cleared it above.
+  if (res.status === 401 && on401Handler && localStorage.getItem("token")) on401Handler();
   return res;
+}
+
+// --- Session / token helpers ------------------------------------------------
+// Decode a JWT payload (no signature check — just to read `exp` on the client).
+export function decodeJwt(token) {
+  try {
+    const base64 = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
+    const json = decodeURIComponent(
+      atob(base64)
+        .split("")
+        .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
+        .join("")
+    );
+    return JSON.parse(json);
+  } catch {
+    return null;
+  }
+}
+
+// True if the token is missing an exp, unreadable, or expired (within `skewSeconds`).
+export function isTokenExpired(token, skewSeconds = 30) {
+  const payload = token && decodeJwt(token);
+  if (!payload || typeof payload.exp !== "number") return true;
+  return Date.now() >= (payload.exp - skewSeconds) * 1000;
+}
+
+// Proactively end an expired session: clear the token and fire the global 401
+// handler (logout + message). Returns true if the session had lapsed.
+export function endSessionIfExpired() {
+  const token = localStorage.getItem("token");
+  if (token && isTokenExpired(token)) {
+    localStorage.removeItem("token");
+    if (on401Handler) on401Handler();
+    return true;
+  }
+  return false;
 }
 
 export const fetchCustomerAppointments = async (customerId) => {
@@ -397,6 +446,11 @@ export const loginUser = async (credentials) => {
   return response.json(); // Returns the JWT token
 };
 export const createAppointment = async (appointmentData) => {
+  // Proactively surface an expired admin session instead of silently sending a
+  // stale token (which the backend would treat as public → confusing 409s).
+  if (endSessionIfExpired()) {
+    throw new Error("SESSION_EXPIRED");
+  }
   // Attach the logged-in barber's token so the backend can recognise staff
   // bookings (barbers may book on top of a "lock"; the public site may not).
   const token = localStorage.getItem("token");

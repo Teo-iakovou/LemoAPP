@@ -64,6 +64,13 @@ export const TIME_PICKER_OPTIONS = {
   minuteIncrement: 5,
 };
 
+// Local midnight of today — used as the default/earliest bulk-lock start date.
+// Local (not UTC) so it matches the shop-local interpretation used everywhere else.
+export const startOfToday = () => {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+};
+
 export const WEEKDAY_OPTIONS = [
   { value: 1, label: "Δευτέρα" },
   { value: 2, label: "Τρίτη" },

@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from "react";
-import { fetchCustomers, addCustomer } from "../utils/api";
+import { fetchCustomers, addCustomer, apiFetch } from "../utils/api";
 import { getCustomerTextColorClass } from "../utils/customerColors";
 import Select from "react-select";
 import DatePicker from "react-datepicker";
@@ -91,7 +91,7 @@ const CustomersPage = () => {
   if (!confirmDelete) return;
 
   try {
-    const response = await fetch(`${API_BASE_URL}/customers/${id}`, {
+    const response = await apiFetch(`${API_BASE_URL}/customers/${id}`, {
       method: "DELETE",
     });
     if (!response.ok) throw new Error("Failed to delete customer");
@@ -126,7 +126,7 @@ const CustomersPage = () => {
 
  const handleEditSubmit = async (id) => {
   try {
-    const response = await fetch(`${API_BASE_URL}/customers/${id}`, {
+    const response = await apiFetch(`${API_BASE_URL}/customers/${id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(editData),

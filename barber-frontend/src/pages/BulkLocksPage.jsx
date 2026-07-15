@@ -20,6 +20,7 @@ import {
   generateId,
   getLockRowKey,
   getNextDateForWeekday,
+  startOfToday,
   toTimeString,
 } from "./BulkLocksPage/utils";
 import PendingLocksTable from "./BulkLocksPage/PendingLocksTable";
@@ -33,6 +34,7 @@ const BulkLocksPage = () => {
   const defaultBarber = BARBER_OPTIONS[0]?.value ?? "";
   const [modalData, setModalData] = useState({
     weekday: WEEKDAY_OPTIONS[0]?.value ?? 1,
+    startDate: startOfToday(),
     barber: defaultBarber,
     slots: [createModalSlot()],
     repeatWeekly: false,
@@ -268,6 +270,7 @@ const BulkLocksPage = () => {
   const resetModal = () => {
     setModalData({
       weekday: WEEKDAY_OPTIONS[0]?.value ?? 1,
+      startDate: startOfToday(),
       barber: defaultBarber,
       slots: [createModalSlot()],
       repeatWeekly: false,
@@ -299,8 +302,15 @@ const BulkLocksPage = () => {
             ),
           ];
 
+    const initialStartDate =
+      initialData?.startDate instanceof Date &&
+      !Number.isNaN(initialData.startDate.getTime())
+        ? initialData.startDate
+        : startOfToday();
+
     setModalData({
       weekday: derivedWeekday,
+      startDate: initialStartDate,
       barber: baseBarber,
       slots,
       repeatWeekly: Boolean(initialData?.repeatWeekly),
@@ -313,6 +323,13 @@ const BulkLocksPage = () => {
     setModalData((prev) => ({
       ...prev,
       weekday,
+    }));
+  };
+
+  const selectModalStartDate = (startDate) => {
+    setModalData((prev) => ({
+      ...prev,
+      startDate,
     }));
   };
 
@@ -376,9 +393,23 @@ const BulkLocksPage = () => {
   };
 
   const handleModalAdd = () => {
-    const { weekday, barber, slots, repeatWeekly, repeatInterval } = modalData;
+    const { weekday, startDate, barber, slots, repeatWeekly, repeatInterval } =
+      modalData;
     if (weekday === undefined || weekday === null) {
       toast.error("Επιλέξτε ημέρα.");
+      return;
+    }
+    if (!(startDate instanceof Date) || Number.isNaN(startDate.getTime())) {
+      toast.error("Επιλέξτε ημερομηνία έναρξης.");
+      return;
+    }
+    const startDayMidnight = new Date(
+      startDate.getFullYear(),
+      startDate.getMonth(),
+      startDate.getDate()
+    );
+    if (startDayMidnight < startOfToday()) {
+      toast.error("Η ημερομηνία έναρξης δεν μπορεί να είναι στο παρελθόν.");
       return;
     }
     if (!barber) {
@@ -394,7 +425,9 @@ const BulkLocksPage = () => {
       return;
     }
 
-    const baseDate = getNextDateForWeekday(weekday);
+    // Start generation from the chosen day (local): the first occurrence is the
+    // selected weekday on or after the start date, then it repeats weekly.
+    const baseDate = getNextDateForWeekday(weekday, startDayMidnight);
     const locksToAdd = [];
     const interval = repeatWeekly ? Math.max(1, Number(repeatInterval) || 1) : 1;
     const totalWeeks = repeatWeekly ? REPEAT_WEEKS : 1;
@@ -964,6 +997,7 @@ const BulkLocksPage = () => {
         modalData={modalData}
         onClose={closeModal}
         onSelectWeekday={selectModalWeekday}
+        onSelectStartDate={selectModalStartDate}
         onSelectBarber={selectModalBarber}
         onAddSlot={addModalSlot}
         onUpdateSlot={updateModalSlot}

@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
+import { apiFetch } from "../utils/api";
 
 // Base API URL
 const API_BASE_URL =
@@ -16,7 +17,7 @@ const Profile = () => {
     e.preventDefault();
 
     try {
-      const response = await fetch(`${API_BASE_URL}/auth/update-profile`, {
+      const response = await apiFetch(`${API_BASE_URL}/auth/update-profile`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",

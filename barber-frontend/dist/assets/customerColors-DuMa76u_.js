@@ -1,0 +1,1 @@
+const e={ΛΕΜΟ:"text-purple-600",ΦΟΡΟΥ:"text-orange-500",ΚΟΥΣΙΗΣ:"text-teal-600",KOUSHIS:"text-teal-600",Koushis:"text-teal-600",koushis:"text-teal-600"},a={ΛΕΜΟ:"#6B21A8",ΦΟΡΟΥ:"orange",ΚΟΥΣΙΗΣ:"#0F766E"},o=t=>e[t]||"text-white",l=t=>o(t==null?void 0:t.barber),x=t=>a[t]||"#9ca3af",r=t=>x(t==null?void 0:t.barber);export{l as a,r as g};

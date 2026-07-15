@@ -1,4 +1,7 @@
 import Flatpickr from "react-flatpickr";
+import DatePicker, { registerLocale } from "react-datepicker";
+import el from "date-fns/locale/el";
+import "react-datepicker/dist/react-datepicker.css";
 import {
   BARBER_OPTIONS,
   DURATION_OPTIONS,
@@ -6,15 +9,19 @@ import {
   TIME_PICKER_OPTIONS,
   WEEKDAY_OPTIONS,
   parseTimeToDate,
+  startOfToday,
   toTimeString,
 } from "./utils";
 import { FiPlus, FiTrash2 } from "react-icons/fi";
+
+registerLocale("el", el);
 
 const BulkLockModal = ({
   open,
   modalData,
   onClose,
   onSelectWeekday,
+  onSelectStartDate,
   onSelectBarber,
   onAddSlot,
   onUpdateSlot,
@@ -24,6 +31,20 @@ const BulkLockModal = ({
   onSubmit,
 }) => {
   if (!open) return null;
+
+  // Inline validation for the start date: must be a valid, non-past day.
+  const startDateError = (() => {
+    const sd = modalData.startDate;
+    if (!(sd instanceof Date) || Number.isNaN(sd.getTime())) {
+      return "Επιλέξτε ημερομηνία έναρξης.";
+    }
+    const todayMidnight = startOfToday();
+    const sdMidnight = new Date(sd.getFullYear(), sd.getMonth(), sd.getDate());
+    if (sdMidnight < todayMidnight) {
+      return "Η ημερομηνία έναρξης δεν μπορεί να είναι στο παρελθόν.";
+    }
+    return "";
+  })();
 
   return (
     <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/70 px-4">
@@ -62,6 +83,33 @@ const BulkLockModal = ({
                 );
               })}
             </div>
+          </div>
+
+          <div>
+            <p className="text-sm font-medium text-gray-300">Ημερομηνία έναρξης</p>
+            <DatePicker
+              selected={modalData.startDate}
+              onChange={(date) => {
+                if (date) {
+                  onSelectStartDate(date);
+                }
+              }}
+              dateFormat="dd/MM/yyyy"
+              minDate={startOfToday()}
+              placeholderText="Επιλέξτε ημέρα"
+              locale="el"
+              className="mt-2 w-full rounded-2xl border border-gray-700 bg-gray-950/60 px-3 py-2 text-sm text-white focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500/50"
+              calendarClassName="!bg-[#161a23] !text-[#ede9fe] !rounded-lg !border !border-violet-500/40"
+              popperClassName="z-[9999]"
+              popperPlacement="bottom"
+              wrapperClassName="w-full"
+            />
+            <p className="mt-1 text-xs text-gray-500">
+              Το κλείδωμα ξεκινά να ισχύει από αυτή την ημέρα και μετά.
+            </p>
+            {startDateError && (
+              <p className="mt-1 text-xs text-red-400">{startDateError}</p>
+            )}
           </div>
 
           <label className="block text-sm font-medium text-gray-300">
@@ -194,7 +242,8 @@ const BulkLockModal = ({
           <button
             type="button"
             onClick={onSubmit}
-            className="rounded-2xl bg-violet-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-violet-400"
+            disabled={Boolean(startDateError)}
+            className="rounded-2xl bg-violet-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-violet-400 disabled:cursor-not-allowed disabled:bg-gray-700 disabled:text-gray-400"
           >
             Προσθήκη κλειδωμάτων
           </button>

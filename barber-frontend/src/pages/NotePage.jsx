@@ -14,7 +14,17 @@ const NotePage = () => {
     import.meta.env.VITE_API_BASE_URL || "http://localhost:5002/api";
 
   useEffect(() => {
-    const id = axios.interceptors.response.use(
+    // Attach the logged-in user's token to every request. The /folders and /notes
+    // routes are admin-only (requireUser), so without this header the backend
+    // returns 401 and the response interceptor below would sign the user out.
+    const reqId = axios.interceptors.request.use((config) => {
+      const token = localStorage.getItem("token");
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+      }
+      return config;
+    });
+    const resId = axios.interceptors.response.use(
       (response) => response,
       (error) => {
         if (error.response?.status === 401) {
@@ -24,7 +34,10 @@ const NotePage = () => {
         return Promise.reject(error);
       }
     );
-    return () => axios.interceptors.response.eject(id);
+    return () => {
+      axios.interceptors.request.eject(reqId);
+      axios.interceptors.response.eject(resId);
+    };
   }, []);
 
   useEffect(() => {

@@ -4,7 +4,7 @@ import Navbar from "./_components/Navbar";
 import { Toaster, toast } from "react-hot-toast";
 import "./index.css";
 import UpdatePasswordForm from "./pages/UpdatePasswordForm";
-import { setOn401Handler } from "./utils/api";
+import { setOn401Handler, isTokenExpired } from "./utils/api";
 
 // Lazy load pages
 // const PaymentPage = lazy(() => import("./pages/PaymentPage"));
@@ -30,18 +30,45 @@ const App = () => {
     }
   });
 
-  // Check authentication on page load
+  // Check authentication on page load — proactively expire a lapsed token instead
+  // of leaving the admin silently degraded (public routes never return 401).
   useEffect(() => {
     const token = localStorage.getItem("token");
-    setAuth(!!token); // Set auth state based on token existence
+    if (token && isTokenExpired(token)) {
+      localStorage.removeItem("token");
+      setAuth(false);
+      toast.error("Η συνεδρία έληξε, συνδεθείτε ξανά.");
+    } else {
+      setAuth(!!token);
+    }
   }, []);
 
   useEffect(() => {
     setOn401Handler(() => {
       localStorage.removeItem("token");
       setAuth(false);
-      toast.error("Η σύνδεση έληξε. Συνδεθείτε ξανά.");
+      toast.error("Η συνεδρία έληξε, συνδεθείτε ξανά.");
     });
+  }, []);
+
+  // Catch a session that expires mid-use (before the next authenticated action),
+  // so we log out cleanly rather than firing requests with a stale token.
+  useEffect(() => {
+    const check = () => {
+      const token = localStorage.getItem("token");
+      if (token && isTokenExpired(token)) {
+        localStorage.removeItem("token");
+        setAuth(false);
+        toast.error("Η συνεδρία έληξε, συνδεθείτε ξανά.");
+      }
+    };
+    const id = setInterval(check, 30000);
+    const onFocus = () => check();
+    window.addEventListener("focus", onFocus);
+    return () => {
+      clearInterval(id);
+      window.removeEventListener("focus", onFocus);
+    };
   }, []);
 
   // Persist calendar dark mode
