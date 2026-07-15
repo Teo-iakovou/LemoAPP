@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import LemoLogo from "../assets/LemoLogo.png";
 
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:5002/api";
@@ -9,7 +10,12 @@ const Login = ({ setAuth }) => {
   const [password, setPassword] = useState("");
   const [error, setError] = useState(null);
   const [isLoading, setIsLoading] = useState(false); // Track loading state
+  const [mounted, setMounted] = useState(false); // entrance animation only (visual)
   const navigate = useNavigate();
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -55,45 +61,86 @@ const Login = ({ setAuth }) => {
   };
 
   return (
-    <div className="flex justify-center items-center h-screen">
+    <div className="flex min-h-[80vh] items-center justify-center px-4">
       <form
         onSubmit={handleLogin}
-        className="p-6 bg-white rounded shadow-md w-full max-w-sm"
+        className={`w-full max-w-sm rounded-3xl border border-[#8B2FF0]/30 bg-gray-950/80 p-8 shadow-2xl shadow-[#8B2FF0]/10 backdrop-blur transition-all duration-500 ease-out ${
+          mounted ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0"
+        }`}
       >
-        <h1 className="text-2xl font-bold mb-4">ΣΥΝΔΕΣΗ</h1>
-        {error && <p className="text-red-500 mb-4">{error}</p>}
+        <div className="mb-6 text-center">
+          <div className="mx-auto mb-3 flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl bg-[#8B2FF0]/15 ring-1 ring-[#8B2FF0]/40">
+            <img
+              src={LemoLogo}
+              alt="Lemo Barber Shop"
+              className="h-12 w-12 object-contain"
+            />
+          </div>
+          <h1 className="text-2xl font-bold tracking-wide text-white">ΣΥΝΔΕΣΗ</h1>
+          <p className="mt-1 text-sm text-gray-400">LEMO BARBER · Admin</p>
+        </div>
+
+        {error && (
+          <p className="mb-4 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+            {error}
+          </p>
+        )}
+
         <div className="mb-4">
-          <label className="block text-gray-700">ΟΝΟΜΑ ΧΡΗΣΤΗ</label>
+          <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-300">
+            Όνομα χρήστη
+          </label>
           <input
             type="text"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
-            className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+            className="w-full rounded-xl border border-gray-700 bg-gray-900/70 px-4 py-2.5 text-white placeholder:text-gray-500 transition focus:border-[#8B2FF0] focus:outline-none focus:ring-2 focus:ring-[#8B2FF0]/40"
             placeholder="Εισάγετε όνομα χρήστη"
             required
           />
         </div>
-        <div className="mb-4">
-          <label className="block text-gray-700">ΚΩΔΙΚΟΣ</label>
+
+        <div className="mb-6">
+          <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-300">
+            Κωδικός
+          </label>
           <input
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+            className="w-full rounded-xl border border-gray-700 bg-gray-900/70 px-4 py-2.5 text-white placeholder:text-gray-500 transition focus:border-[#8B2FF0] focus:outline-none focus:ring-2 focus:ring-[#8B2FF0]/40"
             placeholder="Εισάγετε κωδικό"
             required
           />
         </div>
+
         <button
           type="submit"
-          className={`w-full p-2 rounded ${
+          disabled={isLoading}
+          className={`flex w-full items-center justify-center gap-2 rounded-xl px-4 py-2.5 font-semibold text-white transition active:scale-[.98] ${
             isLoading
-              ? "bg-gray-400 cursor-not-allowed"
-              : "bg-blue-500 hover:bg-blue-600 text-white"
+              ? "cursor-not-allowed bg-[#8B2FF0]/50"
+              : "bg-[#8B2FF0] hover:bg-[#7a29d6]"
           }`}
-          disabled={isLoading} // Disable button when loading
         >
-          {isLoading ? "Loading..." : "ΣΥΝΔΕΣΗ"}
+          {isLoading && (
+            <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+              <circle
+                className="opacity-25"
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                strokeWidth="4"
+              />
+              <path
+                className="opacity-90"
+                fill="currentColor"
+                d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+              />
+            </svg>
+          )}
+          {isLoading ? "Σύνδεση..." : "ΣΥΝΔΕΣΗ"}
         </button>
       </form>
     </div>

@@ -47,10 +47,13 @@ const Navbar = ({ isAuth, onLogout, calendarDark, onToggleCalendarDark }) => {
       text: "You will be logged out and redirected to the login page.",
       icon: "warning",
       showCancelButton: true,
-      confirmButtonColor: "#d33",
-      cancelButtonColor: "#3085d6",
+      confirmButtonColor: "#8B2FF0",
+      cancelButtonColor: "#374151",
       confirmButtonText: "Yes, log out!",
       cancelButtonText: "Cancel",
+      background: "#0b0b12",
+      color: "#e5e7eb",
+      iconColor: "#8B2FF0",
     }).then((result) => {
       if (result.isConfirmed) {
         localStorage.removeItem("token");
@@ -63,6 +66,9 @@ const Navbar = ({ isAuth, onLogout, calendarDark, onToggleCalendarDark }) => {
           icon: "success",
           timer: 1500,
           showConfirmButton: false,
+          background: "#0b0b12",
+          color: "#e5e7eb",
+          iconColor: "#8B2FF0",
         });
       }
     });
