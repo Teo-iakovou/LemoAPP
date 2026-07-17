@@ -20,12 +20,15 @@ import Swal from "sweetalert2";
 import withReactContent from "sweetalert2-react-content";
 import LemoLogo from "../assets/LemoLogo.png";
 
-const Navbar = ({ isAuth, onLogout, calendarDark, onToggleCalendarDark }) => {
+const Navbar = ({ isAuth, role, onLogout, calendarDark, onToggleCalendarDark }) => {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef(null);
   const navigate = useNavigate();
   const location = useLocation();
   const isCalendarPage = location.pathname === "/calendar";
+  // Limited ('calendar') users only get the Calendar, plus their own profile and
+  // logout. Hiding the rest is UX only — the backend enforces the real boundary.
+  const isLimited = role === "calendar";
   const MySwal = withReactContent(Swal);
 
   const toggleDropdown = () => {
@@ -86,7 +89,7 @@ const Navbar = ({ isAuth, onLogout, calendarDark, onToggleCalendarDark }) => {
     <nav className="fixed top-0 left-0 w-full bg-purple-950 flex items-center justify-between px-3 md:px-6 py-3 shadow-md z-[1200] overflow-visible">
       {/* Logo */}
       <div>
-        <Link to="/">
+        <Link to={isLimited ? "/calendar" : "/"}>
           <img
             src={LemoLogo}
             alt="Lemo Barber Shop Logo"
@@ -98,15 +101,17 @@ const Navbar = ({ isAuth, onLogout, calendarDark, onToggleCalendarDark }) => {
       {/* Desktop navigation — all features inline; hidden on mobile (see hamburger) */}
       {isAuth && (
         <ul className="hidden md:flex items-center space-x-4 lg:space-x-6 text-white text-xl">
-          <li>
-            <Link
-              to="/"
-              className="hover:text-blue-500 transition-colors duration-300"
-              title="Αρχική"
-            >
-              <FaHome />
-            </Link>
-          </li>
+          {!isLimited && (
+            <li>
+              <Link
+                to="/"
+                className="hover:text-blue-500 transition-colors duration-300"
+                title="Αρχική"
+              >
+                <FaHome />
+              </Link>
+            </li>
+          )}
           <li>
             <Link
               to="/calendar"
@@ -116,69 +121,73 @@ const Navbar = ({ isAuth, onLogout, calendarDark, onToggleCalendarDark }) => {
               <FaCalendarAlt />
             </Link>
           </li>
-          <li>
-            <Link
-              to="/customers"
-              className="hover:text-blue-500 transition-colors duration-300"
-              title="Πελάτες"
-            >
-              <FaUsers />
-            </Link>
-          </li>
-          <li>
-            <Link
-              to="/CustomerCounts"
-              className="hover:text-blue-500 transition-colors duration-300"
-              title="Customer Counts"
-            >
-              <FaChartBar />
-            </Link>
-          </li>
-          <li>
-            <Link
-              to="/NotePage"
-              className="hover:text-blue-500 transition-colors duration-300"
-              title="Σημειώσεις"
-            >
-              <FaClipboard />
-            </Link>
-          </li>
-          <li>
-            <button
-              onClick={handleRedirectToSmsTo}
-              className="hover:text-blue-500 transition-colors duration-300 text-white"
-              title="SMS.to"
-            >
-              <FaSms />
-            </button>
-          </li>
-          <li>
-            <Link
-              to="/sms-status"
-              className="hover:text-blue-500 transition-colors duration-300"
-              title="SMS Delivery Status"
-            >
-              <FaTools />
-            </Link>
-          </li>
-          <li>
-            <Link
-              to="/auto-customers"
-              className="hover:text-blue-500 transition-colors duration-300"
-              title="Recurring Customers"
-            >
-              <FaRedoAlt />
-            </Link>
-          </li>
-          <li>
-            <Link
-              to="/bulk-locks"
-              className="hover:text-blue-500 transition-colors duration-300"
-              title="Μαζικά κλειδώματα"
-            >
-              <FaLock />
-            </Link>
-          </li>
+          {!isLimited && (
+            <>
+              <li>
+                <Link
+                  to="/customers"
+                  className="hover:text-blue-500 transition-colors duration-300"
+                  title="Πελάτες"
+                >
+                  <FaUsers />
+                </Link>
+              </li>
+              <li>
+                <Link
+                  to="/CustomerCounts"
+                  className="hover:text-blue-500 transition-colors duration-300"
+                  title="Customer Counts"
+                >
+                  <FaChartBar />
+                </Link>
+              </li>
+              <li>
+                <Link
+                  to="/NotePage"
+                  className="hover:text-blue-500 transition-colors duration-300"
+                  title="Σημειώσεις"
+                >
+                  <FaClipboard />
+                </Link>
+              </li>
+              <li>
+                <button
+                  onClick={handleRedirectToSmsTo}
+                  className="hover:text-blue-500 transition-colors duration-300 text-white"
+                  title="SMS.to"
+                >
+                  <FaSms />
+                </button>
+              </li>
+              <li>
+                <Link
+                  to="/sms-status"
+                  className="hover:text-blue-500 transition-colors duration-300"
+                  title="SMS Delivery Status"
+                >
+                  <FaTools />
+                </Link>
+              </li>
+              <li>
+                <Link
+                  to="/auto-customers"
+                  className="hover:text-blue-500 transition-colors duration-300"
+                  title="Recurring Customers"
+                >
+                  <FaRedoAlt />
+                </Link>
+              </li>
+              <li>
+                <Link
+                  to="/bulk-locks"
+                  className="hover:text-blue-500 transition-colors duration-300"
+                  title="Μαζικά κλειδώματα"
+                >
+                  <FaLock />
+                </Link>
+              </li>
+            </>
+          )}
           {/* Calendar theme toggle — only on the Calendar page */}
           {isCalendarPage && (
             <li>
@@ -226,13 +235,15 @@ const Navbar = ({ isAuth, onLogout, calendarDark, onToggleCalendarDark }) => {
           </button>
           {isDropdownOpen && (
             <div className="absolute top-12 right-0 bg-white shadow-lg rounded-3xl py-3 px-4 w-48 z-[1300] border border-gray-200">
-              <Link
-                to="/"
-                className="block px-4 py-2 text-gray-700 hover:bg-gray-100 rounded"
-                onClick={() => setIsDropdownOpen(false)}
-              >
-                ΑΡΧΙΚΗ
-              </Link>
+              {!isLimited && (
+                <Link
+                  to="/"
+                  className="block px-4 py-2 text-gray-700 hover:bg-gray-100 rounded"
+                  onClick={() => setIsDropdownOpen(false)}
+                >
+                  ΑΡΧΙΚΗ
+                </Link>
+              )}
               <Link
                 to="/calendar"
                 className="block px-4 py-2 text-gray-700 hover:bg-gray-100 rounded"
@@ -240,57 +251,61 @@ const Navbar = ({ isAuth, onLogout, calendarDark, onToggleCalendarDark }) => {
               >
                 ΗΜΕΡΟΛΟΓΙΟ
               </Link>
-              <Link
-                to="/customers"
-                className="block px-4 py-2 text-gray-700 hover:bg-gray-100 rounded"
-                onClick={() => setIsDropdownOpen(false)}
-              >
-                ΠΕΛΑΤΕΣ
-              </Link>
-              <Link
-                to="/CustomerCounts"
-                className="block px-4 py-2 text-gray-700 hover:bg-gray-100 rounded"
-                onClick={() => setIsDropdownOpen(false)}
-              >
-                CUSTOMER COUNTS
-              </Link>
-              <Link
-                to="/NotePage"
-                className="block px-4 py-2 text-gray-700 hover:bg-gray-100 rounded"
-                onClick={() => setIsDropdownOpen(false)}
-              >
-                ΣΗΜΕΙΩΣΕΙΣ
-              </Link>
-              <button
-                onClick={() => {
-                  handleRedirectToSmsTo();
-                  setIsDropdownOpen(false);
-                }}
-                className="w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100 rounded"
-              >
-                SMS.TO
-              </button>
-              <Link
-                to="/sms-status"
-                className="block px-4 py-2 text-gray-700 hover:bg-gray-100 rounded"
-                onClick={() => setIsDropdownOpen(false)}
-              >
-                SMS STATUS
-              </Link>
-              <Link
-                to="/auto-customers"
-                className="block px-4 py-2 text-gray-700 hover:bg-gray-100 rounded"
-                onClick={() => setIsDropdownOpen(false)}
-              >
-                AUTO CUSTOMERS
-              </Link>
-              <Link
-                to="/bulk-locks"
-                className="block px-4 py-2 text-gray-700 hover:bg-gray-100 rounded"
-                onClick={() => setIsDropdownOpen(false)}
-              >
-                BULK LOCKS
-              </Link>
+              {!isLimited && (
+                <>
+                  <Link
+                    to="/customers"
+                    className="block px-4 py-2 text-gray-700 hover:bg-gray-100 rounded"
+                    onClick={() => setIsDropdownOpen(false)}
+                  >
+                    ΠΕΛΑΤΕΣ
+                  </Link>
+                  <Link
+                    to="/CustomerCounts"
+                    className="block px-4 py-2 text-gray-700 hover:bg-gray-100 rounded"
+                    onClick={() => setIsDropdownOpen(false)}
+                  >
+                    CUSTOMER COUNTS
+                  </Link>
+                  <Link
+                    to="/NotePage"
+                    className="block px-4 py-2 text-gray-700 hover:bg-gray-100 rounded"
+                    onClick={() => setIsDropdownOpen(false)}
+                  >
+                    ΣΗΜΕΙΩΣΕΙΣ
+                  </Link>
+                  <button
+                    onClick={() => {
+                      handleRedirectToSmsTo();
+                      setIsDropdownOpen(false);
+                    }}
+                    className="w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100 rounded"
+                  >
+                    SMS.TO
+                  </button>
+                  <Link
+                    to="/sms-status"
+                    className="block px-4 py-2 text-gray-700 hover:bg-gray-100 rounded"
+                    onClick={() => setIsDropdownOpen(false)}
+                  >
+                    SMS STATUS
+                  </Link>
+                  <Link
+                    to="/auto-customers"
+                    className="block px-4 py-2 text-gray-700 hover:bg-gray-100 rounded"
+                    onClick={() => setIsDropdownOpen(false)}
+                  >
+                    AUTO CUSTOMERS
+                  </Link>
+                  <Link
+                    to="/bulk-locks"
+                    className="block px-4 py-2 text-gray-700 hover:bg-gray-100 rounded"
+                    onClick={() => setIsDropdownOpen(false)}
+                  >
+                    BULK LOCKS
+                  </Link>
+                </>
+              )}
               {/* Calendar theme toggle — only on the Calendar page */}
               {isCalendarPage && (
                 <button
@@ -315,13 +330,15 @@ const Navbar = ({ isAuth, onLogout, calendarDark, onToggleCalendarDark }) => {
               >
                 ΠΡΟΦΙΛ
               </Link>
-              <Link
-                to="/update-password"
-                className="block px-4 py-2 text-gray-700 hover:bg-gray-100 rounded"
-                onClick={() => setIsDropdownOpen(false)}
-              >
-                ΑΛΛΑΓΗ ΚΩΔΙΚΟΥ
-              </Link>
+              {!isLimited && (
+                <Link
+                  to="/update-password"
+                  className="block px-4 py-2 text-gray-700 hover:bg-gray-100 rounded"
+                  onClick={() => setIsDropdownOpen(false)}
+                >
+                  ΑΛΛΑΓΗ ΚΩΔΙΚΟΥ
+                </Link>
+              )}
               <button
                 onClick={handleLogout}
                 className="w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100 rounded"

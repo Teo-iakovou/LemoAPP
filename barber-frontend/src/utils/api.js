@@ -58,6 +58,19 @@ export function endSessionIfExpired() {
   return false;
 }
 
+// Fetch the signed-in admin user (id, username, dob, role) from the server.
+// The role returned here is the authoritative DB value; the copy inside the JWT
+// is only a hint used to render instantly without a flash. Neither is a security
+// boundary — the backend re-checks the DB role on every protected route.
+export const fetchMe = async () => {
+  const response = await apiFetch(`${API_BASE_URL}/auth/me`);
+  if (!response.ok) {
+    throw new Error("Failed to fetch current user.");
+  }
+  const data = await response.json();
+  return data?.user || null;
+};
+
 export const fetchCustomerAppointments = async (customerId) => {
   try {
     const res = await apiFetch(

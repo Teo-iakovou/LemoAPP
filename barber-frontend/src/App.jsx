@@ -1,10 +1,23 @@
 import { useState, useEffect, lazy, Suspense } from "react";
-import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import Navbar from "./_components/Navbar";
 import { Toaster, toast } from "react-hot-toast";
 import "./index.css";
 import UpdatePasswordForm from "./pages/UpdatePasswordForm";
-import { setOn401Handler, isTokenExpired } from "./utils/api";
+import { setOn401Handler, isTokenExpired, decodeJwt, fetchMe } from "./utils/api";
+
+// Read the role straight off the stored JWT so the first render is already
+// correct (no flash of admin nav for a limited user). This is a UX hint only —
+// the server re-checks the DB role on every protected route.
+const readRoleFromToken = () => {
+  try {
+    const token = localStorage.getItem("token");
+    if (!token || isTokenExpired(token)) return null;
+    return decodeJwt(token)?.role || null;
+  } catch {
+    return null;
+  }
+};
 
 // Lazy load pages
 // const PaymentPage = lazy(() => import("./pages/PaymentPage"));
@@ -21,6 +34,7 @@ const BulkLocksPage = lazy(() => import("./pages/BulkLocksPage"));
 
 const App = () => {
   const [isAuth, setAuth] = useState(false); // Authentication state
+  const [role, setRole] = useState(readRoleFromToken); // 'admin' | 'calendar' | null
   const [calendarDark, setCalendarDark] = useState(() => {
     try {
       const saved = localStorage.getItem("calendarDark");
@@ -47,9 +61,31 @@ const App = () => {
     setOn401Handler(() => {
       localStorage.removeItem("token");
       setAuth(false);
+      setRole(null);
       toast.error("Η συνεδρία έληξε, συνδεθείτε ξανά.");
     });
   }, []);
+
+  // Resolve the signed-in user's role. Seeded from the token for an instant
+  // render, then confirmed against /auth/me (the authoritative DB value).
+  useEffect(() => {
+    if (!isAuth) {
+      setRole(null);
+      return;
+    }
+    setRole(readRoleFromToken());
+    let cancelled = false;
+    fetchMe()
+      .then((user) => {
+        if (!cancelled && user) setRole(user.role || "admin");
+      })
+      .catch(() => {
+        // 401s are handled globally by the on401Handler above.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuth]);
 
   // Catch a session that expires mid-use (before the next authenticated action),
   // so we log out cleanly rather than firing requests with a stale token.
@@ -80,6 +116,7 @@ const App = () => {
   const handleLogout = () => {
     localStorage.removeItem("token"); // Clear the token
     setAuth(false); // Set authentication to false
+    setRole(null);
   };
 
   return (
@@ -91,6 +128,7 @@ const App = () => {
         <header className="h-16 shrink-0 bg-purple-950">
           <Navbar
             isAuth={isAuth}
+            role={role}
             onLogout={handleLogout}
             calendarDark={calendarDark}
             onToggleCalendarDark={() => setCalendarDark((v) => !v)}
@@ -100,7 +138,19 @@ const App = () => {
         {/* Main Content */}
         <main className="flex-1 overflow-y-auto overflow-x-hidden px-2 py-3 sm:px-4 sm:py-4 lg:p-6">
           <Suspense fallback={<div>Loading...</div>}>
-            {isAuth ? (
+            {isAuth && role === "calendar" ? (
+              // Limited role: Calendar only (plus their own profile, so they can
+              // change their password). Every other path redirects to /calendar.
+              // This is convenience/UX — the backend independently enforces access.
+              <Routes>
+                <Route
+                  path="/calendar"
+                  element={<CalendarPage darkCalendar={calendarDark} />}
+                />
+                <Route path="/profile" element={<Profile />} />
+                <Route path="*" element={<Navigate to="/calendar" replace />} />
+              </Routes>
+            ) : isAuth ? (
               <Routes>
                 <Route path="/" element={<Home />} />
                 <Route
