@@ -45,7 +45,6 @@ exports.getAllCustomers = async (req, res) => {
 
 // Add a customer to the waiting list
 exports.addToWaitingList = async (req, res) => {
-  console.log("Request body:", req.body); // Debug request data
   try {
     const { customerId } = req.body;
 

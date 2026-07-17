@@ -9,6 +9,7 @@ const {
   getMyAppointments,
 } = require("../controllers/appointmentController");
 const requireUser = require("../middlewares/requireUser");
+const requireFullAdmin = require("../middlewares/requireFullAdmin");
 // const validatePassword = require("../middlewares/validatePassword");
 const rateLimit = require("express-rate-limit");
 
@@ -24,11 +25,20 @@ const bookingLimiter = rateLimit({
   },
 });
 
+// PUBLIC: the booking site creates appointments here (anonymous or public-user
+// token). Staff callers are identified from their token inside the controller.
 router.post("/", bookingLimiter, createAppointment);
-router.get("/", getAppointments);
+
+// Admin-only: returns full customer PII + reminder history, and has no callers in
+// either frontend. Locked rather than scoped.
+router.get("/", requireUser, requireFullAdmin, getAppointments);
+
 router.put("/:id", requireUser, updateAppointment); //, validatePassword it used to be here
 router.delete("/:id", requireUser, deleteAppointment); //, validatePassword it used to be here
-router.get("/upcoming", getUpcomingAppointments);
-router.get("/past", getPastAppointments);
+
+// Authenticated staff only — these return customer names/phones. The controller
+// additionally scopes a 'calendar' user to their own barber.
+router.get("/upcoming", requireUser, getUpcomingAppointments);
+router.get("/past", requireUser, getPastAppointments);
 router.get("/mine", requireUser, getMyAppointments);
 module.exports = router;

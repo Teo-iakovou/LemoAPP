@@ -65,30 +65,36 @@ const login = async (req, res, next) => {
 
 const updateProfile = async (req, res, next) => {
   try {
-    const { username, currentPassword, newUsername, newPassword } = req.body;
+    const { currentPassword, newUsername, newPassword } = req.body;
 
-    const user = await User.findOne({ username });
+    if (!currentPassword) {
+      return res.status(400).json({ message: "Current password is required" });
+    }
+
+    // SESSION-SCOPED: always act on the authenticated user (requireUser sets
+    // req.userId from the verified token). Any `username` in the body is ignored,
+    // so a signed-in user can never target someone else's account.
+    const user = await User.findById(req.userId);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
 
     // Verify current password
-    if (!user || !(await user.comparePassword(currentPassword))) {
-      console.log("Invalid current credentials");
+    if (!(await user.comparePassword(currentPassword))) {
       return res.status(400).json({ message: "Invalid current credentials" });
     }
 
     // Update username if provided
     if (newUsername) {
-      console.log("Updating username to:", newUsername);
       user.username = newUsername;
     }
 
     // Update password if provided
     if (newPassword) {
-      console.log("Updating password...");
       user.password = newPassword; // Assign plain password; let middleware hash it
     }
 
     await user.save();
-    console.log("User updated successfully:", user);
 
     res.status(200).json({ message: "Profile updated successfully" });
   } catch (error) {

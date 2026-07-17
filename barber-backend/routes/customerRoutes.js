@@ -3,7 +3,6 @@ const router = express.Router();
 const multer = require("multer");
 const { CloudinaryStorage } = require("multer-storage-cloudinary");
 const cloudinary = require("../utils/cloudinaryConfig");
-console.log("Cloudinary config:", cloudinary.config());
 const { sendBirthdaySMS } = require("../controllers/birthdaySms");
 const { sendNewYearSMS } = require("../controllers/newYearSms");
 const requireUser = require("../middlewares/requireUser");

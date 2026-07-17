@@ -1,7 +1,9 @@
 const Appointment = require("../models/appointment");
 const Customer = require("../models/customer");
+const User = require("../models/user");
 const { sendSMS } = require("../utils/smsService")
 const { upsertCustomerFromIdentity } = require("../utils/customerSync");
+const { resolveBarberScope } = require("../utils/appointmentScope");
 
 const moment = require("moment-timezone");
 const { getUserIdFromRequest, getPublicUserIdFromRequest, hasBearerToken } = require("../utils/auth");
@@ -82,8 +84,6 @@ function getBarberDisplayName(barber = "") {
 // Create an appointment
 const createAppointment = async (req, res, next) => {
   try {
-    console.log("📥 Received Payload on Server:", req.body);
-
     // Identify the caller up front (before any DB side effects). A LemoApp user
     // (barber/admin) resolves to a userId; public-site requests carry no token or a
     // public-user token (different secret) and resolve to null here.
@@ -118,8 +118,27 @@ const createAppointment = async (req, res, next) => {
     } = req.body;
 
     const normalizedBarber = normalizeBarber(barber);
-    const effectiveBarber = normalizedBarber || "ΛΕΜΟ";
-    const explicitBarberProvided = Boolean(normalizedBarber);
+    let effectiveBarber = normalizedBarber || "ΛΕΜΟ";
+    let explicitBarberProvided = Boolean(normalizedBarber);
+
+    // A limited 'calendar' user may only ever book for THEMSELVES. Their barber is
+    // taken from their own DB record and overrides whatever the client sent, so a
+    // crafted `barber` in the body cannot place work on another barber's calendar.
+    // Public/anonymous bookings and full admins are unaffected.
+    if (userId) {
+      const staffUser = await User.findById(userId)
+        .select("role barberName")
+        .lean();
+      if (staffUser?.role === "calendar") {
+        if (!staffUser.barberName) {
+          return res
+            .status(403)
+            .json({ error: "No barber is linked to this account." });
+        }
+        effectiveBarber = staffUser.barberName;
+        explicitBarberProvided = true;
+      }
+    }
 
     const appointmentType = ["appointment", "break", "lock"].includes(
       type
@@ -599,7 +618,7 @@ const getAppointments = async (req, res, next) => {
 const updateAppointment = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const {
+    let {
       appointmentDateTime,
       duration,
       endTime,
@@ -608,15 +627,26 @@ const updateAppointment = async (req, res, next) => {
       ...updateData
     } = req.body;
 
-    console.log("🔥 Incoming Update Request:", req.body);
-    console.log("🔍 Appointment ID:", id);
+    // Log the id/action only — never the request body (it carries customer PII).
+    console.log("🔍 Update appointment:", id);
 
     const appointment = await Appointment.findById(id);
     if (!appointment) {
       return res.status(404).json({ message: "Appointment not found" });
     }
 
-    console.log("📅 Existing Appointment Before Update:", appointment);
+    // A 'calendar' user may only touch appointments belonging to their own barber...
+    const scope = resolveBarberScope(req.user);
+    if (scope.status) {
+      return res.status(scope.status).json({ message: scope.message });
+    }
+    if (scope.barber && appointment.barber !== scope.barber) {
+      return res.status(403).json({ message: "Insufficient permissions" });
+    }
+    // ...and may never reassign one onto a different barber's calendar.
+    if (scope.barber) {
+      barber = scope.barber;
+    }
 
     const oldFormattedDate = moment(appointment.appointmentDateTime)
       .tz("Europe/Athens")
@@ -748,6 +778,19 @@ const deleteAppointment = async (req, res, next) => {
         .json({ success: false, message: "Appointment not found" });
     }
 
+    // A 'calendar' user may only delete their own barber's appointments.
+    const scope = resolveBarberScope(req.user);
+    if (scope.status) {
+      return res
+        .status(scope.status)
+        .json({ success: false, message: scope.message });
+    }
+    if (scope.barber && appointmentToDelete.barber !== scope.barber) {
+      return res
+        .status(403)
+        .json({ success: false, message: "Insufficient permissions" });
+    }
+
     // Delete the appointment
     const deletedAppointment = await Appointment.findByIdAndDelete(id);
 
@@ -793,17 +836,27 @@ const deleteAppointment = async (req, res, next) => {
 
 const getUpcomingAppointments = async (req, res) => {
   try {
+    // Scope comes from the DB user only; a 'calendar' user is hard-limited to
+    // their own barber and cannot widen it from the client.
+    const scope = resolveBarberScope(req.user);
+    if (scope.status) {
+      return res.status(scope.status).json({ message: scope.message });
+    }
+
     const startOfYesterday = moment()
       .subtract(1, "day")
       .startOf("day")
       .toDate();
 
+    const query = {
+      appointmentDateTime: { $gte: startOfYesterday },
+      appointmentStatus: "confirmed",
+      type: { $in: ["appointment", "break", "lock"] },
+    };
+    if (scope.barber) query.barber = scope.barber;
+
     const appointments = await Appointment.find(
-      {
-        appointmentDateTime: { $gte: startOfYesterday },
-        appointmentStatus: "confirmed",
-        type: { $in: ["appointment", "break", "lock"] },
-      },
+      query,
       {
         customerName: 1,
         phoneNumber: 1,
@@ -826,20 +879,36 @@ const getUpcomingAppointments = async (req, res) => {
 
 const getPastAppointments = async (req, res) => {
   try {
+    const scope = resolveBarberScope(req.user);
+    if (scope.status) {
+      return res.status(scope.status).json({ message: scope.message });
+    }
+
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 100;
     const today = new Date();
 
-    const appointments = await Appointment.find({
-      appointmentDateTime: { $lt: today },
+    const query = { appointmentDateTime: { $lt: today } };
+    if (scope.barber) query.barber = scope.barber;
+
+    // Project the same shape as /upcoming. Previously this returned whole
+    // documents, leaking internal fields (reminders[].messageText, source, etc.).
+    const appointments = await Appointment.find(query, {
+      customerName: 1,
+      phoneNumber: 1,
+      appointmentDateTime: 1,
+      barber: 1,
+      type: 1,
+      duration: 1,
+      endTime: 1,
+      _id: 1,
     })
       .sort({ appointmentDateTime: -1 })
       .skip((page - 1) * limit)
-      .limit(limit);
+      .limit(limit)
+      .lean();
 
-    const total = await Appointment.countDocuments({
-      appointmentDateTime: { $lt: today },
-    });
+    const total = await Appointment.countDocuments(query);
 
     res.json({ total, page, limit, appointments });
   } catch (error) {

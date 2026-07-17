@@ -9,6 +9,15 @@ const userSchema = new mongoose.Schema({
   // Enforcement is server-side (requireFullAdmin reads this field from the DB per request);
   // the JWT/frontend copy is convenience only and is never trusted for authorization.
   role: { type: String, enum: ["admin", "calendar"], default: "admin" },
+  // Which barber this account IS. Used to scope a 'calendar' user to their own
+  // appointments, and (Phase B) to preselect a default barber.
+  // NOTE: visibility is governed by `role`, NOT by this field — an admin with a
+  // barberName still sees every barber. Only role 'calendar' is ever filtered.
+  barberName: {
+    type: String,
+    enum: ["ΛΕΜΟ", "ΦΟΡΟΥ", "ΚΟΥΣΙΗΣ", null],
+    default: null,
+  },
   // Stored as YYYY-MM-DD to avoid timezone shifts for birth dates.
   dob: { type: String, default: null, trim: true },
   resetToken: String,
