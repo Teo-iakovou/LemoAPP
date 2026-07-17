@@ -5,6 +5,10 @@ const userSchema = new mongoose.Schema({
   username: { type: String, required: true, unique: true },
 
   password: { type: String, required: true },
+  // Access role: 'admin' = full access; 'calendar' = limited (Calendar page only).
+  // Enforcement is server-side (requireFullAdmin reads this field from the DB per request);
+  // the JWT/frontend copy is convenience only and is never trusted for authorization.
+  role: { type: String, enum: ["admin", "calendar"], default: "admin" },
   // Stored as YYYY-MM-DD to avoid timezone shifts for birth dates.
   dob: { type: String, default: null, trim: true },
   resetToken: String,

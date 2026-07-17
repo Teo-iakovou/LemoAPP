@@ -7,6 +7,7 @@ console.log("Cloudinary config:", cloudinary.config());
 const { sendBirthdaySMS } = require("../controllers/birthdaySms");
 const { sendNewYearSMS } = require("../controllers/newYearSms");
 const requireUser = require("../middlewares/requireUser");
+const requireFullAdmin = require("../middlewares/requireFullAdmin");
 const {
   getCustomers,
   deleteCustomer,
@@ -22,7 +23,7 @@ const {
 
 // Every customer route is admin-only. The public booking site never calls
 // /api/customers (booking creates customers implicitly via the upsert).
-router.use(requireUser);
+router.use(requireUser, requireFullAdmin);
 
 // NOTE: the bulk "delete ALL customers" route was removed — unused by the admin UI
 // and far too dangerous to expose. Restore behind an explicit confirm payload only

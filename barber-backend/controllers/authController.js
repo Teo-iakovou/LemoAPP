@@ -14,14 +14,16 @@ const signup = async (req, res, next) => {
     const user = new User({ username, password });
     await user.save();
 
-    const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, {
-      expiresIn: "7d",
-    });
+    const token = jwt.sign(
+      { userId: user._id, role: user.role },
+      process.env.JWT_SECRET,
+      { expiresIn: "7d" }
+    );
 
     res.status(201).json({
       message: "User created successfully",
       token,
-      user: { id: user._id, username: user.username },
+      user: { id: user._id, username: user.username, role: user.role },
     });
   } catch (error) {
     next(error);
@@ -45,13 +47,15 @@ const login = async (req, res, next) => {
       return res.status(400).json({ message: "Invalid credentials" });
     }
 
-    const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, {
-      expiresIn: "7d",
-    });
+    const token = jwt.sign(
+      { userId: user._id, role: user.role },
+      process.env.JWT_SECRET,
+      { expiresIn: "7d" }
+    );
 
     res.status(200).json({
       token,
-      user: { id: user._id, username: user.username },
+      user: { id: user._id, username: user.username, role: user.role },
     });
   } catch (error) {
     console.error("Error during login:", error);
@@ -100,6 +104,7 @@ const me = async (req, res) => {
       id: user._id,
       username: user.username,
       dob: user.dob || null,
+      role: user.role || "admin",
     },
   });
 };

@@ -7,11 +7,12 @@ const {
   deleteFolder,
 } = require("../controllers/folderController");
 const requireUser = require("../middlewares/requireUser");
+const requireFullAdmin = require("../middlewares/requireFullAdmin");
 
 const router = express.Router();
 
 // Folders are admin-only.
-router.use(requireUser);
+router.use(requireUser, requireFullAdmin);
 
 // Route for creating a folder
 router.post("/", createFolder);

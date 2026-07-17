@@ -15,11 +15,12 @@ const {
   skipAutoCustomerOccurrence,
 } = require("../controllers/autoCustomerController");
 const requireUser = require("../middlewares/requireUser");
+const requireFullAdmin = require("../middlewares/requireFullAdmin");
 
 const router = express.Router();
 
 // Auto-customers are an admin-only feature; the public site never touches them.
-router.use(requireUser);
+router.use(requireUser, requireFullAdmin);
 
 router.get("/", listAutoCustomers);
 router.get("/last-appointments", getLastAutoCustomerAppointments);

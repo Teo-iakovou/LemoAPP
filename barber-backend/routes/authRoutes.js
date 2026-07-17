@@ -7,11 +7,14 @@ const {
   updateMe,
 } = require("../controllers/authController");
 const requireUser = require("../middlewares/requireUser");
+const requireFullAdmin = require("../middlewares/requireFullAdmin");
 
 const router = express.Router();
 
-// User signup
-router.post("/signup", signup);
+// Account creation is admin-only: only an existing full admin may provision
+// accounts. (Previously this route was public — anyone could self-register a
+// full-admin account.)
+router.post("/signup", requireUser, requireFullAdmin, signup);
 
 // User login
 router.post("/signin", login);

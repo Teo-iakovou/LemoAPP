@@ -1,8 +1,12 @@
 const express = require("express");
 const Appointment = require("../models/appointment");
+const requireUser = require("../middlewares/requireUser");
+const requireFullAdmin = require("../middlewares/requireFullAdmin");
 const router = express.Router();
 
-router.get("/sms-statuses", async (req, res) => {
+// Admin-only: exposes customer names/phones + reminder history. Previously this
+// route had NO auth at all; gated now behind full-admin.
+router.get("/sms-statuses", requireUser, requireFullAdmin, async (req, res) => {
   try {
     // 🚀 Just return current DB data instantly
     const appointments = await Appointment.find({
