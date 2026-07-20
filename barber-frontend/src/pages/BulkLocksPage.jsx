@@ -4,7 +4,7 @@ import { FiPlus } from "react-icons/fi";
 import {
   createAppointment,
   deleteAppointment,
-  fetchUpcomingAppointments,
+  fetchRecentLocks,
   updateAppointment,
 } from "../utils/api";
 import "flatpickr/dist/themes/dark.css";
@@ -84,13 +84,22 @@ const BulkLocksPage = () => {
     );
   }, [sortedLocks]);
 
-  const displayLocks = createdLocks;
+  // The fetch now includes locks up to 12 months back so past occurrences of a weekly
+  // pattern group with their future ones. Hide groups that lie ENTIRELY in the past
+  // (their last occurrence already ended before today) — they can't be acted on and are
+  // only noise; a group with any current/future occurrence stays visible.
+  const displayLocks = useMemo(() => {
+    const floor = startOfToday();
+    return createdLocks.filter(
+      (item) => item?.endDate instanceof Date && item.endDate >= floor
+    );
+  }, [createdLocks]);
 
   const refreshCalendarLocks = async () => {
     setLoadingCalendarLocks(true);
     setCalendarError("");
     try {
-      const appointments = await fetchUpcomingAppointments();
+      const appointments = await fetchRecentLocks();
       const locks = (appointments || [])
         .filter((appointment) => appointment.type === "lock")
         .map((appointment) => {

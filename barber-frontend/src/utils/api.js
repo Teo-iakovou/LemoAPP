@@ -200,6 +200,21 @@ export const fetchUpcomingAppointments = async () => {
   }
 };
 
+// Locks from the last 12 months onward (past + future), for the Bulk Locks grouping
+// view. Includes lockReason so the stored "ΜΟΝΙΜΟ" tag is available to the client.
+export const fetchRecentLocks = async () => {
+  try {
+    const response = await apiFetch(`${API_BASE_URL}/appointments/locks`);
+    if (!response.ok) {
+      throw new Error("Failed to fetch locks.");
+    }
+    return await response.json(); // returns just an array
+  } catch (error) {
+    console.error("Error fetching locks:", error);
+    return []; // Fallback
+  }
+};
+
 export const fetchPastAppointments = async (page = 1, limit = 100) => {
   try {
     const response = await apiFetch(
@@ -282,10 +297,13 @@ export const fetchAutoCustomers = async (params = {}) => {
   return data?.data ?? [];
 };
 
-export const fetchAutoCustomerLastAppointments = async (autoCustomerIds = []) => {
+export const fetchAutoCustomerLastAppointments = async (autoCustomerIds = [], options = {}) => {
   const params = new URLSearchParams();
   if (Array.isArray(autoCustomerIds) && autoCustomerIds.length) {
     params.set("ids", autoCustomerIds.join(","));
+  }
+  if (options.autoOnly) {
+    params.set("autoOnly", "true");
   }
   const query = params.toString() ? `?${params.toString()}` : "";
   const res = await apiFetch(`${API_BASE_URL}/auto-customers/last-appointments${query}`);

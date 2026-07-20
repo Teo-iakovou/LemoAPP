@@ -1,3 +1,16 @@
 .auto-customers-preview .rbc-time-content {
   overflow-y: auto !important;
 }
+
+/*
+ * Desktop only: give the preview calendar's viewport a real height. The shared
+ * `.barber-calendar-viewport` height rules live inside a max-width:768px media query, so
+ * on wider screens the viewport is auto-height and the month grid's flex rows collapse to
+ * zero (only the weekday header row renders). A concrete height lets the month rows
+ * distribute and show their day cells. Mobile keeps its own (working) layout untouched.
+ */
+@media (min-width: 769px) {
+  .auto-customers-preview .barber-calendar-viewport {
+    height: 100%;
+  }
+}

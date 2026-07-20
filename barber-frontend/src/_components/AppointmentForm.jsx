@@ -25,6 +25,7 @@ function AppointmentForm({
   onDelete,
   isEditing,
   appointmentData,
+  defaultBarber = null,
   customers = [],
 }) {
   const formRef = useRef(null);
@@ -35,7 +36,9 @@ function AppointmentForm({
     defaultValues: {
       customerName: appointmentData?.customerName || "",
       phoneNumber: appointmentData?.phoneNumber || "",
-      barber: appointmentData?.barber || "ΛΕΜΟ",
+      // Editing keeps the appointment's own barber; a NEW appointment defaults to
+      // the signed-in user's barber, falling back to ΛΕΜΟ when they have none.
+      barber: appointmentData?.barber || defaultBarber || "ΛΕΜΟ",
       dateOfBirth: appointmentData?.dateOfBirth || "",
     },
   });

@@ -39,6 +39,32 @@ const alignToWeekday = (startDate, targetDay) => {
   return aligned;
 };
 
+// Read-only preview of a card's own range: first occurrence on the chosen weekday
+// on/after max(today, startFrom) (never in the past), then +(count-1)*cadence weeks.
+// Mirrors the backend generation so the card shows what a plain push would produce.
+const computeCardRange = ({ startFrom, weekday, cadenceWeeks, maxOccurrences }) => {
+  const start0 = parseLocalDateString(startFrom);
+  const count = Number(maxOccurrences);
+  const wd = Number(weekday);
+  const cadence = Number(cadenceWeeks) || 1;
+  if (!start0 || !Number.isFinite(count) || count < 1 || !Number.isFinite(wd)) {
+    return null;
+  }
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const base = start0 < today ? today : start0;
+  const start = alignToWeekday(base, wd);
+  const end = addWeeks(start, (count - 1) * cadence);
+  return { start, end };
+};
+
+const formatShortDate = (date) =>
+  date.toLocaleDateString("el-GR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+
 const alignToMondayStart = (value) => {
   const base = value instanceof Date ? new Date(value.getTime()) : new Date(value);
   base.setHours(0, 0, 0, 0);
@@ -150,10 +176,26 @@ const formatDateDisplay = (value, fallback = "-") => {
   }
 };
 
+// Auto-fill value for the "Λήξη" (until) field. Given the card's inputs, returns the
+// local date string (YYYY-MM-DD) of the last appointment: the first occurrence of the
+// chosen weekday on/after startFrom, then + cadence * (count - 1) weeks. Returns "" when
+// the count is missing/invalid (open-ended → caller leaves "Λήξη" untouched).
+const computeUntilValue = ({ startFrom, weekday, cadenceWeeks, maxOccurrences }) => {
+  const start0 = parseLocalDateString(toDateInput(startFrom));
+  const count = Number(maxOccurrences);
+  const wd = Number(weekday);
+  const cadence = Number(cadenceWeeks) || 1;
+  if (!start0 || !Number.isFinite(count) || count < 1 || !Number.isFinite(wd)) {
+    return "";
+  }
+  const firstDate = alignToWeekday(start0, wd);
+  const end = addWeeks(firstDate, cadence * (count - 1));
+  return toLocalDateString(end);
+};
+
 const AutoCustomersPage = () => {
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [renewing, setRenewing] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
   const [formState, setFormState] = useState(emptyForm);
   const [formSubmitting, setFormSubmitting] = useState(false);
@@ -163,16 +205,23 @@ const AutoCustomersPage = () => {
   const [pushOpen, setPushOpen] = useState(false);
   const [pushSubmitting, setPushSubmitting] = useState(false);
   const [pushState, setPushState] = useState({
-    from: toLocalDateString(new Date()),
-    to: "",
+    from: "", // optional floor; empty => each customer uses their own startFrom
+    to: "", // optional hard stop; empty => open horizon (count/until govern)
+    count: "", // optional per-push occurrence override (1..52); empty => per-customer maxOccurrences
   });
+  // Read-only preview state, populated by a dryRun push (single source of truth with the
+  // real push). previewMeta records what the shown preview reflects, for the badge.
+  const [previewSummary, setPreviewSummary] = useState([]);
+  const [previewMeta, setPreviewMeta] = useState(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState("");
+  const [renewing, setRenewing] = useState(false);
   const [selectedCustomerIds, setSelectedCustomerIds] = useState(() => new Set());
   const [customerSearch, setCustomerSearch] = useState("");
   const [directory, setDirectory] = useState([]);
   const [listOpen, setListOpen] = useState(true);
   const formRef = useRef(null);
   const pushRef = useRef(null);
-  const hasAutoJumpedRef = useRef(false);
   const MySwal = useMemo(() => withReactContent(Swal), []);
   const [calendarStart, setCalendarStart] = useState(() => alignToMondayStart(new Date()));
   const [calendarView, setCalendarView] = useState("week");
@@ -280,170 +329,58 @@ const AutoCustomersPage = () => {
     return map;
   }, [directory]);
 
-  const calendarEvents = useMemo(() => {
-  const rangeWeeks = 12;
-  const rangeStart = alignToMondayStart(calendarStart);
-  const rangeEnd = addWeeks(rangeStart, rangeWeeks);
-  const events = [];
-
-  customers.forEach((customer) => {
-    if (!customer) return;
-    const cadence = Number(customer.cadenceWeeks) || 1;
-    const defaultDuration = Number(customer.durationMin) || 40;
-    let targetWeekday = Number(customer.weekday);
-    if (!Number.isFinite(targetWeekday)) {
-      targetWeekday = 0;
-    }
-    const [hour, minute] = normalizeTimeString(customer.timeOfDay, "09:00")
-      .split(":")
-      .map(Number);
-
-    const baseStart =
-      customer.startFrom && toDateInput(customer.startFrom)
-        ? parseLocalDateString(toDateInput(customer.startFrom))
-        : new Date(rangeStart.getTime());
-    if (!baseStart) return;
-    baseStart.setHours(hour || 0, minute || 0, 0, 0);
-
-    let occurrence = alignToWeekday(baseStart, targetWeekday);
-
-    const until = customer.until ? parseLocalDateString(toDateInput(customer.until)) : null;
-    const maxOccurrences = customer.maxOccurrences
-      ? Number(customer.maxOccurrences)
-      : customer.until
-      ? Infinity
-      : 5;
-    let generated = 0;
-
-    const skippedSet = new Set(
-      (customer.skippedOccurrences || [])
-        .map((value) => normalizeDateValue(value))
-        .filter(Boolean)
-        .map((date) => date.getTime())
-    );
-
-    const overrideMap = new Map(
-      (customer.occurrenceOverrides || [])
-        .map((entry) => {
-          const originalDate = normalizeDateValue(entry?.originalStart);
-          const overrideDate = normalizeDateValue(entry?.overrideStart);
-          if (!originalDate || !overrideDate) return null;
-          return [
-            originalDate.getTime(),
-            {
-              startMs: overrideDate.getTime(),
-              duration: entry?.durationMin,
-              barber: entry?.barber,
-            },
-          ];
-        })
-        .filter(Boolean)
-    );
-
-    while (occurrence <= rangeEnd) {
-      if (until && occurrence > until) break;
-
-      const occurrenceKey = occurrence.getTime();
-      const overrideInfo = overrideMap.get(occurrenceKey);
-      const isSkipped = skippedSet.has(occurrenceKey);
-
-      if (!isSkipped) {
-        if (maxOccurrences && generated >= maxOccurrences) break;
-
-        const startMs = overrideInfo?.startMs ?? occurrenceKey;
-        const eventStart = new Date(startMs);
-        const eventEnd = new Date(startMs + (overrideInfo?.duration ?? defaultDuration) * 60000);
-
-        if (eventStart >= rangeStart && eventStart <= rangeEnd) {
-          events.push({
-            id: `${customer._id || "auto"}-${occurrenceKey}`,
-            title: customer.customerName || "Ραντεβού",
-            start: eventStart,
-            end: eventEnd,
-            barber: overrideInfo?.barber || customer.barber || "ΛΕΜΟ",
-            type: "appointment",
-            autoCustomerId: customer._id,
-            originalStart: new Date(occurrenceKey),
-            hasOverride: Boolean(overrideInfo),
-            overrideBarber: overrideInfo?.barber || null,
-            overrideDuration: overrideInfo?.duration ?? null,
-            durationMin: overrideInfo?.duration ?? defaultDuration,
-          });
-        }
-
-        generated += 1;
-      }
-
-      occurrence = addWeeks(occurrence, cadence);
-      if (maxOccurrences && generated >= maxOccurrences) break;
-    }
-    });
-
-    return events;
-  }, [customers, calendarStart]);
-
+  // Read-only preview events, derived from the backend dryRun push summary — the SAME
+  // generation logic as a real push, so the preview can never drift from reality. We
+  // render only the occurrences that would actually be created (inserted/moved).
   const previewEvents = useMemo(
     () =>
-      calendarEvents.map((event) => {
-        const customer = customers.find((item) => item?._id === event.autoCustomerId);
-        const barber = event.barber || customer?.barber || "ΛΕΜΟ";
-        const customerName = event.title || customer?.customerName || "Ραντεβού";
-        const isOverride = Boolean(event.hasOverride);
-        const start = event.start instanceof Date ? event.start : new Date(event.start);
-        const durationMin = Number(event.durationMin) || 40;
-        const end = new Date(start.getTime() + durationMin * 60000);
-
-        return {
-          id: String(event.id),
-          title: `${customerName} • ${barber}${isOverride ? " • override" : ""}`,
-          start,
-          end,
-          type: "appointment",
-          barber,
-          isOverride,
-          isAutoCustomerPreview: true,
-          autoCustomerId: event.autoCustomerId,
-          originalStart: event.originalStart,
-          durationMin,
-        };
-      }),
-    [calendarEvents, customers]
+      previewSummary
+        .filter((entry) => entry.status === "inserted" || entry.status === "moved")
+        .map((entry) => {
+          const start = new Date(entry.scheduledFor);
+          const durationMin = Number(entry.durationMin) || 40;
+          const end = new Date(start.getTime() + durationMin * 60000);
+          const barber = entry.barber || "ΛΕΜΟ";
+          const customerName = entry.customerName || "Ραντεβού";
+          return {
+            id: `${entry.autoCustomerId || "auto"}-${start.getTime()}`,
+            title: `${customerName} • ${barber}${entry.shiftMinutes ? " • moved" : ""}`,
+            start,
+            end,
+            type: "appointment",
+            barber,
+            isOverride: Boolean(entry.shiftMinutes),
+            isAutoCustomerPreview: true,
+            autoCustomerId: entry.autoCustomerId,
+            originalStart: start,
+            durationMin,
+          };
+        }),
+    [previewSummary]
   );
 
+  // Whenever a new preview loads, anchor the calendar to the EARLIEST previewed
+  // appointment (not to today). Anchor by the active view's unit so the view opens on the
+  // right period: month view → the first day of that appointment's month (a Monday-align
+  // could otherwise fall into the previous month); week/day view → that appointment's
+  // week. Runs once per preview (keyed on previewEvents), so manual navigation afterwards
+  // is preserved.
   useEffect(() => {
-    hasAutoJumpedRef.current = false;
-  }, [previewEvents.length]);
-
-  useEffect(() => {
-    if (hasAutoJumpedRef.current) return;
     if (!previewEvents.length) return;
-
-    const rangeStart =
-      calendarView === "day"
-        ? new Date(calendarStart.getFullYear(), calendarStart.getMonth(), calendarStart.getDate(), 0, 0, 0, 0)
-        : calendarView === "month"
-        ? new Date(calendarStart.getFullYear(), calendarStart.getMonth(), 1, 0, 0, 0, 0)
-        : alignToMondayStart(calendarStart);
-
-    const rangeEnd =
-      calendarView === "day"
-        ? new Date(calendarStart.getFullYear(), calendarStart.getMonth(), calendarStart.getDate(), 23, 59, 59, 999)
-        : calendarView === "month"
-        ? new Date(calendarStart.getFullYear(), calendarStart.getMonth() + 1, 0, 23, 59, 59, 999)
-        : new Date(addDays(rangeStart, 6).setHours(23, 59, 59, 999));
-
-    const hasInRange = previewEvents.some(
-      (event) => event.start >= rangeStart && event.start <= rangeEnd
+    const earliestStart = previewEvents.reduce(
+      (min, event) => (event.start < min ? event.start : min),
+      previewEvents[0].start
     );
-
-    if (!hasInRange) {
-      const earliestStart = previewEvents.reduce((min, event) =>
-        event.start < min ? event.start : min
-      , previewEvents[0].start);
-      hasAutoJumpedRef.current = true;
-      setCalendarStart(alignToMondayStart(new Date(earliestStart)));
-    }
-  }, [calendarStart, calendarView, previewEvents]);
+    const earliest = new Date(earliestStart);
+    const target =
+      calendarView === "month"
+        ? new Date(earliest.getFullYear(), earliest.getMonth(), 1)
+        : alignToMondayStart(earliest);
+    setCalendarStart(target);
+    // calendarView is read but intentionally NOT a trigger: re-anchoring only on new
+    // preview data, not on a manual view switch.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [previewEvents]);
 
 
   const handleOpenCreate = () => {
@@ -454,8 +391,19 @@ const AutoCustomersPage = () => {
     setFormOpen(true);
   };
 
-  const shiftCalendar = (weeks) => {
-    setCalendarStart((prev) => alignToMondayStart(addWeeks(prev, weeks)));
+  // Navigate by the active view's own unit: month view pages by a whole month, day view
+  // by a day, week/agenda by a week. (Previously every click jumped a fixed 4 weeks, which
+  // skipped weeks in week view and mis-paged months.)
+  const navigateCalendar = (direction) => {
+    setCalendarStart((prev) => {
+      if (calendarView === "month") {
+        return new Date(prev.getFullYear(), prev.getMonth() + direction, 1);
+      }
+      if (calendarView === "day") {
+        return addDays(prev, direction);
+      }
+      return alignToMondayStart(addWeeks(prev, direction));
+    });
   };
 
   const resetCalendarStart = () => {
@@ -518,106 +466,55 @@ const AutoCustomersPage = () => {
     return base;
   }
 
-  const computeNextDatesFromHistory = (customer, options = {}) => {
-    if (!customer) return null;
-
+  // Renewal ("Ανανέωση προγράμματος"): continue a customer's recurring schedule from
+  // where it currently ends. Anchor = the customer's latest appointment date (any date,
+  // past or future), or today when they have none. New start = anchor + one cadence
+  // interval, aligned to the customer's own weekday, then floored at today in whole
+  // cadence steps so it is never in the past. New until = new start + cadence*(count-1)
+  // weeks (same card formula). weekday/time/barber/cadence/count are never changed.
+  const computeRenewal = (customer, anchorAppointmentDate) => {
     const cadence = Number(customer.cadenceWeeks) || 1;
     const weekday = Number(customer.weekday ?? 1);
-    const timeString = normalizeTimeString(customer.timeOfDay, "09:00");
-    const [hours, minutes] = timeString.split(":").map(Number);
-
-    const startReferenceInput = customer.startFrom ? toDateInput(customer.startFrom) : "";
-    let baseStart = startReferenceInput ? parseLocalDateString(startReferenceInput) : null;
-    if (!baseStart) {
-      baseStart = alignToMondayStart(new Date());
-    }
-    baseStart.setHours(0, 0, 0, 0);
-
-    const firstOccurrence = alignToWeekday(baseStart, weekday);
-    firstOccurrence.setHours(hours || 0, minutes || 0, 0, 0);
-
-    let lastOccurrence = new Date(firstOccurrence.getTime());
-    let occurrencesCount = 1;
-
-    const untilInput = customer.until ? toDateInput(customer.until) : "";
-    let untilDate = untilInput ? parseLocalDateString(untilInput) : null;
-    if (untilDate) {
-      untilDate.setHours(hours || 0, minutes || 0, 0, 0);
-    }
-
-    const maxOccurrencesValue = customer.maxOccurrences
-      ? Number(customer.maxOccurrences)
-      : undefined;
-    const hasMaxLimit = Number.isFinite(maxOccurrencesValue) && maxOccurrencesValue > 0;
-    const hasUntilLimit = Boolean(untilDate);
-
-    let spanWeeks = 0;
-
-    if (hasMaxLimit || hasUntilLimit) {
-      while (true) {
-        const potentialNext = addWeeks(lastOccurrence, cadence);
-        const nextCount = occurrencesCount + 1;
-        const exceedsUntil = hasUntilLimit && untilDate && potentialNext > untilDate;
-        const exceedsMax = hasMaxLimit && nextCount > maxOccurrencesValue;
-
-        if (exceedsUntil || exceedsMax) break;
-
-        lastOccurrence = potentialNext;
-        occurrencesCount = nextCount;
-      }
-
-      spanWeeks = cadence * Math.max(occurrencesCount - 1, 0);
-    } else {
-      lastOccurrence = null;
-    }
-
-    const actualLast = options?.lastActualStart instanceof Date ? options.lastActualStart : null;
-    if (actualLast && !Number.isNaN(actualLast.getTime())) {
-      const alignedActual = new Date(actualLast.getTime());
-      alignedActual.setSeconds(0, 0);
-      const nextStart = addWeeks(alignedActual, cadence);
-      const newUntil = spanWeeks > 0 ? addWeeks(nextStart, spanWeeks) : undefined;
-      return { nextStart, newUntil };
-    }
-
-    if (lastOccurrence) {
-      const nextStart = addWeeks(lastOccurrence, cadence);
-      const newUntil = spanWeeks > 0 ? addWeeks(nextStart, spanWeeks) : undefined;
-      return { nextStart, newUntil };
-    }
-
-    const fallbackStart = getNextStartFromToday(customer);
-    const newUntil = spanWeeks > 0 ? addWeeks(fallbackStart, spanWeeks) : undefined;
-
-    return { nextStart: fallbackStart, newUntil };
-  };
-
-  const getNextStartFromToday = (customer) => {
-    const cadence = Number(customer.cadenceWeeks) || 1;
-    const weekday = Number(customer.weekday ?? 1);
-    const timeString = normalizeTimeString(customer.timeOfDay, "09:00");
-    const [hours, minutes] = timeString.split(":").map(Number);
 
     const today = new Date();
-    const midnight = new Date(
-      today.getFullYear(),
-      today.getMonth(),
-      today.getDate(),
-      0,
-      0,
-      0,
-      0
-    );
-    let nextDate = alignToWeekday(midnight, weekday);
-    const firstOccurrence = new Date(nextDate.getTime());
-    firstOccurrence.setHours(hours || 0, minutes || 0, 0, 0);
+    today.setHours(0, 0, 0, 0);
 
-    if (firstOccurrence <= today) {
-      nextDate = addWeeks(nextDate, cadence);
+    let anchor =
+      anchorAppointmentDate instanceof Date
+        ? new Date(anchorAppointmentDate.getTime())
+        : anchorAppointmentDate
+        ? new Date(anchorAppointmentDate)
+        : null;
+    const hadAppointment = Boolean(anchor && !Number.isNaN(anchor.getTime()));
+    if (!hadAppointment) {
+      anchor = new Date(today.getTime());
+    }
+    anchor.setHours(0, 0, 0, 0);
+
+    // One cadence interval past the anchor, aligned to the customer's own weekday.
+    let newStart = alignToWeekday(addWeeks(anchor, cadence), weekday);
+    newStart.setHours(0, 0, 0, 0);
+    // Floor at today: never a start in the past. Advance in whole cadence steps.
+    while (newStart < today) {
+      newStart = addWeeks(newStart, cadence);
     }
 
-    nextDate.setHours(hours || 0, minutes || 0, 0, 0);
-    return nextDate;
+    const hasCount =
+      customer.maxOccurrences !== undefined &&
+      customer.maxOccurrences !== null &&
+      String(customer.maxOccurrences).trim() !== "" &&
+      Number(customer.maxOccurrences) > 0;
+    // Same formula the card uses; "" => open-ended (a card without a count).
+    const until = hasCount
+      ? computeUntilValue({
+          startFrom: newStart,
+          weekday,
+          cadenceWeeks: cadence,
+          maxOccurrences: customer.maxOccurrences,
+        })
+      : "";
+
+    return { anchor, hadAppointment, newStart, until };
   };
 
   const handleEdit = (customer, occurrenceDate, options = {}) => {
@@ -713,6 +610,19 @@ const AutoCustomersPage = () => {
           next.phoneNumber = lookup.phoneNumber;
         }
       }
+      if (
+        field === "startFrom" ||
+        field === "cadenceWeeks" ||
+        field === "maxOccurrences"
+      ) {
+        // Auto-fill "Λήξη" from the current inputs. Only when a count is present; an
+        // empty count means open-ended, so we leave "Λήξη" exactly as it is. A value
+        // typed manually into "Λήξη" survives until one of these three fields changes.
+        if (String(next.maxOccurrences ?? "").trim() !== "") {
+          const computed = computeUntilValue(next);
+          if (computed) next.until = computed;
+        }
+      }
       return next;
     });
   };
@@ -732,7 +642,14 @@ const AutoCustomersPage = () => {
   }
 
   const parseFormPayload = () => {
-    const untilIso = toUtcIsoFromLocalDate(formState.until);
+    // Guarantee the ΈΩΣ column is never "-" for a card that has a count: if "Λήξη" was
+    // left empty but a count exists (e.g. a card saved with only default values), fill
+    // it from the same formula the live auto-fill uses. A count-less card stays open.
+    let untilLocal = formState.until;
+    if (!untilLocal && String(formState.maxOccurrences ?? "").trim() !== "") {
+      untilLocal = computeUntilValue(formState);
+    }
+    const untilIso = toUtcIsoFromLocalDate(untilLocal);
     let maxOccurrencesValue = formState.maxOccurrences ? Number(formState.maxOccurrences) : undefined;
 
     if ((!maxOccurrencesValue || Number.isNaN(maxOccurrencesValue)) && !untilIso) {
@@ -846,6 +763,96 @@ const AutoCustomersPage = () => {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [formOpen, pushOpen]);
 
+  // Optional per-push count override. Empty is valid (each customer uses its own
+  // maxOccurrences); when present it must be an integer 1..52.
+  const countError = (() => {
+    const raw = pushState.count;
+    if (raw === "" || raw === null || raw === undefined) return "";
+    const n = Number(raw);
+    if (!Number.isInteger(n) || n < 1 || n > 52) return "Δώσε αριθμό από 1 έως 52.";
+    return "";
+  })();
+  const countOverrideValue =
+    pushState.count !== "" && !countError ? Number(pushState.count) : undefined;
+
+  // Read-only preview: runs the SAME endpoint as push with dryRun:true. Writes nothing.
+  // Uses the current selection when any exists, else all active customers.
+  const runPreview = async (overrides = {}) => {
+    // Inputs default to the live bulk fields, but callers can pass explicit values to
+    // avoid React's async state (e.g. after renewal we preview with all three empty
+    // immediately, before the cleared pushState has flushed).
+    const fromInput = overrides.from !== undefined ? overrides.from : pushState.from;
+    const toInput = overrides.to !== undefined ? overrides.to : pushState.to;
+    const countInput = overrides.count !== undefined ? overrides.count : pushState.count;
+
+    // Validate the count actually being previewed; invalid → skip (inline error shows).
+    let countValue;
+    if (countInput !== "" && countInput !== null && countInput !== undefined) {
+      const n = Number(countInput);
+      if (!Number.isInteger(n) || n < 1 || n > 52) return;
+      countValue = n;
+    }
+
+    const useSelection = selectedCustomerIds.size > 0;
+    setPreviewLoading(true);
+    setPreviewError("");
+    try {
+      const res = await pushAutoCustomers({
+        dryRun: true,
+        from: fromInput ? toUtcIsoFromLocalDate(fromInput) : undefined,
+        to: toInput ? toUtcIsoFromLocalDate(toInput) : undefined,
+        count: countValue,
+        customerIds: useSelection ? Array.from(selectedCustomerIds) : undefined,
+      });
+      const summary = res?.data?.summary || [];
+      setPreviewSummary(summary);
+      setPreviewMeta({
+        mode: useSelection ? "selected" : "all",
+        selectedCount: useSelection ? selectedCustomerIds.size : null,
+        count: countValue || null,
+      });
+
+      // When the planned dates span more than one week, default to the month view so the
+      // whole multi-week schedule is visible at a glance (instead of the week view).
+      const starts = summary
+        .filter((entry) => entry.status === "inserted" || entry.status === "moved")
+        .map((entry) => new Date(entry.scheduledFor))
+        .filter((date) => !Number.isNaN(date.getTime()));
+      if (starts.length > 1) {
+        const earliest = starts.reduce((min, date) => (date < min ? date : min), starts[0]);
+        const latest = starts.reduce((max, date) => (date > max ? date : max), starts[0]);
+        const spansMultipleWeeks =
+          alignToMondayStart(earliest).getTime() !== alignToMondayStart(latest).getTime();
+        if (spansMultipleWeeks) {
+          setCalendarView("month");
+        }
+      }
+    } catch (error) {
+      console.error("Preview failed", error);
+      // Never leave stale dates on screen: clear the preview and show a visible error, so
+      // it's obvious the calendar no longer reflects reality.
+      setPreviewSummary([]);
+      setPreviewError("Η προεπισκόπηση απέτυχε. Δοκιμάστε ξανά.");
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
+  // Auto-load the read-only preview on mount and whenever the inputs that shape it
+  // change (selection, from, to, count). Debounced so typing in the count field
+  // doesn't fire a request per keystroke. Never writes (dryRun).
+  const previewSelectionKey = Array.from(selectedCustomerIds).sort().join(",");
+  useEffect(() => {
+    if (countError) return; // don't fetch with an invalid count
+    const t = setTimeout(() => {
+      runPreview();
+    }, 350);
+    return () => clearTimeout(t);
+    // runPreview intentionally omitted — it reads the latest state via closure and
+    // isn't memoized; the input deps below are what should trigger a refresh.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [previewSelectionKey, pushState.from, pushState.to, pushState.count, countError]);
+
   const handlePushSubmit = async (e) => {
     e.preventDefault();
 
@@ -853,48 +860,87 @@ const AutoCustomersPage = () => {
 
     if (formOpen || hasUnsavedChanges || formSubmitting) {
       toast.error(
-        "Υπάρχουν μη αποθηκευμένες αλλαγές. Αποθήκευσε πρώτα και μετά κάνε Push."
+        "Υπάρχουν μη αποθηκευμένες αλλαγές. Αποθήκευσε πρώτα."
       );
       return;
     }
 
-    if (!pushState.from) {
-      toast.error("Η ημερομηνία έναρξης είναι υποχρεωτική.");
+    if (countError) {
+      toast.error("Ο αριθμός ραντεβού πρέπει να είναι από 1 έως 52.");
       return;
     }
     if (selectedCount === 0) {
-      toast.error("Επίλεξε τουλάχιστον έναν πελάτη για Push.");
+      toast.error("Επίλεξε τουλάχιστον έναν πελάτη.");
+      return;
+    }
+    if (
+      pushState.from &&
+      pushState.to &&
+      parseLocalDateString(pushState.to) < parseLocalDateString(pushState.from)
+    ) {
+      toast.error("Η ημερομηνία «Έως» δεν μπορεί να είναι πριν από την «Από».");
+      return;
+    }
+
+    const fromIso = pushState.from ? toUtcIsoFromLocalDate(pushState.from) : undefined;
+    const toIso = pushState.to ? toUtcIsoFromLocalDate(pushState.to) : undefined;
+    const selectedIds = Array.from(selectedCustomerIds);
+
+    // Dry-run first so the confirmation shows the real number of appointments that will
+    // be created (Y). Same inputs as the real run below → identical result.
+    setPushSubmitting(true);
+    let plannedCount = 0;
+    try {
+      const dry = await pushAutoCustomers({
+        dryRun: true,
+        from: fromIso,
+        to: toIso,
+        count: countOverrideValue,
+        customerIds: selectedIds,
+      });
+      const totals = dry?.data?.totals || {};
+      plannedCount = (totals.inserted || 0) + (totals.moved || 0);
+    } catch (error) {
+      console.error(error);
+      toast.error(error.message || "Αποτυχία υπολογισμού ραντεβού.");
+      setPushSubmitting(false);
       return;
     }
 
     const confirmPush = await MySwal.fire({
-      title: "Προσοχή",
-      text:
-        "Αυτό θα δημιουργήσει ΚΑΝΟΝΙΚΑ ραντεβού στο κύριο ημερολόγιο (Calendar page). Θέλεις να συνεχίσεις;",
+      title: "Επιβεβαίωση",
+      text: `Θα δημιουργηθούν ${plannedCount} ραντεβού για ${selectedCount} πελάτες. Συνέχεια;`,
       icon: "warning",
       showCancelButton: true,
-      confirmButtonText: "Ναι, κάνε Push",
+      confirmButtonText: "Ναι",
       cancelButtonText: "Άκυρο",
     });
 
-    if (!confirmPush.isConfirmed) return;
-
-    setPushSubmitting(true);
+    if (!confirmPush.isConfirmed) {
+      setPushSubmitting(false);
+      return;
+    }
 
     try {
       const payload = {
-        from: toUtcIsoFromLocalDate(pushState.from),
-        to: pushState.to ? toUtcIsoFromLocalDate(pushState.to) : undefined,
+        from: fromIso,
+        to: toIso,
+        count: countOverrideValue,
         dryRun: false,
-        customerIds: Array.from(selectedCustomerIds),
+        customerIds: selectedIds,
       };
       toast("Οι πελάτες προστίθενται στο ημερολόγιο...");
       setPushOpen(false);
       await pushAutoCustomers(payload);
       toast.success(`Προστέθηκαν στο ημερολόγιο οι επιλεγμένοι πελάτες (${selectedCount}).`);
       clearCustomerSelection();
+      // The bulk fields permanently updated each selected card, so clear them to avoid
+      // re-applying the same change on a later run.
+      setPushState({ from: "", to: "", count: "" });
 
-      loadCustomers();
+      await loadCustomers();
+      // The preview auto-refreshes via the effect (clearing the selection changes the
+      // preview inputs), so it reflects post-push reality without an explicit call.
     } catch (error) {
       console.error(error);
       toast.error(error.message || "Αποτυχία δημιουργίας ραντεβού.");
@@ -904,85 +950,140 @@ const AutoCustomersPage = () => {
     }
   };
 
-  const buildUpdatePayloadFromCustomer = (customer, startDate, options = {}) => {
-    const timeOfDay = normalizeTimeString(customer.timeOfDay, "09:00");
-    const cadenceWeeks = Number(customer.cadenceWeeks) || 1;
-    const weekday = Number(customer.weekday ?? 1);
-    const hasUntilOverride = Object.prototype.hasOwnProperty.call(options, "untilOverride");
-    const untilInput = hasUntilOverride
-      ? toDateInput(options.untilOverride)
-      : toDateInput(customer.until);
-    const untilIso = untilInput ? toUtcIsoFromLocalDate(untilInput) : undefined;
-    const maxOccurrencesValue = customer.maxOccurrences
-      ? Number(customer.maxOccurrences)
-      : undefined;
+  // Renewal writes ONLY startFrom and until. Everything else (weekday, time, barber,
+  // cadence, count) is left untouched — the partial update never sends those fields.
+  const buildRenewalPayload = (newStart, untilLocal) => ({
+    startFrom: toUtcIsoFromLocalDate(toLocalDateString(newStart)),
+    until: untilLocal ? toUtcIsoFromLocalDate(untilLocal) : null,
+  });
 
-    return {
-      customerName: customer.customerName || "",
-      phoneNumber: customer.phoneNumber || "",
-      barber: customer.barber || "ΛΕΜΟ",
-      weekday,
-      timeOfDay,
-      durationMin: Number(customer.durationMin) || 40,
-      cadenceWeeks,
-      startFrom: startDate ? toUtcIsoFromLocalDate(toLocalDateString(startDate)) : undefined,
-      until: untilIso,
-      maxOccurrences: Number.isFinite(maxOccurrencesValue) ? maxOccurrencesValue : undefined,
-    };
-  };
+  // EXPLICIT WRITE: renews each selected customer's schedule (startFrom + until only),
+  // continuing it from the customer's latest appointment. Scoped to the current
+  // selection when any exists, else all active customers. Shows a per-customer dry-run
+  // (anchor / new start / new until) and confirms before writing. No appointments are
+  // created here — that stays the separate "Δημιουργία ραντεβού" step.
+  const handleRenewSchedule = async () => {
+    const base = (Array.isArray(customers) ? customers : []).filter(
+      (customer) => customer && customer._id
+    );
+    const useSelection = selectedCustomerIds.size > 0;
+    const targets = useSelection
+      ? base.filter((customer) => selectedCustomerIds.has(String(customer._id)))
+      : base;
 
-  const handleRenewAll = async () => {
-    if (!Array.isArray(customers) || customers.length === 0) {
-      toast("Δεν υπάρχουν επαναλαμβανόμενοι πελάτες για ανανέωση.");
+    if (targets.length === 0) {
+      toast("Δεν υπάρχουν πελάτες για ανανέωση προγράμματος.");
       return;
     }
 
     setRenewing(true);
     try {
-      let lastAppointmentsByCustomer = {};
+      // Anchor lookup: the latest AUTO-generated appointment per customer (any date).
+      let anchorsByCustomer = {};
       try {
-        const customerIds = customers
+        const customerIds = targets
           .map((customer) => (customer && customer._id ? String(customer._id) : null))
           .filter(Boolean);
-        lastAppointmentsByCustomer = await fetchAutoCustomerLastAppointments(customerIds);
-      } catch (historyError) {
-        console.error("Failed to fetch last saved appointments for auto customers", historyError);
+        anchorsByCustomer = await fetchAutoCustomerLastAppointments(customerIds, {
+          autoOnly: true,
+        });
+      } catch (anchorError) {
+        console.error("Failed to fetch anchor appointments for renewal", anchorError);
       }
 
-      const customersToUpdate = customers.filter((customer) => customer && customer._id);
-      const updatedPayloads = customersToUpdate.map((customer) => {
-          const customerKey =
-            customer && customer._id ? (typeof customer._id === "string" ? customer._id : String(customer._id)) : "";
-          const lastEntry = customerKey ? lastAppointmentsByCustomer?.[customerKey] : undefined;
-          const lastActualStart = lastEntry?.appointmentDateTime
-            ? new Date(lastEntry.appointmentDateTime)
-            : null;
-          const historicalWindow = computeNextDatesFromHistory(customer, { lastActualStart });
-          const nextDate = historicalWindow?.nextStart || getNextStartFromToday(customer);
-          return buildUpdatePayloadFromCustomer(customer, nextDate, {
-            ...(historicalWindow?.newUntil ? { untilOverride: historicalWindow.newUntil } : {}),
-          });
-        });
+      // Dry-run: compute anchor / new start / new until per customer. Writes nothing yet.
+      const plans = targets.map((customer) => {
+        const entry = anchorsByCustomer?.[String(customer._id)];
+        const anchorDate = entry?.appointmentDateTime
+          ? new Date(entry.appointmentDateTime)
+          : null;
+        const { anchor, hadAppointment, newStart, until } = computeRenewal(customer, anchorDate);
+        return { customer, anchor, hadAppointment, newStart, until };
+      });
 
-      const updates = updatedPayloads.map((payload, index) =>
-        updateAutoCustomer(customersToUpdate[index]._id, payload)
+      const cellStyle = {
+        padding: "6px 10px",
+        borderBottom: "1px solid #e5e7eb",
+        whiteSpace: "nowrap",
+      };
+
+      const confirmed = await MySwal.fire({
+        title: "Ανανέωση προγράμματος",
+        width: 680,
+        html: (
+          <div style={{ textAlign: "left" }}>
+            <div
+              style={{
+                maxHeight: 340,
+                overflowY: "auto",
+                border: "1px solid #e5e7eb",
+                borderRadius: 8,
+              }}
+            >
+              <table style={{ width: "100%", fontSize: 13, borderCollapse: "collapse" }}>
+                <thead>
+                  <tr style={{ background: "#f3f4f6" }}>
+                    <th style={{ ...cellStyle, textAlign: "left" }}>Πελάτης</th>
+                    <th style={{ ...cellStyle, textAlign: "left" }}>Τελευταίο ραντεβού</th>
+                    <th style={{ ...cellStyle, textAlign: "left" }}>Νέα έναρξη</th>
+                    <th style={{ ...cellStyle, textAlign: "left" }}>Νέα λήξη</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {plans.map((plan) => (
+                    <tr key={plan.customer._id}>
+                      <td style={cellStyle}>{plan.customer.customerName}</td>
+                      <td style={cellStyle}>
+                        {plan.hadAppointment ? formatShortDate(plan.anchor) : "Κανένα"}
+                      </td>
+                      <td style={cellStyle}>{formatShortDate(plan.newStart)}</td>
+                      <td style={cellStyle}>
+                        {plan.until ? formatShortDate(parseLocalDateString(plan.until)) : "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p style={{ marginTop: 14, fontWeight: 600 }}>
+              Θα ανανεωθεί το πρόγραμμα για {plans.length} πελάτες. Συνέχεια;
+            </p>
+          </div>
+        ),
+        showCancelButton: true,
+        confirmButtonText: "Ναι",
+        cancelButtonText: "Άκυρο",
+      });
+
+      if (!confirmed.isConfirmed) return;
+
+      const updates = plans.map((plan) =>
+        updateAutoCustomer(plan.customer._id, buildRenewalPayload(plan.newStart, plan.until))
       );
-
       await Promise.all(updates);
       await loadCustomers();
-      toast.success(
-        "Οι επαναλαμβανόμενοι πελάτες ανανεώθηκαν. Έλεγξε το preview και μετά κάνε Push στο κύριο ημερολόγιο."
-      );
-      const earliestNextStartFrom = updatedPayloads
-        .map((payload) => (payload?.startFrom ? new Date(payload.startFrom) : null))
+      toast.success(`Ανανεώθηκε το πρόγραμμα για ${plans.length} πελάτες.`);
+
+      // Renewal already wrote the correct values onto each card, so the preview must run
+      // with the bulk Από / Έως / Αριθμός fields empty — each card is the source of
+      // truth. Leaving stale values here would make the preview request fail validation.
+      setPushState({ from: "", to: "", count: "" });
+
+      // Show the result on THIS page: jump the preview to the earliest new start and
+      // refresh the on-page dry-run preview. Nothing is written to the Calendar page.
+      const earliestStart = plans
+        .map((plan) => plan.newStart)
         .filter((date) => date && !Number.isNaN(date.getTime()))
         .sort((a, b) => a.getTime() - b.getTime())[0];
-      if (earliestNextStartFrom) {
-        setCalendarStart(alignToMondayStart(new Date(earliestNextStartFrom)));
+      if (earliestStart) {
+        setCalendarStart(alignToMondayStart(new Date(earliestStart)));
       }
+      // Explicit empty inputs so the preview reflects the freshly-written cards, not the
+      // just-cleared (but not yet flushed) bulk fields.
+      runPreview({ from: "", to: "", count: "" });
     } catch (error) {
-      console.error("Failed to renew auto customers", error);
-      toast.error(error?.message || "Αποτυχία ανανέωσης πελατών.");
+      console.error("Failed to renew schedule", error);
+      toast.error(error?.message || "Αποτυχία ανανέωσης προγράμματος.");
     } finally {
       setRenewing(false);
     }
@@ -991,9 +1092,18 @@ const AutoCustomersPage = () => {
   const pushBlocked = formOpen || formSubmitting || hasUnsavedChanges || selectedCount === 0;
   const newTooltipText = "";
   const renewTooltipText =
-    "Η ανανέωση ενημερώνει τους recurring πελάτες και το preview. Δεν δημιουργεί κανονικά ραντεβού. Για να αποθηκευτούν στο κύριο ημερολόγιο, πάτησε Push.";
+    "Συνεχίζει το πρόγραμμα κάθε πελάτη από το τελευταίο του ραντεβού. Δεν δημιουργεί ραντεβού.";
   const pushTooltipText =
-    "Αποθήκευσε πρώτα τις αλλαγές σου για να κάνεις Push στο κύριο ημερολόγιο.";
+    "Αποθήκευσε πρώτα τις αλλαγές σου.";
+
+  // Badge so it's always clear what's on screen.
+  const previewBadgeText = !previewMeta
+    ? "Φόρτωση…"
+    : previewMeta.mode === "selected"
+    ? `${previewMeta.selectedCount} επιλεγμένοι πελάτες${
+        previewMeta.count ? ` · ${previewMeta.count} ραντεβού ο καθένας` : ""
+      }`
+    : "Όλοι οι πελάτες";
 
   return (
     <div className="h-full text-gray-100">
@@ -1024,12 +1134,12 @@ const AutoCustomersPage = () => {
               </div>
               <div className="relative group">
                 <button
-                  onClick={handleRenewAll}
+                  onClick={handleRenewSchedule}
                   disabled={renewing || loading}
-                  className="h-10 bg-emerald-600 hover:brightness-110 disabled:bg-gray-700 disabled:text-gray-400 text-white px-4 rounded-lg text-sm font-medium transition shadow-sm"
-                  aria-label="Η ανανέωση ενημερώνει τους recurring πελάτες και το preview. Δεν δημιουργεί κανονικά ραντεβού. Για να αποθηκευτούν στο κύριο ημερολόγιο, πάτησε Push."
+                  className="h-10 bg-amber-600 hover:brightness-110 disabled:bg-gray-700 disabled:text-gray-400 text-white px-4 rounded-lg text-sm font-medium transition shadow-sm"
+                  aria-label={renewTooltipText}
                 >
-                  {renewing ? "Ανανέωση (Preview)..." : "Ανανέωση (Preview)"}
+                  {renewing ? "Ανανέωση..." : "Ανανέωση προγράμματος"}
                 </button>
                 {renewTooltipText && (
                   <div className="pointer-events-none absolute left-0 top-full mt-2 w-64 rounded-lg border border-white/10 bg-black/80 px-3 py-2 text-xs leading-snug text-gray-200 opacity-0 translate-y-1 transition group-hover:opacity-100 group-hover:translate-y-0 group-focus-within:opacity-100 group-focus-within:translate-y-0 z-50">
@@ -1045,9 +1155,9 @@ const AutoCustomersPage = () => {
                   }}
                   disabled={pushBlocked}
                   className="h-10 bg-blue-500 hover:brightness-110 disabled:bg-gray-700 disabled:text-gray-400 text-white px-4 rounded-lg text-sm font-medium transition shadow-sm"
-                  aria-label="Αποθήκευσε πρώτα τις αλλαγές σου για να κάνεις Push στο κύριο ημερολόγιο."
+                  aria-label="Αποθήκευσε πρώτα τις αλλαγές σου."
                 >
-                  Push στο Ημερολόγιο
+                  Δημιουργία ραντεβού
                 </button>
                 {pushTooltipText && (
                   <div className="pointer-events-none absolute left-0 top-full mt-2 w-64 rounded-lg border border-white/10 bg-black/80 px-3 py-2 text-xs leading-snug text-gray-200 opacity-0 translate-y-1 transition group-hover:opacity-100 group-hover:translate-y-0 group-focus-within:opacity-100 group-focus-within:translate-y-0 z-50">
@@ -1311,14 +1421,12 @@ const AutoCustomersPage = () => {
               ))}
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs text-gray-400 sm:hidden">Υπολογισμοί βασισμένοι στους αποθηκευμένους πελάτες</span>
-              <span className="hidden text-xs text-gray-400 sm:inline">Υπολογισμοί βασισμένοι στους αποθηκευμένους πελάτες</span>
               <div className="flex items-center gap-2 flex-wrap">
                 <button
                   type="button"
-                  onClick={() => shiftCalendar(-4)}
+                  onClick={() => navigateCalendar(-1)}
                 className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-gray-600 text-gray-200 hover:bg-gray-700"
-                aria-label="Προηγούμενη εβδομάδα"
+                aria-label="Προηγούμενο"
               >
                   <ChevronLeft size={18} />
                 </button>
@@ -1331,9 +1439,9 @@ const AutoCustomersPage = () => {
                 </button>
               <button
                 type="button"
-                onClick={() => shiftCalendar(4)}
+                onClick={() => navigateCalendar(1)}
                 className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-gray-600 text-gray-200 hover:bg-gray-700"
-                aria-label="Επόμενη εβδομάδα"
+                aria-label="Επόμενο"
               >
                   <ChevronRight size={18} />
                 </button>
@@ -1341,9 +1449,37 @@ const AutoCustomersPage = () => {
             </div>
           </div>
           <div
+            className={`mb-3 flex items-center gap-2 rounded-lg border px-3 py-2 text-sm ${
+              previewMeta
+                ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-200"
+                : "border-gray-600 bg-gray-700/40 text-gray-300"
+            }`}
+          >
+            <CalendarClock size={16} />
+            <span>{previewBadgeText}</span>
+            {previewLoading && previewMeta && (
+              <span className="text-xs text-gray-400">· φόρτωση…</span>
+            )}
+          </div>
+          <div
             className="auto-customers-preview overflow-x-auto max-w-full min-h-0"
             style={{ height: previewCalHeight, width: "100%" }}
           >
+            {previewError ? (
+              <div className="flex h-full items-center justify-center p-6 text-center">
+                <div className="max-w-md rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-4 text-sm text-red-200">
+                  <p className="mb-1 font-semibold">Κάτι πήγε στραβά</p>
+                  <p className="text-red-300/90">{previewError}</p>
+                  <button
+                    type="button"
+                    onClick={runPreview}
+                    className="mt-3 rounded-md border border-red-400/50 px-3 py-1 text-xs text-red-100 hover:bg-red-500/20"
+                  >
+                    Δοκίμασε ξανά
+                  </button>
+                </div>
+              </div>
+            ) : (
             <CalendarComponent
               events={previewEvents}
               date={calendarStart}
@@ -1366,29 +1502,16 @@ const AutoCustomersPage = () => {
                 setInitialFormSnapshot(toComparableSnapshot(nextFormState));
                 setFormOpen(true);
               }}
-              onUpdateAppointment={async ({ event, start, end }) => {
-                if (!event?.autoCustomerId || !event?.originalStart) return;
-                const startDate = new Date(start);
-                const endDate = new Date(end);
-                try {
-                  await overrideAutoCustomerOccurrence(event.autoCustomerId, {
-                    occurrence: new Date(event.originalStart).toISOString(),
-                    overrideStart: startDate.toISOString(),
-                    durationMin: Math.round((endDate - startDate) / 60000),
-                    barber: event.barber,
-                  });
-                  await loadCustomers();
-                } catch (error) {
-                  console.error(error);
-                  toast.error(error.message || "Αποτυχία ενημέρωσης εμφάνισης.");
-                }
-              }}
+              /* Read-only preview: drag-to-override removed so the calendar never
+                 writes to the DB. Per-occurrence overrides are done via the edit
+                 form (click an event -> explicit save). */
               onSelectEvent={(event) => {
                 const customer = customers.find((item) => item?._id === event.autoCustomerId);
                 if (!customer) return;
                 handleEdit(customer, event.originalStart);
               }}
             />
+            )}
           </div>
         </section>
       </div>
@@ -1552,7 +1675,15 @@ const AutoCustomersPage = () => {
                   <option value="10">10</option>
                   <option value="20">20</option>
                 </datalist>
-
+                {(() => {
+                  const range = computeCardRange(formState);
+                  return range ? (
+                    <span className="text-xs text-gray-400">
+                      Ξεκινά: {formatShortDate(range.start)} · Τελειώνει:{" "}
+                      {formatShortDate(range.end)}
+                    </span>
+                  ) : null;
+                })()}
               </label>
               <label className="flex flex-col text-sm gap-1">
                 Έναρξη
@@ -1619,7 +1750,7 @@ const AutoCustomersPage = () => {
             className="w-full max-w-lg bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl p-6"
           >
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-semibold">Push στο Ημερολόγιο ({selectedCount} selected)</h2>
+              <h2 className="text-xl font-semibold">Δημιουργία ραντεβού</h2>
               <button
                 onClick={() => setPushOpen(false)}
                 className="text-gray-400 hover:text-gray-200 text-xl"
@@ -1628,11 +1759,8 @@ const AutoCustomersPage = () => {
               </button>
             </div>
             <form className="space-y-4" onSubmit={handlePushSubmit}>
-              <p className="text-sm text-gray-300">
-                Θα δημιουργηθούν ραντεβού μόνο για τους επιλεγμένους πελάτες.
-              </p>
               <label className="flex flex-col text-sm gap-1">
-                Από
+                Από (προαιρετικό)
               <DatePicker
                   selected={pushState.from ? parseLocalDateString(pushState.from) : null}
                   onChange={(date) =>
@@ -1646,8 +1774,8 @@ const AutoCustomersPage = () => {
                   className="bg-[#181a23] border border-gray-700 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500 text-[#a78bfa]"
                   calendarClassName="!bg-[#161a23] !text-[#ede9fe] !rounded-lg !border !border-[#a78bfa]"
                   wrapperClassName="w-full"
-                  placeholderText="Επιλέξτε ημερομηνία"
-                  required
+                  placeholderText=""
+                  isClearable
                 />
               </label>
               <label className="flex flex-col text-sm gap-1">
@@ -1665,9 +1793,30 @@ const AutoCustomersPage = () => {
                   className="bg-[#181a23] border border-gray-700 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500 text-[#a78bfa]"
                   calendarClassName="!bg-[#161a23] !text-[#ede9fe] !rounded-lg !border !border-[#a78bfa]"
                   wrapperClassName="w-full"
-                  placeholderText="Επιλέξτε ημερομηνία"
+                  placeholderText=""
                   isClearable
                 />
+              </label>
+              <label className="flex flex-col text-sm gap-1">
+                Αριθμός ραντεβού (προαιρετικό)
+                <input
+                  type="number"
+                  min={1}
+                  max={52}
+                  step={1}
+                  inputMode="numeric"
+                  value={pushState.count}
+                  onChange={(e) =>
+                    setPushState((prev) => ({ ...prev, count: e.target.value }))
+                  }
+                  placeholder=""
+                  className={`bg-[#181a23] border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500 text-[#a78bfa] ${
+                    countError ? "border-red-500" : "border-gray-700"
+                  }`}
+                />
+                {countError && (
+                  <span className="text-xs text-red-400">{countError}</span>
+                )}
               </label>
               <div className="flex justify-end gap-3 pt-2">
                 <button
@@ -1679,10 +1828,10 @@ const AutoCustomersPage = () => {
                 </button>
                 <button
                   type="submit"
-                  disabled={pushSubmitting}
+                  disabled={pushSubmitting || Boolean(countError)}
                   className="px-4 py-2 rounded-lg bg-blue-500 hover:bg-blue-600 text-white disabled:bg-gray-700 disabled:text-gray-400 disabled:hover:bg-gray-700"
                 >
-                  Εκτέλεση
+                  Δημιουργία ραντεβού
                 </button>
               </div>
             </form>

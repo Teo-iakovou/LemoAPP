@@ -18,6 +18,9 @@ moment.updateLocale("el", {
   meridiemParse: /π\.μ\.|μ\.μ\./,
   meridiem: (hour) => (hour < 12 ? "π.μ." : "μ.μ."),
   isPM: (input) => input === "μ.μ.",
+  // Pin the week to Monday-start so the calendar's week grid matches the app's
+  // Monday-aligned dates (prevents a Sunday/Monday off-by-one in the week view).
+  week: { dow: 1, doy: 4 },
 });
 const localizer = momentLocalizer(moment);
 const DragAndDropCalendar = withDragAndDrop(BigCalendar);
@@ -107,6 +110,33 @@ const CalendarEvent = ({ event, title }) =>
     </span>
   );
 
+// Week/Day time-grid bounds. Default to a 07:00–21:00 window, but expand it to include
+// any event that starts earlier or ends later, so no appointment is ever hidden in the
+// time-grid views. (Month view ignores time and always shows every event, which is why
+// a 21:00 slot shows in Μήνας but was clipped out of Εβδομάδα/Ημέρα.)
+const getTimeBounds = (events = []) => {
+  let minMinutes = 7 * 60; // 07:00
+  let maxMinutes = 21 * 60; // 21:00
+  (Array.isArray(events) ? events : []).forEach((ev) => {
+    const start = ev?.start instanceof Date ? ev.start : null;
+    const end = ev?.end instanceof Date ? ev.end : null;
+    if (start) {
+      const m = start.getHours() * 60 + start.getMinutes();
+      if (m < minMinutes) minMinutes = m;
+    }
+    if (end) {
+      let m = end.getHours() * 60 + end.getMinutes();
+      // An end of exactly 00:00 is midnight of the next day → treat as end of day.
+      if (m === 0 && start && end > start) m = 24 * 60;
+      if (m > maxMinutes) maxMinutes = m;
+    }
+  });
+  minMinutes = Math.max(0, Math.min(minMinutes, 23 * 60));
+  maxMinutes = Math.min(24 * 60 - 1, Math.max(maxMinutes, minMinutes + 60));
+  const toDate = (mins) => new Date(1970, 1, 1, Math.floor(mins / 60), mins % 60, 0);
+  return { calendarMin: toDate(minMinutes), calendarMax: toDate(maxMinutes) };
+};
+
 const CalendarComponent = ({
   events,
   onSelectSlot,
@@ -128,6 +158,7 @@ const CalendarComponent = ({
   const activeView = view || internalView;
   const shouldUseHorizontalScroll = isMobile && activeView === Views.WEEK;
   const isMobileMonthView = isMobile && activeView === Views.MONTH;
+  const { calendarMin, calendarMax } = getTimeBounds(events);
 
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
@@ -233,8 +264,8 @@ const CalendarComponent = ({
             event: CalendarEvent,
           }}
           className="relative z-0 barber-calendar"
-          min={new Date(1970, 1, 1, 7, 0, 0)}
-          max={new Date(1970, 1, 1, 21, 0, 0)}
+          min={calendarMin}
+          max={calendarMax}
           step={40}
           timeslots={1}
           defaultView={defaultCalendarView}

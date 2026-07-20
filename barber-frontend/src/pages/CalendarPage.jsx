@@ -20,7 +20,7 @@ const API_BASE_URL =
 
 const MySwal = withReactContent(Swal);
 
-const CalendarPage = ({ darkCalendar = false }) => {
+const CalendarPage = ({ darkCalendar = false, defaultBarber = null }) => {
   const [appointments, setAppointments] = useState([]);
   const [customers, setCustomers] = useState([]); // Add customers state
   const [selectedDate, setSelectedDate] = useState(null);
@@ -515,6 +515,7 @@ const [isLoading, setIsLoading] = useState(true);  // ✅ Fetch appointments
         onClose={() => setShowForm(false)}
         onSubmit={handleFormSubmit}
         onDelete={handleDelete}
+        defaultBarber={defaultBarber}
         customers={customers}
       />
     )}

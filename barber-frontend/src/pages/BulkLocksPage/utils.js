@@ -201,15 +201,118 @@ export const aggregateLocks = (locks) => {
 
   const TOLERANCE_MS = 3 * 60 * 60 * 1000;
 
+  const isTagged = (entry) =>
+    entry.recurring === true || entry.lockReason === "ΜΟΝΙΜΟ";
+
+  // Build one recurring ("ΜΟΝΙΜΟ") row from same-slot occurrences. `forceInterval` is
+  // passed for untagged detected patterns (their interval is already known); for
+  // tag-grouped rows we take the most common week-gap, so a biweekly series reads as
+  // "κάθε 2 εβδομάδες" even when a gap makes the spacing irregular.
+  const buildRecurring = (entries, forceInterval) => {
+    const sorted = [...entries].sort((a, b) => a.startDate - b.startDate);
+    const first = sorted[0];
+    const last = sorted[sorted.length - 1];
+    const responseIds = sorted.map((entry) => entry.responseId).filter(Boolean);
+    const occurrences = sorted.map((entry) => ({
+      startDate: entry.startDate,
+      endDate: entry.endDate,
+      responseId: entry.responseId || null,
+    }));
+
+    let repeatInterval;
+    if (forceInterval != null) {
+      repeatInterval = forceInterval;
+    } else if (sorted.length > 1) {
+      const counts = new Map();
+      for (let i = 1; i < sorted.length; i++) {
+        const weeks = Math.max(
+          1,
+          Math.round((sorted[i].startDate - sorted[i - 1].startDate) / weekMs)
+        );
+        counts.set(weeks, (counts.get(weeks) || 0) + 1);
+      }
+      repeatInterval = Array.from(counts.entries()).sort(
+        (a, b) => b[1] - a[1] || a[0] - b[0]
+      )[0][0];
+    } else {
+      repeatInterval = 1;
+    }
+
+    const recurringLock = {
+      ...first,
+      startDate: first.startDate,
+      responseIds,
+      recurring: true,
+    };
+    return {
+      kind: "recurring",
+      uid: getLockRowKey(recurringLock),
+      barber: first.barber,
+      weekday: first.weekday,
+      time: first.time,
+      duration: first.duration,
+      startDate: first.startDate,
+      endDate: last.endDate,
+      responseIds,
+      recurring: true,
+      lockReason: "ΜΟΝΙΜΟ",
+      repeatInterval,
+      occurrences,
+    };
+  };
+
+  const buildSingle = (entry) => {
+    const singleLock = {
+      ...entry,
+      startDate: entry.startDate,
+      responseIds: entry.responseId ? [entry.responseId] : [],
+      recurring: false,
+    };
+    return {
+      kind: "single",
+      uid: getLockRowKey(singleLock),
+      barber: entry.barber,
+      weekday: entry.weekday,
+      time: entry.time,
+      duration: entry.duration,
+      startDate: entry.startDate,
+      endDate: entry.endDate,
+      responseIds: entry.responseId ? [entry.responseId] : [],
+      recurring: false,
+      lockReason: entry.lockReason,
+      repeatInterval: 1,
+      occurrences: [
+        {
+          startDate: entry.startDate,
+          endDate: entry.endDate,
+          responseId: entry.responseId || null,
+        },
+      ],
+    };
+  };
+
   byKey.forEach((entries) => {
     entries.sort((a, b) => a.startDate - b.startDate);
-    const responseIds = entries.map((entry) => entry.responseId).filter(Boolean);
+
+    // Tag-driven: every "ΜΟΝΙΜΟ" row in this slot collapses into ONE entry, regardless of
+    // gaps or interval changes — the tag is the grouping key, not the detected pattern.
+    // This is what keeps a biweekly series whole once the 12-month window pulls in past
+    // occurrences that would otherwise break interval detection.
+    const tagged = entries.filter(isTagged);
+    if (tagged.length) {
+      result.push(buildRecurring(tagged));
+    }
+
+    // Untagged rows keep the original interval pattern-detection behaviour, unchanged.
+    const untagged = entries.filter((entry) => !isTagged(entry));
+    if (!untagged.length) return;
+
     let repeatInterval = 1;
-    let isRecurring =
-      entries.length > 1 &&
-      entries.every((entry, index) => {
+    const isRecurring =
+      untagged.length > 1 &&
+      untagged.every((entry, index) => {
         if (index === 0) return true;
-        const prev = entries[index - 1];
+        const prev = untagged[index - 1];
         const diff = Math.abs(entry.startDate - prev.startDate);
         const approxWeeks = Math.max(1, Math.round(diff / weekMs));
         const expectedDiff = approxWeeks * weekMs;
@@ -226,65 +329,9 @@ export const aggregateLocks = (locks) => {
       });
 
     if (isRecurring) {
-      const first = entries[0];
-      const last = entries[entries.length - 1];
-      const occurrences = entries.map((entry) => ({
-        startDate: entry.startDate,
-        endDate: entry.endDate,
-        responseId: entry.responseId || null,
-      }));
-      const recurringLock = {
-        ...first,
-        startDate: first.startDate,
-        responseIds,
-        recurring: true,
-      };
-      result.push({
-        kind: "recurring",
-        uid: getLockRowKey(recurringLock),
-        barber: first.barber,
-        weekday: first.weekday,
-        time: first.time,
-        duration: first.duration,
-        startDate: first.startDate,
-        endDate: last.endDate,
-        responseIds,
-        recurring: true,
-        lockReason: "ΜΟΝΙΜΟ",
-        repeatInterval,
-        occurrences,
-      });
+      result.push(buildRecurring(untagged, repeatInterval));
     } else {
-      entries.forEach((entry) => {
-        const occurrences = [
-          {
-            startDate: entry.startDate,
-            endDate: entry.endDate,
-            responseId: entry.responseId || null,
-          },
-        ];
-        const singleLock = {
-          ...entry,
-          startDate: entry.startDate,
-          responseIds: entry.responseId ? [entry.responseId] : [],
-          recurring: false,
-        };
-        result.push({
-          kind: "single",
-          uid: getLockRowKey(singleLock),
-          barber: entry.barber,
-          weekday: entry.weekday,
-          time: entry.time,
-          duration: entry.duration,
-          startDate: entry.startDate,
-          endDate: entry.endDate,
-          responseIds: entry.responseId ? [entry.responseId] : [],
-          recurring: false,
-          lockReason: entry.lockReason,
-          repeatInterval: 1,
-          occurrences,
-        });
-      });
+      untagged.forEach((entry) => result.push(buildSingle(entry)));
     }
   });
 

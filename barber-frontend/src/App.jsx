@@ -35,6 +35,9 @@ const BulkLocksPage = lazy(() => import("./pages/BulkLocksPage"));
 const App = () => {
   const [isAuth, setAuth] = useState(false); // Authentication state
   const [role, setRole] = useState(readRoleFromToken); // 'admin' | 'calendar' | null
+  // Which barber the signed-in user IS. Used only to preselect the barber on a new
+  // appointment (Phase B); access control never depends on it.
+  const [barberName, setBarberName] = useState(null);
   const [calendarDark, setCalendarDark] = useState(() => {
     try {
       const saved = localStorage.getItem("calendarDark");
@@ -62,6 +65,7 @@ const App = () => {
       localStorage.removeItem("token");
       setAuth(false);
       setRole(null);
+      setBarberName(null);
       toast.error("Η συνεδρία έληξε, συνδεθείτε ξανά.");
     });
   }, []);
@@ -71,13 +75,17 @@ const App = () => {
   useEffect(() => {
     if (!isAuth) {
       setRole(null);
+      setBarberName(null);
       return;
     }
     setRole(readRoleFromToken());
     let cancelled = false;
     fetchMe()
       .then((user) => {
-        if (!cancelled && user) setRole(user.role || "admin");
+        if (!cancelled && user) {
+          setRole(user.role || "admin");
+          setBarberName(user.barberName || null);
+        }
       })
       .catch(() => {
         // 401s are handled globally by the on401Handler above.
@@ -117,6 +125,7 @@ const App = () => {
     localStorage.removeItem("token"); // Clear the token
     setAuth(false); // Set authentication to false
     setRole(null);
+    setBarberName(null);
   };
 
   return (
@@ -145,7 +154,12 @@ const App = () => {
               <Routes>
                 <Route
                   path="/calendar"
-                  element={<CalendarPage darkCalendar={calendarDark} />}
+                  element={
+                    <CalendarPage
+                      darkCalendar={calendarDark}
+                      defaultBarber={barberName}
+                    />
+                  }
                 />
                 <Route path="/profile" element={<Profile />} />
                 <Route path="*" element={<Navigate to="/calendar" replace />} />
@@ -155,7 +169,12 @@ const App = () => {
                 <Route path="/" element={<Home />} />
                 <Route
                   path="/calendar"
-                  element={<CalendarPage darkCalendar={calendarDark} />}
+                  element={
+                    <CalendarPage
+                      darkCalendar={calendarDark}
+                      defaultBarber={barberName}
+                    />
+                  }
                 />
                 <Route path="/customers" element={<Customers />} />
                 <Route path="/CustomerCounts" element={<CustomerCounts />} />
