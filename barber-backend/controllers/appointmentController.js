@@ -290,6 +290,12 @@ const createAppointment = async (req, res, next) => {
     }
 
     const effectiveName = customer ? customer.name : incomingName || customerName;
+    // A weekly lock is a recurring/permanent lock: tag every row "ΜΟΝΙΜΟ" so it is
+    // indistinguishable from a recurring lock created on the Bulk Locks page. (recurrence/
+    // repeatInterval/repeatCount are request params that drive generation only — they are
+    // not persisted, since recurrence is represented by the per-date rows + this tag.)
+    const isRecurringLock =
+      appointmentType === "lock" && recurrence === "weekly" && maxRepeat > 1;
     const newAppointment = new Appointment({
       customerName: effectiveName,
       phoneNumber: appointmentType === "appointment" ? phone : undefined,
@@ -299,16 +305,15 @@ const createAppointment = async (req, res, next) => {
       appointmentStatus: "confirmed",
       type: appointmentType,
       endTime: endTimeUTC,
-      recurrence: recurrence === "weekly" ? "weekly" : "one-time",
-      repeatInterval: recurrence === "weekly" ? intervalWeeks : null,
-      repeatCount: recurrence === "weekly" ? maxRepeat : null,
       user: userId || undefined,
       origin: isStaff ? "admin" : "public",
       lockReason:
-        appointmentType === "lock" && typeof lockReason === "string"
-          ? lockReason.trim()
-          : appointmentType === "lock"
-          ? ""
+        appointmentType === "lock"
+          ? isRecurringLock
+            ? "ΜΟΝΙΜΟ"
+            : typeof lockReason === "string"
+            ? lockReason.trim()
+            : ""
           : undefined,
       createdBy: createdBy || undefined,
     });
@@ -358,7 +363,7 @@ const createAppointment = async (req, res, next) => {
           duration,
           intervalWeeks,
           repeatCount: maxRepeat - 1,
-          lockReason: lockReason || "",
+          lockReason: "ΜΟΝΙΜΟ", // recurring lock → tag every occurrence, like the Bulk page
           createdBy,
           user: userId || undefined,
         });
@@ -559,11 +564,8 @@ const generateRecurringLocks = async ({
       endTime: currentDateUTC.clone().add(duration, "minutes").toDate(),
       appointmentStatus: "confirmed",
       type: "lock",
-      lockReason: lockReason || "",
+      lockReason: lockReason || "ΜΟΝΙΜΟ",
       createdBy: createdBy || undefined,
-      recurrence: "weekly",
-      repeatInterval: intervalWeeks,
-      repeatCount: null,
       user: user || undefined,
     });
 
@@ -865,6 +867,7 @@ const getUpcomingAppointments = async (req, res) => {
         type: 1,
         duration: 1,
         endTime: 1,
+        lockReason: 1,
         _id: 1,
       }
     )
@@ -874,6 +877,42 @@ const getUpcomingAppointments = async (req, res) => {
     res.json(appointments);
   } catch (error) {
     res.status(500).json({ error: "Failed to fetch upcoming appointments" });
+  }
+};
+
+// Locks from the last 12 months onward (past + future), for the Bulk Locks grouping
+// view — so past occurrences of a weekly pattern group together instead of being cut off
+// at "today". Read-only; includes lockReason so the stored "ΜΟΝΙΜΟ" tag is visible.
+const getRecentLocks = async (req, res) => {
+  try {
+    const scope = resolveBarberScope(req.user);
+    if (scope.status) {
+      return res.status(scope.status).json({ message: scope.message });
+    }
+
+    const since = moment().subtract(12, "months").startOf("day").toDate();
+    const query = {
+      type: "lock",
+      appointmentStatus: "confirmed",
+      appointmentDateTime: { $gte: since },
+    };
+    if (scope.barber) query.barber = scope.barber;
+
+    const locks = await Appointment.find(query, {
+      appointmentDateTime: 1,
+      barber: 1,
+      type: 1,
+      duration: 1,
+      endTime: 1,
+      lockReason: 1,
+      _id: 1,
+    })
+      .sort({ appointmentDateTime: 1 })
+      .lean();
+
+    res.json(locks);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch recent locks" });
   }
 };
 
@@ -947,6 +986,7 @@ module.exports = {
   updateAppointment,
   deleteAppointment,
   getUpcomingAppointments,
+  getRecentLocks,
   getPastAppointments,
   getMyAppointments,
 };

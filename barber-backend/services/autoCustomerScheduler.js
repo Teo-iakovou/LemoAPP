@@ -19,9 +19,17 @@ const getBarberDisplayName = (barber = "") => {
   return barber;
 };
 
+// Hard cap on occurrences per customer per push (matches the model's maxOccurrences
+// limit). Guarantees the generation loop always terminates, even with an open horizon.
+const HARD_CEILING = 52;
+// When no explicit "to" is given the horizon is open. We bound it at the maximum span
+// the caps allow — 52 occurrences × 5-week cadence = 260 weeks — plus headroom, so an
+// empty "to" never truncates; count/until stop generation first.
+const OPEN_HORIZON_WEEKS = 300;
+
 const normalizeRange = ({ from, to }) => {
   const start = from ? toMoment(from) : moment.tz(TZ);
-  const end = to ? toMoment(to) : start.clone().add(8, "weeks");
+  const end = to ? toMoment(to) : start.clone().add(OPEN_HORIZON_WEEKS, "weeks");
 
   return {
     start: start.clone().startOf("minute"),
@@ -149,6 +157,7 @@ const generateAutoAppointments = async ({
   customers,
   rangeStart,
   rangeEnd,
+  countOverride,
   dryRun = true,
   initiatedBy,
 }) => {
@@ -168,6 +177,10 @@ const generateAutoAppointments = async ({
   if (!toMomentRange.isAfter(fromMoment)) {
     throw new Error("Range end must be after range start.");
   }
+
+  // Never generate in the past: floor every customer's start at "now", regardless of
+  // their startFrom or an explicitly typed (possibly past) `from`.
+  const notBefore = moment.tz(TZ);
 
   const barbers = Array.from(new Set(customers.map((c) => c.barber))).filter(Boolean);
   const autoCustomerIds = customers.map((c) => c._id).filter(Boolean);
@@ -231,12 +244,21 @@ const generateAutoAppointments = async ({
     const cadence = customer.cadenceWeeks || 1;
     const defaultDuration = customer.durationMin || 40;
     const untilMoment = customer.until ? toMoment(customer.until).endOf("day") : null;
-    let maxOccurrences = customer.maxOccurrences && Number(customer.maxOccurrences) > 0
-      ? Number(customer.maxOccurrences)
-      : null;
-    if (!untilMoment && (!maxOccurrences || !Number.isFinite(maxOccurrences))) {
+    // Effective occurrence cap for THIS push. A per-push count override wins; otherwise
+    // the customer's own maxOccurrences; otherwise 10 when there's no `until`. Always
+    // hard-capped at HARD_CEILING so an open horizon can never loop unbounded. This is
+    // a local value only — the customer's stored maxOccurrences is never modified.
+    let maxOccurrences;
+    if (countOverride && countOverride > 0) {
+      maxOccurrences = countOverride;
+    } else if (customer.maxOccurrences && Number(customer.maxOccurrences) > 0) {
+      maxOccurrences = Number(customer.maxOccurrences);
+    } else if (!untilMoment) {
       maxOccurrences = 10;
+    } else {
+      maxOccurrences = HARD_CEILING;
     }
+    maxOccurrences = Math.min(maxOccurrences, HARD_CEILING);
     let generatedForCustomer = 0;
 
     const skippedSet = new Set(
@@ -270,7 +292,7 @@ const generateAutoAppointments = async ({
     const startBoundary = customer.startFrom
       ? moment(customer.startFrom).tz(TZ).startOf("day")
       : fromMoment.clone();
-    const minStart = moment.max(fromMoment, startBoundary);
+    const minStart = moment.max(notBefore, fromMoment, startBoundary);
 
     while (occurrence.isBefore(minStart)) {
       occurrence.add(cadence, "weeks");
@@ -412,6 +434,7 @@ const generateAutoAppointments = async ({
           customerName: customer.customerName,
           barber: targetBarber,
           scheduledFor: matchedStart.toISOString(),
+          durationMin: duration,
           status: appliedShift === 0 ? "inserted" : "moved",
           shiftMinutes: appliedShift,
           reason: overrideEntry

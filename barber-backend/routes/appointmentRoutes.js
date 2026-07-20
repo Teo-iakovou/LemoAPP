@@ -6,6 +6,7 @@ const {
   deleteAppointment,
   getPastAppointments,
   getUpcomingAppointments,
+  getRecentLocks,
   getMyAppointments,
 } = require("../controllers/appointmentController");
 const requireUser = require("../middlewares/requireUser");
@@ -39,6 +40,7 @@ router.delete("/:id", requireUser, deleteAppointment); //, validatePassword it u
 // Authenticated staff only — these return customer names/phones. The controller
 // additionally scopes a 'calendar' user to their own barber.
 router.get("/upcoming", requireUser, getUpcomingAppointments);
+router.get("/locks", requireUser, getRecentLocks);
 router.get("/past", requireUser, getPastAppointments);
 router.get("/mine", requireUser, getMyAppointments);
 module.exports = router;

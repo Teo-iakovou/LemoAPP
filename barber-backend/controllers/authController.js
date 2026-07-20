@@ -111,6 +111,7 @@ const me = async (req, res) => {
       username: user.username,
       dob: user.dob || null,
       role: user.role || "admin",
+      barberName: user.barberName || null,
     },
   });
 };

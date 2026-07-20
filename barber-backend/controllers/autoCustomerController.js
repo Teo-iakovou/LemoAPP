@@ -348,6 +348,10 @@ const getLastAutoCustomerAppointments = async (req, res, next) => {
     const requestedIdStrings = parseIdList(req.query.ids);
     const requestedIds = requestedIdStrings.map(toObjectId).filter(Boolean);
     const restrictByIds = requestedIds.length > 0;
+    // autoOnly=true → anchor strictly on auto-generated appointments (used by the
+    // schedule-renewal action). Skips the phone/name fallback so a one-off manual
+    // booking is never treated as the recurring series' end.
+    const autoOnly = parseBoolean(req.query.autoOnly, false);
 
     const matchConditions = {
       type: "appointment",
@@ -385,7 +389,7 @@ const getLastAutoCustomerAppointments = async (req, res, next) => {
       });
     });
 
-    if (restrictByIds) {
+    if (restrictByIds && !autoOnly) {
       const autoCustomers = await AutoCustomer.find({ _id: { $in: requestedIds } })
         .select({ phoneNumber: 1, barber: 1, customerName: 1 })
         .lean();
@@ -643,11 +647,49 @@ const pushAutoCustomers = async (req, res, next) => {
     const {
       from,
       to,
+      count,
       dryRun = false,
       includeInactive = false,
       includePaused = false,
       customerIds,
     } = req.body || {};
+
+    // Bulk permanent-update semantics: "Από" (from), "Έως" (to) and "Αριθμός" (count)
+    // each PERMANENTLY replace the selected cards' startFrom / until / maxOccurrences.
+    // Any field left empty changes nothing — that customer keeps its own value for it.
+    // The same effective values drive generation (dry-run preview AND the real run), so
+    // the preview is exactly what the real run creates. weekday/time/barber/cadence are
+    // never touched here.
+    let countValue;
+    if (count !== undefined && count !== null && count !== "") {
+      const n = Number(count);
+      if (!Number.isInteger(n) || n < 1 || n > 52) {
+        return res.status(400).json({
+          success: false,
+          message: "Ο αριθμός ραντεβού πρέπει να είναι από 1 έως 52.",
+        });
+      }
+      countValue = n;
+    }
+
+    const hasFrom = from !== undefined && from !== null && from !== "";
+    const hasTo = to !== undefined && to !== null && to !== "";
+    const fromDate = hasFrom ? parseDateInput(from) : undefined;
+    const toDate = hasTo ? parseDateInput(to) : undefined;
+    if (hasFrom && !fromDate) {
+      return res.status(400).json({ success: false, message: "Μη έγκυρη ημερομηνία «Από»." });
+    }
+    if (hasTo && !toDate) {
+      return res.status(400).json({ success: false, message: "Μη έγκυρη ημερομηνία «Έως»." });
+    }
+    // Only compare when BOTH "Από" and "Έως" are actually provided; if either is
+    // empty/undefined, skip the check entirely (each card keeps its own value).
+    if (hasFrom && hasTo && fromDate && toDate && toDate < fromDate) {
+      return res.status(400).json({
+        success: false,
+        message: "Η ημερομηνία «Έως» δεν μπορεί να είναι πριν από την «Από».",
+      });
+    }
 
     const filter = {};
     if (!parseBoolean(includeInactive, false)) {
@@ -698,11 +740,37 @@ const pushAutoCustomers = async (req, res, next) => {
       });
     }
 
+    // Only the fields actually provided are changed; empties leave each card as-is.
+    const cardUpdates = {};
+    if (fromDate) cardUpdates.startFrom = fromDate;
+    if (toDate) cardUpdates.until = toDate;
+    if (countValue !== undefined) cardUpdates.maxOccurrences = countValue;
+    const hasCardUpdates = Object.keys(cardUpdates).length > 0;
+
+    // Effective values used for generation. On a real run these are also persisted onto
+    // the cards (permanent bulk update) before appointments are created. Generation then
+    // uses each customer's own startFrom (now the floor), until and maxOccurrences — so
+    // "Από" behaves as a per-customer floor aligned to that customer's weekday, and
+    // generation stops at whichever of "Έως" / "Αριθμός" comes first.
+    const effectiveCustomers = hasCardUpdates
+      ? customers.map((customer) => ({ ...customer, ...cardUpdates }))
+      : customers;
+
+    const isDryRun = parseBoolean(dryRun, false);
+
+    if (!isDryRun && hasCardUpdates) {
+      await AutoCustomer.updateMany(
+        { _id: { $in: customers.map((customer) => customer._id) } },
+        { $set: cardUpdates }
+      );
+    }
+
     const result = await generateAutoAppointments({
-      customers,
-      rangeStart: from,
-      rangeEnd: to,
-      dryRun: parseBoolean(dryRun, false),
+      customers: effectiveCustomers,
+      rangeStart: undefined,
+      rangeEnd: undefined,
+      countOverride: undefined,
+      dryRun: isDryRun,
       initiatedBy: req.user?._id,
     });
 
