@@ -9,7 +9,6 @@ import {
   pushAutoCustomers,
   fetchCustomers,
   overrideAutoCustomerOccurrence,
-  fetchAutoCustomerLastAppointments,
 } from "../utils/api";
 import CalendarComponent from "../_components/CalendarComponent";
 import { toast } from "react-hot-toast";
@@ -466,55 +465,46 @@ const AutoCustomersPage = () => {
     return base;
   }
 
-  // Renewal ("Ανανέωση προγράμματος"): continue a customer's recurring schedule from
-  // where it currently ends. Anchor = the customer's latest appointment date (any date,
-  // past or future), or today when they have none. New start = anchor + one cadence
-  // interval, aligned to the customer's own weekday, then floored at today in whole
-  // cadence steps so it is never in the past. New until = new start + cadence*(count-1)
-  // weeks (same card formula). weekday/time/barber/cadence/count are never changed.
-  const computeRenewal = (customer, anchorAppointmentDate) => {
-    const cadence = Number(customer.cadenceWeeks) || 1;
+  // Renewal ("Ανανέωση προγράμματος"): restart a customer's recurring schedule from
+  // TODAY, on that customer's own weekday. The card's existing `until` is the end
+  // boundary and is carried through UNCHANGED — never recomputed from maxOccurrences,
+  // never moved. weekday/time/barber/cadence/maxOccurrences are never changed either.
+  //
+  // A card whose `until` leaves no room for the new start is not renewed at all: moving
+  // its end date silently is exactly the kind of hidden write that destroyed 51 cards on
+  // 21/07, so it is reported for manual attention instead.
+  const computeRenewal = (customer) => {
     const weekday = Number(customer.weekday ?? 1);
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    let anchor =
-      anchorAppointmentDate instanceof Date
-        ? new Date(anchorAppointmentDate.getTime())
-        : anchorAppointmentDate
-        ? new Date(anchorAppointmentDate)
-        : null;
-    const hadAppointment = Boolean(anchor && !Number.isNaN(anchor.getTime()));
-    if (!hadAppointment) {
-      anchor = new Date(today.getTime());
-    }
-    anchor.setHours(0, 0, 0, 0);
-
-    // One cadence interval past the anchor, aligned to the customer's own weekday.
-    let newStart = alignToWeekday(addWeeks(anchor, cadence), weekday);
+    // Today advanced to this customer's own next weekday occurrence. When today already
+    // IS their weekday the offset is 0 and the new start is today — the backend floors
+    // every occurrence at "now" (autoCustomerScheduler :183, :295), so a slot earlier
+    // today rolls to the next cadence step there rather than being booked in the past.
+    const newStart = alignToWeekday(today, weekday);
     newStart.setHours(0, 0, 0, 0);
-    // Floor at today: never a start in the past. Advance in whole cadence steps.
-    while (newStart < today) {
-      newStart = addWeeks(newStart, cadence);
+
+    // Passed through verbatim, NOT reformatted: re-deriving it via
+    // toLocalDateString/toUtcIsoFromLocalDate would snap a value that is not at UTC
+    // midnight onto midnight, i.e. a silent edit to the very field we promise to keep.
+    const until = customer.until ?? null;
+
+    // Day-level comparison in local terms, matching how the rest of this file compares
+    // dates. Only used to classify — never written back.
+    const untilDay = until
+      ? parseLocalDateString(toLocalDateString(new Date(until)))
+      : null;
+    const untilValid = untilDay && !Number.isNaN(untilDay.getTime());
+
+    let skipReason = null;
+    if (untilValid) {
+      if (untilDay < today) skipReason = "past";
+      else if (untilDay < newStart) skipReason = "before-start";
     }
 
-    const hasCount =
-      customer.maxOccurrences !== undefined &&
-      customer.maxOccurrences !== null &&
-      String(customer.maxOccurrences).trim() !== "" &&
-      Number(customer.maxOccurrences) > 0;
-    // Same formula the card uses; "" => open-ended (a card without a count).
-    const until = hasCount
-      ? computeUntilValue({
-          startFrom: newStart,
-          weekday,
-          cadenceWeeks: cadence,
-          maxOccurrences: customer.maxOccurrences,
-        })
-      : "";
-
-    return { anchor, hadAppointment, newStart, until };
+    return { newStart, until, untilDay: untilValid ? untilDay : null, skipReason };
   };
 
   const handleEdit = (customer, occurrenceDate, options = {}) => {
@@ -934,8 +924,11 @@ const AutoCustomersPage = () => {
       await pushAutoCustomers(payload);
       toast.success(`Προστέθηκαν στο ημερολόγιο οι επιλεγμένοι πελάτες (${selectedCount}).`);
       clearCustomerSelection();
-      // The bulk fields permanently updated each selected card, so clear them to avoid
-      // re-applying the same change on a later run.
+      // Kept even though the fields no longer touch the cards. They are a one-shot
+      // override for the run that just finished, and the selection is cleared right
+      // above — so leaving them filled would silently carry this run's dates onto a
+      // DIFFERENT set of customers next time. Clearing forces each run to be typed
+      // deliberately, and leaves the preview showing each card's own values.
       setPushState({ from: "", to: "", count: "" });
 
       await loadCustomers();
@@ -952,9 +945,11 @@ const AutoCustomersPage = () => {
 
   // Renewal writes ONLY startFrom and until. Everything else (weekday, time, barber,
   // cadence, count) is left untouched — the partial update never sends those fields.
-  const buildRenewalPayload = (newStart, untilLocal) => ({
+  // `untilValue` is the card's existing value forwarded as-is, so the write is a no-op
+  // for that field; a card with no `until` stays open-ended (null unsets nothing).
+  const buildRenewalPayload = (newStart, untilValue) => ({
     startFrom: toUtcIsoFromLocalDate(toLocalDateString(newStart)),
-    until: untilLocal ? toUtcIsoFromLocalDate(untilLocal) : null,
+    until: untilValue ?? null,
   });
 
   // EXPLICIT WRITE: renews each selected customer's schedule (startFrom + until only),
@@ -978,34 +973,59 @@ const AutoCustomersPage = () => {
 
     setRenewing(true);
     try {
-      // Anchor lookup: the latest AUTO-generated appointment per customer (any date).
-      let anchorsByCustomer = {};
-      try {
-        const customerIds = targets
-          .map((customer) => (customer && customer._id ? String(customer._id) : null))
-          .filter(Boolean);
-        anchorsByCustomer = await fetchAutoCustomerLastAppointments(customerIds, {
-          autoOnly: true,
-        });
-      } catch (anchorError) {
-        console.error("Failed to fetch anchor appointments for renewal", anchorError);
-      }
+      // Dry-run: compute the new start per customer and classify. Writes nothing yet.
+      // No anchor lookup — the new start comes from today, not from past appointments.
+      const plans = targets.map((customer) => ({
+        customer,
+        ...computeRenewal(customer),
+      }));
 
-      // Dry-run: compute anchor / new start / new until per customer. Writes nothing yet.
-      const plans = targets.map((customer) => {
-        const entry = anchorsByCustomer?.[String(customer._id)];
-        const anchorDate = entry?.appointmentDateTime
-          ? new Date(entry.appointmentDateTime)
-          : null;
-        const { anchor, hadAppointment, newStart, until } = computeRenewal(customer, anchorDate);
-        return { customer, anchor, hadAppointment, newStart, until };
-      });
+      const renewable = plans.filter((plan) => !plan.skipReason);
+      const expired = plans.filter((plan) => plan.skipReason === "past");
+      const tooEarly = plans.filter((plan) => plan.skipReason === "before-start");
 
       const cellStyle = {
         padding: "6px 10px",
         borderBottom: "1px solid #e5e7eb",
         whiteSpace: "nowrap",
       };
+      const noteStyle = { marginTop: 14, fontWeight: 600, color: "#b45309" };
+      const listStyle = { margin: "6px 0 0", paddingLeft: 18, fontSize: 13 };
+
+      const skippedBlock = (title, rows) =>
+        rows.length > 0 && (
+          <div style={{ marginTop: 14 }}>
+            <p style={noteStyle}>{title}</p>
+            <ul style={listStyle}>
+              {rows.map((plan) => (
+                <li key={plan.customer._id}>
+                  {plan.customer.customerName} — λήξη{" "}
+                  {plan.untilDay ? formatShortDate(plan.untilDay) : "—"}
+                </li>
+              ))}
+            </ul>
+          </div>
+        );
+
+      if (renewable.length === 0) {
+        await MySwal.fire({
+          title: "Ανανέωση προγράμματος",
+          width: 680,
+          icon: "info",
+          html: (
+            <div style={{ textAlign: "left" }}>
+              <p>Κανένας πελάτης δεν μπορεί να ανανεωθεί.</p>
+              {skippedBlock("Χρειάζονται προσοχή (η λήξη τους έχει περάσει)", expired)}
+              {skippedBlock(
+                "Χρειάζονται προσοχή (η λήξη τους είναι πριν από τη νέα έναρξη)",
+                tooEarly
+              )}
+            </div>
+          ),
+          confirmButtonText: "Εντάξει",
+        });
+        return;
+      }
 
       const confirmed = await MySwal.fire({
         title: "Ανανέωση προγράμματος",
@@ -1024,21 +1044,17 @@ const AutoCustomersPage = () => {
                 <thead>
                   <tr style={{ background: "#f3f4f6" }}>
                     <th style={{ ...cellStyle, textAlign: "left" }}>Πελάτης</th>
-                    <th style={{ ...cellStyle, textAlign: "left" }}>Τελευταίο ραντεβού</th>
                     <th style={{ ...cellStyle, textAlign: "left" }}>Νέα έναρξη</th>
-                    <th style={{ ...cellStyle, textAlign: "left" }}>Νέα λήξη</th>
+                    <th style={{ ...cellStyle, textAlign: "left" }}>Έως (αμετάβλητο)</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {plans.map((plan) => (
+                  {renewable.map((plan) => (
                     <tr key={plan.customer._id}>
                       <td style={cellStyle}>{plan.customer.customerName}</td>
-                      <td style={cellStyle}>
-                        {plan.hadAppointment ? formatShortDate(plan.anchor) : "Κανένα"}
-                      </td>
                       <td style={cellStyle}>{formatShortDate(plan.newStart)}</td>
                       <td style={cellStyle}>
-                        {plan.until ? formatShortDate(parseLocalDateString(plan.until)) : "—"}
+                        {plan.untilDay ? formatShortDate(plan.untilDay) : "—"}
                       </td>
                     </tr>
                   ))}
@@ -1046,8 +1062,13 @@ const AutoCustomersPage = () => {
               </table>
             </div>
             <p style={{ marginTop: 14, fontWeight: 600 }}>
-              Θα ανανεωθεί το πρόγραμμα για {plans.length} πελάτες. Συνέχεια;
+              Θα ανανεωθεί το πρόγραμμα για {renewable.length} πελάτες. Συνέχεια;
             </p>
+            {skippedBlock("Χρειάζονται προσοχή (η λήξη τους έχει περάσει)", expired)}
+            {skippedBlock(
+              "Χρειάζονται προσοχή (η λήξη τους είναι πριν από τη νέα έναρξη)",
+              tooEarly
+            )}
           </div>
         ),
         showCancelButton: true,
@@ -1057,12 +1078,16 @@ const AutoCustomersPage = () => {
 
       if (!confirmed.isConfirmed) return;
 
-      const updates = plans.map((plan) =>
+      const updates = renewable.map((plan) =>
         updateAutoCustomer(plan.customer._id, buildRenewalPayload(plan.newStart, plan.until))
       );
       await Promise.all(updates);
       await loadCustomers();
-      toast.success(`Ανανεώθηκε το πρόγραμμα για ${plans.length} πελάτες.`);
+      const skippedCount = expired.length + tooEarly.length;
+      toast.success(
+        `Ανανεώθηκε το πρόγραμμα για ${renewable.length} πελάτες.` +
+          (skippedCount > 0 ? ` ${skippedCount} χρειάζονται προσοχή.` : "")
+      );
 
       // Renewal already wrote the correct values onto each card, so the preview must run
       // with the bulk Από / Έως / Αριθμός fields empty — each card is the source of
@@ -1071,7 +1096,8 @@ const AutoCustomersPage = () => {
 
       // Show the result on THIS page: jump the preview to the earliest new start and
       // refresh the on-page dry-run preview. Nothing is written to the Calendar page.
-      const earliestStart = plans
+      // Only the customers actually written — skipped ones were not renewed.
+      const earliestStart = renewable
         .map((plan) => plan.newStart)
         .filter((date) => date && !Number.isNaN(date.getTime()))
         .sort((a, b) => a.getTime() - b.getTime())[0];
@@ -1092,7 +1118,7 @@ const AutoCustomersPage = () => {
   const pushBlocked = formOpen || formSubmitting || hasUnsavedChanges || selectedCount === 0;
   const newTooltipText = "";
   const renewTooltipText =
-    "Συνεχίζει το πρόγραμμα κάθε πελάτη από το τελευταίο του ραντεβού. Δεν δημιουργεί ραντεβού.";
+    "Ξεκινά ξανά το πρόγραμμα κάθε πελάτη από σήμερα, κρατώντας τη δική του λήξη. Δεν δημιουργεί ραντεβού.";
   const pushTooltipText =
     "Αποθήκευσε πρώτα τις αλλαγές σου.";
 
