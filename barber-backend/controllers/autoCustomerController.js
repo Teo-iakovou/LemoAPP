@@ -654,12 +654,16 @@ const pushAutoCustomers = async (req, res, next) => {
       customerIds,
     } = req.body || {};
 
-    // Bulk permanent-update semantics: "Από" (from), "Έως" (to) and "Αριθμός" (count)
-    // each PERMANENTLY replace the selected cards' startFrom / until / maxOccurrences.
-    // Any field left empty changes nothing — that customer keeps its own value for it.
+    // Bulk TEMPORARY-override semantics: "Από" (from), "Έως" (to) and "Αριθμός" (count)
+    // apply to THIS generation run only. They are never written to the customer cards.
+    // Any field left empty means "use that customer's own card value" for it.
     // The same effective values drive generation (dry-run preview AND the real run), so
     // the preview is exactly what the real run creates. weekday/time/barber/cadence are
     // never touched here.
+    //
+    // Card values are changed ONLY from the individual edit modal, or by
+    // "Ανανέωση προγράμματος". A bulk push must never mutate them: doing so
+    // destroyed every card's individually planned dates on 21/07/2026.
     let countValue;
     if (count !== undefined && count !== null && count !== "") {
       const n = Number(count);
@@ -740,30 +744,30 @@ const pushAutoCustomers = async (req, res, next) => {
       });
     }
 
-    // Only the fields actually provided are changed; empties leave each card as-is.
-    const cardUpdates = {};
-    if (fromDate) cardUpdates.startFrom = fromDate;
-    if (toDate) cardUpdates.until = toDate;
-    if (countValue !== undefined) cardUpdates.maxOccurrences = countValue;
-    const hasCardUpdates = Object.keys(cardUpdates).length > 0;
+    // Only the fields actually provided are overridden; empties leave each card as-is.
+    const overrides = {};
+    if (fromDate) overrides.startFrom = fromDate;
+    if (toDate) overrides.until = toDate;
+    if (countValue !== undefined) overrides.maxOccurrences = countValue;
+    const hasOverrides = Object.keys(overrides).length > 0;
 
-    // Effective values used for generation. On a real run these are also persisted onto
-    // the cards (permanent bulk update) before appointments are created. Generation then
-    // uses each customer's own startFrom (now the floor), until and maxOccurrences — so
-    // "Από" behaves as a per-customer floor aligned to that customer's weekday, and
-    // generation stops at whichever of "Έως" / "Αριθμός" comes first.
-    const effectiveCustomers = hasCardUpdates
-      ? customers.map((customer) => ({ ...customer, ...cardUpdates }))
+    // In-memory copies ONLY — never persisted. Generation reads startFrom / until /
+    // maxOccurrences off these throwaway objects, so "Από" behaves as a per-customer
+    // floor aligned to that customer's weekday and generation stops at whichever of
+    // "Έως" / "Αριθμός" comes first, exactly as before. The stored cards are untouched.
+    //
+    // Deliberately NOT passed as rangeStart / rangeEnd / countOverride: those are an
+    // extra clamp INTERSECTED with each card's own values, not a replacement for them.
+    // A card's own startFrom would still floor the start (scheduler :291-299) and its
+    // own until would still cap the end (:302), and normalizeRange truncates `to` to
+    // startOf("minute") rather than endOf("day") (:36 vs :246), dropping same-day
+    // slots. Measured over the live 52 cards, that route changed the generated dates
+    // for up to 47 of them — see the dry-run comparison in the review notes.
+    const effectiveCustomers = hasOverrides
+      ? customers.map((customer) => ({ ...customer, ...overrides }))
       : customers;
 
     const isDryRun = parseBoolean(dryRun, false);
-
-    if (!isDryRun && hasCardUpdates) {
-      await AutoCustomer.updateMany(
-        { _id: { $in: customers.map((customer) => customer._id) } },
-        { $set: cardUpdates }
-      );
-    }
 
     const result = await generateAutoAppointments({
       customers: effectiveCustomers,

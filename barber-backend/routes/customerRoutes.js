@@ -7,8 +7,10 @@ const { sendBirthdaySMS } = require("../controllers/birthdaySms");
 const { sendNewYearSMS } = require("../controllers/newYearSms");
 const requireUser = require("../middlewares/requireUser");
 const requireFullAdmin = require("../middlewares/requireFullAdmin");
+const requireCalendarOrAdmin = require("../middlewares/requireCalendarOrAdmin");
 const {
   getCustomers,
+  getCustomersForLookup,
   deleteCustomer,
   updateCustomer,
   uploadProfilePicture,
@@ -20,7 +22,25 @@ const {
   createCustomer,
 } = require("../controllers/customerController");
 
-// Every customer route is admin-only. The public booking site never calls
+// ---------------------------------------------------------------------------
+// The ONLY customer route a limited 'calendar' user may reach.
+//
+// Registered ABOVE the admin gate below on purpose: Express runs middleware in
+// registration order, so this route is matched before `router.use(...)` is ever
+// applied, and everything declared after it stays admin-only by default. Opening
+// a route therefore requires an explicit line up here — nothing can be exposed by
+// forgetting to add a guard further down.
+//
+// Read-only, and role-dispatched: a 'calendar' user gets the reduced autocomplete
+// projection, an admin keeps the full list the Customers page depends on.
+// ---------------------------------------------------------------------------
+router.get("/", requireUser, requireCalendarOrAdmin, (req, res, next) =>
+  req.user.role === "admin"
+    ? getCustomers(req, res, next)
+    : getCustomersForLookup(req, res, next)
+);
+
+// Every other customer route is admin-only. The public booking site never calls
 // /api/customers (booking creates customers implicitly via the upsert).
 router.use(requireUser, requireFullAdmin);
 
@@ -33,7 +53,7 @@ router.use(requireUser, requireFullAdmin);
 router.get("/CustomerCounts", getCustomerCounts);
 router.get("/WeeklyCustomerCounts", getWeeklyCustomerCounts);
 // Main customer data
-router.get("/", getCustomers);
+// NOTE: GET "/" is declared above the admin gate (role-dispatched) — not here.
 router.delete("/:id", deleteCustomer);
 router.patch("/:id", updateCustomer);
 router.post("/", createCustomer); 

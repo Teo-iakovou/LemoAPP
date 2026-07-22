@@ -239,6 +239,34 @@ const getCustomerById = async (req, res) => {
 };
 
 // Get all customers
+// Autocomplete lookup for the LIMITED 'calendar' role. Deliberately a separate
+// handler with its own projection rather than a flag on getCustomers: the admin
+// list spreads the whole customer document (`...customer`), so reusing it and
+// deleting fields afterwards would leak anything added to the schema later.
+// Here the projection is an allow-list — a new schema field is invisible until
+// someone explicitly adds it.
+//
+// Returns ONLY what the booking autocomplete needs:
+//   _id, name, phoneNumber  — to match and fill the form
+//   barber                  — the coloured dot beside each suggestion
+// No dateOfBirth, no profile picture, no SMS history, and none of the
+// appointment-derived data the admin list joins in.
+const getCustomersForLookup = async (req, res, next) => {
+  try {
+    const customers = await Customer.find(
+      {},
+      { name: 1, phoneNumber: 1, barber: 1 }
+    )
+      .sort({ name: 1 })
+      .lean();
+
+    res.status(200).json(customers);
+  } catch (error) {
+    console.error("Error fetching customer lookup list:", error);
+    next(error);
+  }
+};
+
 const getCustomers = async (req, res, next) => {
   try {
     // 1. Get all latest appointments by phoneNumber
@@ -466,6 +494,7 @@ const getAllCustomerAppointments = async (req, res) => {
 
 module.exports = {
   getCustomers,
+  getCustomersForLookup,
   deleteCustomer,
   updateCustomer,
   getCustomerCounts,
