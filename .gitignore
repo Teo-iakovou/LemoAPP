@@ -1,2 +1,5 @@
 .env
 **/.env
+
+# build output — Netlify runs its own vite build; see commit message
+dist/
