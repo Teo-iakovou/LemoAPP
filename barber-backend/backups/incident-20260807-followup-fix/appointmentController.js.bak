@@ -81,21 +81,6 @@ function getBarberDisplayName(barber = "") {
   return barber;
 }
 
-// Long weekly recurrences are confirmed in two parts: the first RECURRENCE_SPLIT_INDEX
-// dates are SMS'd immediately at booking; the rest ("επιπλέον"/additional) are queued as a
-// ScheduledMessage and confirmed later. This single constant defines both the split point
-// and the stored additionalFromIndex, so the "5" never has to be duplicated across files.
-const RECURRENCE_SPLIT_INDEX = 5;
-
-// When to send the follow-up: on the 3rd of the first-five confirmed appointments (never #1),
-// so it arrives partway through the series instead of on day one. `allMoments` is the ordered
-// list of series datetimes [initial, ...additional]; the split guard guarantees >=6 entries,
-// so index 2 (#3) always exists. Exported for deterministic testing.
-function computeFollowupSendAt(allMoments) {
-  const followupIndex = Math.min(2, allMoments.length - 1);
-  return allMoments[followupIndex].clone().toDate();
-}
-
 // Create an appointment
 const createAppointment = async (req, res, next) => {
   try {
@@ -399,11 +384,10 @@ const createAppointment = async (req, res, next) => {
           ];
           const labels = allMoments.map((m) => m.format("DD/MM/YYYY HH:mm"));
 
-          const shouldSplit =
-            maxRepeat > RECURRENCE_SPLIT_INDEX && labels.length > RECURRENCE_SPLIT_INDEX;
+          const shouldSplit = maxRepeat > 5 && labels.length > 5;
           if (shouldSplit) {
-            const firstHalf = labels.slice(0, RECURRENCE_SPLIT_INDEX);
-            const secondHalf = labels.slice(RECURRENCE_SPLIT_INDEX);
+            const firstHalf = labels.slice(0, 5);
+            const secondHalf = labels.slice(5);
             const msg1 = `Επιβεβαιώνουμε τα ραντεβού σας στο LEMO BARBER SHOP με τον ${displayBarber} για τις ημερομηνίες: ${firstHalf.join(", ")}.\nWe confirm your appointments at LEMO BARBER SHOP with ${displayBarber} for the dates: ${firstHalf.join(", ")}.`;
             result = await sendSMS(phoneNumber, msg1, { smsType: "confirmation" });
             savedAppointment.reminders.push({
@@ -416,9 +400,8 @@ const createAppointment = async (req, res, next) => {
               retryCount: 0,
             });
 
-            // Send the follow-up on the 3rd confirmed appointment, not (intervalWeeks/2)
-            // weeks out — for weekly series floor(1/2)=0 put it on appointment #1 (day one).
-            const sendAt = computeFollowupSendAt(allMoments);
+            const halfWeeks = Math.floor(intervalWeeks / 2);
+            const sendAt = appointmentDateUTC.clone().add(halfWeeks, "weeks").toDate();
             const ScheduledMessage = require("../models/ScheduledMessage");
             await ScheduledMessage.create({
               phoneNumber,
@@ -427,9 +410,6 @@ const createAppointment = async (req, res, next) => {
               status: "pending",
               type: "recurrence-followup",
               appointmentIds: [savedAppointment._id, ...additionalAppointments.map((a) => a._id)],
-              // The message lists appointmentIds.slice(RECURRENCE_SPLIT_INDEX); persist the
-              // index so the send-time rebuild stays correct even if the threshold changes.
-              additionalFromIndex: RECURRENCE_SPLIT_INDEX,
               barber: effectiveBarber,
             });
           } else {
@@ -1009,6 +989,4 @@ module.exports = {
   getRecentLocks,
   getPastAppointments,
   getMyAppointments,
-  computeFollowupSendAt,
-  RECURRENCE_SPLIT_INDEX,
 };

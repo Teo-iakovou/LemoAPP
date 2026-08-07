@@ -4,14 +4,9 @@ const ScheduledMessageSchema = new mongoose.Schema({
   phoneNumber: { type: String, required: true },
   messageText: { type: String, required: true },
   sendAt: { type: Date, required: true, index: true },
-  status: { type: String, enum: ['pending', 'sent', 'failed', 'skipped'], default: 'pending', index: true },
+  status: { type: String, enum: ['pending', 'sent', 'failed'], default: 'pending', index: true },
   type: { type: String, default: 'recurrence-followup' },
   appointmentIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Appointment' }],
-  // Index into appointmentIds where the "additional" (second-half) appointments this
-  // message is about begin. The send-time rebuild lists appointmentIds.slice(additionalFromIndex)
-  // only, so the first-half dates (already confirmed at booking) are never re-listed.
-  // Legacy messages created before this field default to 5 in processScheduledMessages().
-  additionalFromIndex: { type: Number },
   barber: { type: String },
   retryCount: { type: Number, default: 0 },
 }, { timestamps: true });

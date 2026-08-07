@@ -167,30 +167,164 @@ const sendReminders = async (options = {}) => {
 
 module.exports = { sendReminders };
 
-// Process scheduled messages due to be sent (e.g., recurrence follow-ups)
+const FOLLOWUP_TZ = "Europe/Athens";
+// Legacy fallback: messages created before the additionalFromIndex field existed were all
+// built with a hardcoded split at 5 (labels.slice(5)). This 5 is a historical constant for
+// those old documents only — NOT the live threshold (which lives in appointmentController as
+// RECURRENCE_SPLIT_INDEX and is now persisted per-message). Do not couple the two.
+const LEGACY_ADDITIONAL_FROM_INDEX = 5;
+
+const getBarberDisplayName = (barber = "") =>
+  barber === "ΚΟΥΣΙΗΣ" ? "ΚΟΥΣΙΗ" : barber;
+
+// Extract the unique DD/MM/YYYY HH:mm dates printed in a stored message, in order. Used only
+// for logging "what was originally promised" vs "what we actually sent".
+const parseFollowupDates = (text = "") => {
+  const out = [];
+  const seen = new Set();
+  const re = /(\d{2}\/\d{2}\/\d{4}\s+\d{2}:\d{2})/g;
+  let m;
+  while ((m = re.exec(text))) {
+    if (!seen.has(m[1])) {
+      seen.add(m[1]);
+      out.push(m[1]);
+    }
+  }
+  return out;
+};
+
+// Build the confirmation text from LIVE dates, with singular/plural agreement in both
+// languages. Greek "ραντεβού" is invariant, so only the article changes (το/τα); English
+// switches appointment(s).
+const buildFollowupMessage = (dates, barber) => {
+  const displayBarber = getBarberDisplayName(barber || "");
+  const joined = dates.join(", ");
+  const single = dates.length === 1;
+  const gr = single ? "το επιπλέον ραντεβού σας" : "τα επιπλέον ραντεβού σας";
+  const en = single ? "additional appointment" : "additional appointments";
+  return (
+    `Επιβεβαιώνουμε ${gr} στο LEMO BARBER SHOP με τον ${displayBarber}: ${joined}.\n` +
+    `We confirm your ${en} at LEMO BARBER SHOP with ${displayBarber}: ${joined}.`
+  );
+};
+
+// Revalidate a scheduled follow-up against the live calendar at SEND time. Reads only; makes
+// no writes and sends no SMS. Returns what should be sent (or a skip decision). Exported so
+// the send loop and tests share one implementation.
+//   { skip:true, reason, original[], sent:[], dropped[] }                  -> do not send
+//   { skip:false, message, sent[], original[], dropped[], firstApptId }    -> send `message`
+async function resolveFollowup(msg) {
+  const original = parseFollowupDates(msg.messageText || "");
+  const fromIndex = Number.isInteger(msg.additionalFromIndex)
+    ? msg.additionalFromIndex
+    : LEGACY_ADDITIONAL_FROM_INDEX;
+
+  // Only the "additional" (second-half) appointments this message is about — never re-list
+  // the first-half dates the customer was already confirmed for at booking time.
+  const relevantIds = (msg.appointmentIds || []).slice(fromIndex);
+  if (!relevantIds.length) {
+    return { skip: true, reason: "no-appointment-refs", original, sent: [], dropped: original };
+  }
+
+  // Survivors = still exist AND still confirmed. Rescheduled ones surface at their CURRENT
+  // datetime; deleted/cancelled ones simply drop out.
+  const survivors = await Appointment.find({
+    _id: { $in: relevantIds },
+    appointmentStatus: "confirmed",
+    type: "appointment",
+  })
+    .select({ appointmentDateTime: 1 })
+    .lean();
+
+  survivors.sort(
+    (a, b) => new Date(a.appointmentDateTime) - new Date(b.appointmentDateTime)
+  );
+  const sent = survivors.map((a) =>
+    moment(a.appointmentDateTime).tz(FOLLOWUP_TZ).format("DD/MM/YYYY HH:mm")
+  );
+  const dropped = original.filter((d) => !sent.includes(d));
+
+  if (!sent.length) {
+    return { skip: true, reason: "all-cancelled", original, sent, dropped };
+  }
+
+  return {
+    skip: false,
+    message: buildFollowupMessage(sent, msg.barber),
+    sent,
+    original,
+    dropped,
+    firstApptId: survivors[0]._id,
+  };
+}
+
+// Process scheduled messages due to be sent (e.g., recurrence follow-ups).
+// Rebuilds each message from the live calendar at send time so a reschedule/cancellation that
+// happened after booking can never send a customer a wrong or phantom date.
 async function processScheduledMessages() {
-  const tz = "Europe/Athens";
-  const now = moment().tz(tz).toDate();
-  const due = await ScheduledMessage.find({ status: 'pending', sendAt: { $lte: now } }).limit(50).lean();
+  const now = moment().tz(FOLLOWUP_TZ).toDate();
+  const due = await ScheduledMessage.find({ status: "pending", sendAt: { $lte: now } })
+    .limit(50)
+    .lean();
   if (!due.length) return;
+
   for (const msg of due) {
+    let resolved;
     try {
-      const result = await sendSMS(msg.phoneNumber, msg.messageText, {
+      resolved = await resolveFollowup(msg);
+    } catch (e) {
+      await ScheduledMessage.updateOne(
+        { _id: msg._id },
+        { $set: { status: "failed" }, $inc: { retryCount: 1 } }
+      );
+      console.error(
+        `[recurrence-followup][FAILED] msg=${msg._id} phone=${msg.phoneNumber} resolve error: ${e.message}`
+      );
+      continue;
+    }
+
+    if (resolved.skip) {
+      await ScheduledMessage.updateOne({ _id: msg._id }, { $set: { status: "skipped" } });
+      console.warn(
+        `[recurrence-followup][SKIPPED] msg=${msg._id} phone=${msg.phoneNumber} reason=${resolved.reason} ` +
+          `original=[${resolved.original.join(" | ")}] sent=[] dropped=[${resolved.dropped.join(" | ")}] — nothing sent`
+      );
+      continue;
+    }
+
+    try {
+      const result = await sendSMS(msg.phoneNumber, resolved.message, {
         smsType: "recurrence-followup",
       });
-      await ScheduledMessage.updateOne({ _id: msg._id }, { $set: { status: 'sent' } });
-      // Best-effort: attach a reminder log to the first appointment in the series
-      if (msg.appointmentIds && msg.appointmentIds.length) {
+      await ScheduledMessage.updateOne({ _id: msg._id }, { $set: { status: "sent" } });
+
+      // Forensic log: exactly what was promised vs what actually went out, so "what did we
+      // send this customer" is answerable from logs without re-running a script.
+      if (resolved.dropped.length) {
+        console.warn(
+          `[recurrence-followup][MODIFIED] msg=${msg._id} phone=${msg.phoneNumber} ` +
+            `original=[${resolved.original.join(" | ")}] sent=[${resolved.sent.join(" | ")}] ` +
+            `dropped=[${resolved.dropped.join(" | ")}]`
+        );
+      } else {
+        console.log(
+          `[recurrence-followup][SENT] msg=${msg._id} phone=${msg.phoneNumber} sent=[${resolved.sent.join(" | ")}]`
+        );
+      }
+
+      // Best-effort: attach a reminder log to the first SURVIVING appointment, storing the
+      // text we actually sent (not the frozen original).
+      if (resolved.firstApptId) {
         await Appointment.updateOne(
-          { _id: msg.appointmentIds[0] },
+          { _id: resolved.firstApptId },
           {
             $push: {
               reminders: {
-                type: 'recurrence-followup',
+                type: "recurrence-followup",
                 sentAt: new Date(),
-                status: result?.success ? 'sent' : result?.status || 'sent',
-                messageText: msg.messageText,
-                senderId: 'Lemo Barber',
+                status: result?.success ? "sent" : result?.status || "sent",
+                messageText: resolved.message,
+                senderId: "Lemo Barber",
                 retryCount: 0,
               },
             },
@@ -198,9 +332,18 @@ async function processScheduledMessages() {
         );
       }
     } catch (e) {
-      await ScheduledMessage.updateOne({ _id: msg._id }, { $set: { status: 'failed' }, $inc: { retryCount: 1 } });
+      await ScheduledMessage.updateOne(
+        { _id: msg._id },
+        { $set: { status: "failed" }, $inc: { retryCount: 1 } }
+      );
+      console.error(
+        `[recurrence-followup][FAILED] msg=${msg._id} phone=${msg.phoneNumber}: ${e.message}`
+      );
     }
   }
 }
 
 module.exports.processScheduledMessages = processScheduledMessages;
+module.exports.resolveFollowup = resolveFollowup;
+module.exports.buildFollowupMessage = buildFollowupMessage;
+module.exports.parseFollowupDates = parseFollowupDates;
