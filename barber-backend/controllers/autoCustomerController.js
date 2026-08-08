@@ -744,36 +744,25 @@ const pushAutoCustomers = async (req, res, next) => {
       });
     }
 
-    // Only the fields actually provided are overridden; empties leave each card as-is.
-    const overrides = {};
-    if (fromDate) overrides.startFrom = fromDate;
-    if (toDate) overrides.until = toDate;
-    if (countValue !== undefined) overrides.maxOccurrences = countValue;
-    const hasOverrides = Object.keys(overrides).length > 0;
-
-    // In-memory copies ONLY — never persisted. Generation reads startFrom / until /
-    // maxOccurrences off these throwaway objects, so "Από" behaves as a per-customer
-    // floor aligned to that customer's weekday and generation stops at whichever of
-    // "Έως" / "Αριθμός" comes first, exactly as before. The stored cards are untouched.
+    // "Από" / "Έως" / "Αριθμός" are WINDOW BOUNDS for THIS run only — never per-card
+    // overrides. Previously they were written onto each card as startFrom/until/maxOccurrences,
+    // which re-anchored every customer's PHASE to the window start: a biweekly customer whose
+    // real turn fell on a different week got force-booked into the window instead of skipped
+    // (phase-reset bug; see batch 6a6f97c3e0734eae677b1363 on 02/08/2026, where Gitonas and
+    // Orestis were booked off-cadence).
     //
-    // Deliberately NOT passed as rangeStart / rangeEnd / countOverride: those are an
-    // extra clamp INTERSECTED with each card's own values, not a replacement for them.
-    // A card's own startFrom would still floor the start (scheduler :291-299) and its
-    // own until would still cap the end (:302), and normalizeRange truncates `to` to
-    // startOf("minute") rather than endOf("day") (:36 vs :246), dropping same-day
-    // slots. Measured over the live 52 cards, that route changed the generated dates
-    // for up to 47 of them — see the dry-run comparison in the review notes.
-    const effectiveCustomers = hasOverrides
-      ? customers.map((customer) => ({ ...customer, ...overrides }))
-      : customers;
-
+    // Passing them as rangeStart / rangeEnd / countOverride keeps each card's OWN startFrom as
+    // the phase anchor (scheduler computeBaseOccurrence + :291-299). "Από" is a lower bound,
+    // "Έως" an upper bound (normalizeRange now takes endOf("day") so same-day slots survive),
+    // and each card's own `until` still caps the end (intersection). A customer whose next
+    // on-phase occurrence falls outside the window is SKIPPED (and reported), not re-phased.
     const isDryRun = parseBoolean(dryRun, false);
 
     const result = await generateAutoAppointments({
-      customers: effectiveCustomers,
-      rangeStart: undefined,
-      rangeEnd: undefined,
-      countOverride: undefined,
+      customers,
+      rangeStart: fromDate || undefined,
+      rangeEnd: toDate || undefined,
+      countOverride: countValue,
       dryRun: isDryRun,
       initiatedBy: req.user?._id,
     });

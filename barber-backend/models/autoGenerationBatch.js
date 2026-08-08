@@ -11,6 +11,9 @@ const resultSummarySchema = new mongoose.Schema(
     customerName: String,
     barber: String,
     scheduledFor: Date,
+    // For "out-of-window"/"after-until" skips: the customer's next on-phase date, so the
+    // record shows why they were skipped (e.g. biweekly turn falls on a later week).
+    nextOccurrence: Date,
     status: {
       type: String,
       enum: ["inserted", "moved", "skipped", "existing"],

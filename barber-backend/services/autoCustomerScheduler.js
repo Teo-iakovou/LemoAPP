@@ -29,7 +29,9 @@ const OPEN_HORIZON_WEEKS = 300;
 
 const normalizeRange = ({ from, to }) => {
   const start = from ? toMoment(from) : moment.tz(TZ);
-  const end = to ? toMoment(to) : start.clone().add(OPEN_HORIZON_WEEKS, "weeks");
+  // "Έως" is a whole-day upper bound: take endOf("day") so same-day occurrences on the
+  // final day are not dropped (mirrors the per-card `until` handling at :246).
+  const end = to ? toMoment(to).endOf("day") : start.clone().add(OPEN_HORIZON_WEEKS, "weeks");
 
   return {
     start: start.clone().startOf("minute"),
@@ -298,9 +300,16 @@ const generateAutoAppointments = async ({
       occurrence.add(cadence, "weeks");
     }
 
+    // First on-phase occurrence at/after the window floor, computed from the card's OWN
+    // startFrom (the phase anchor). If nothing lands inside the window the customer is
+    // skipped, and we emit a visible skip row after the loop so it never disappears silently.
+    const firstOnPhase = occurrence.clone();
+    let enteredWindow = false;
+
     while (!occurrence.isAfter(toMomentRange)) {
       if (untilMoment && occurrence.isAfter(untilMoment)) break;
       if (maxOccurrences && generatedForCustomer >= maxOccurrences) break;
+      enteredWindow = true;
 
       const occurrenceValue = occurrence.valueOf();
 
@@ -458,6 +467,26 @@ const generateAutoAppointments = async ({
 
       occurrence = occurrence.clone().add(cadence, "weeks");
     }
+
+    // Visible skip: the customer had NO occurrence inside the window. Their next on-phase
+    // date is off-cadence for this window (e.g. a biweekly customer whose turn is next week),
+    // or after their own `until`. Emit a row so the UI can show WHO was skipped and WHY,
+    // instead of the customer silently vanishing from the result.
+    if (!enteredWindow) {
+      const afterUntil = untilMoment && firstOnPhase.isAfter(untilMoment);
+      summary.push({
+        autoCustomerId: customerId,
+        customerName: customer.customerName,
+        barber: customer.barber,
+        scheduledFor: firstOnPhase.toISOString(),
+        status: "skipped",
+        reason: afterUntil ? "after-until" : "out-of-window",
+        nextOccurrence: firstOnPhase.toISOString(),
+        shiftMinutes: 0,
+        smsStatus: "n/a",
+      });
+      totals.skipped += 1;
+    }
   }
 
   if (!dryRun && touchedCustomers.size > 0) {
@@ -579,6 +608,7 @@ const generateAutoAppointments = async ({
         customerName: item.customerName,
         barber: item.barber,
         scheduledFor: item.scheduledFor ? new Date(item.scheduledFor) : undefined,
+        nextOccurrence: item.nextOccurrence ? new Date(item.nextOccurrence) : undefined,
         status: item.status,
         reason: item.reason,
         shiftMinutes: item.shiftMinutes,

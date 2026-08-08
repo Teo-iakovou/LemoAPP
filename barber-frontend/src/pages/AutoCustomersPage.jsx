@@ -38,6 +38,55 @@ const alignToWeekday = (startDate, targetDay) => {
   return aligned;
 };
 
+// --- Skip-reason display for the auto-customers push (preview + confirm dialog) ---
+// The push summary contains rows with status "skipped"/"existing": customers that were
+// NOT booked. We show them, grouped so "working as intended" (their turn is a different
+// week — out-of-phase for this window) is visually separate from "needs your attention"
+// (a real double-booking or a manual skip).
+const skipDayMonth = (iso) => {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
+};
+
+const OUT_OF_SERIES_REASONS = new Set(["out-of-window", "after-until"]);
+
+const skipReasonGreek = (row) => {
+  const next = skipDayMonth(row.nextOccurrence || row.scheduledFor);
+  switch (row.reason) {
+    case "out-of-window":
+      return `εκτός σειράς — επόμενο ${next}`;
+    case "after-until":
+      return `μετά το «Έως» — επόμενο ${next}`;
+    case "conflict":
+    case "override-conflict":
+      return "διπλή κράτηση εκείνη την ώρα";
+    case "manual-skip":
+      return "εξαιρέθηκε χειροκίνητα (skip)";
+    case "already-created":
+    case "override-already-created":
+      return "υπάρχει ήδη στο ημερολόγιο";
+    default:
+      return row.reason || "εξαιρέθηκε";
+  }
+};
+
+// Split a push summary into the two skip buckets shown to the user.
+const groupSkips = (summary = []) => {
+  const skipped = summary.filter((s) => s.status === "skipped" || s.status === "existing");
+  return {
+    outOfSeries: skipped.filter((s) => OUT_OF_SERIES_REASONS.has(s.reason)),
+    needsAttention: skipped.filter((s) => !OUT_OF_SERIES_REASONS.has(s.reason)),
+  };
+};
+
+const escapeHtml = (value = "") =>
+  String(value).replace(
+    /[&<>"']/g,
+    (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch])
+  );
+
 // Read-only preview of a card's own range: first occurrence on the chosen weekday
 // on/after max(today, startFrom) (never in the past), then +(count-1)*cadence weeks.
 // Mirrors the backend generation so the card shows what a plain push would produce.
@@ -880,6 +929,7 @@ const AutoCustomersPage = () => {
     // be created (Y). Same inputs as the real run below → identical result.
     setPushSubmitting(true);
     let plannedCount = 0;
+    let drySummary = [];
     try {
       const dry = await pushAutoCustomers({
         dryRun: true,
@@ -890,6 +940,7 @@ const AutoCustomersPage = () => {
       });
       const totals = dry?.data?.totals || {};
       plannedCount = (totals.inserted || 0) + (totals.moved || 0);
+      drySummary = dry?.data?.summary || [];
     } catch (error) {
       console.error(error);
       toast.error(error.message || "Αποτυχία υπολογισμού ραντεβού.");
@@ -897,10 +948,30 @@ const AutoCustomersPage = () => {
       return;
     }
 
+    // Skips must be visible on the SAME dry-run the confirmation is built from (identical to
+    // what the real push will do), grouped so out-of-series is separate from double-bookings.
+    const { outOfSeries, needsAttention } = groupSkips(drySummary);
+    const skipRowHtml = (s) =>
+      `<li style="display:flex;justify-content:space-between;gap:12px;padding:1px 0">` +
+      `<span>${escapeHtml(s.customerName || "—")}<span style="opacity:.6"> · ${escapeHtml(s.barber || "")}</span></span>` +
+      `<span style="opacity:.85;white-space:nowrap">${escapeHtml(skipReasonGreek(s))}</span></li>`;
+    const skipBlock = (title, rows, color) =>
+      rows.length
+        ? `<div style="margin-top:10px;text-align:left">` +
+          `<div style="font-weight:600;color:${color}">${title} (${rows.length})</div>` +
+          `<ul style="margin:4px 0 0;padding:0;list-style:none;font-size:13px;max-height:180px;overflow:auto">${rows.map(skipRowHtml).join("")}</ul></div>`
+        : "";
+    const confirmHtml =
+      `<p>Θα δημιουργηθούν <b>${plannedCount}</b> ραντεβού για <b>${selectedCount}</b> επιλεγμένους πελάτες.</p>` +
+      skipBlock("Εκτός σειράς — δεν θα κλειστούν", outOfSeries, "#38bdf8") +
+      skipBlock("⚠ Χρειάζονται προσοχή", needsAttention, "#f59e0b") +
+      `<p style="margin-top:12px">Συνέχεια;</p>`;
+
     const confirmPush = await MySwal.fire({
       title: "Επιβεβαίωση",
-      text: `Θα δημιουργηθούν ${plannedCount} ραντεβού για ${selectedCount} πελάτες. Συνέχεια;`,
+      html: confirmHtml,
       icon: "warning",
+      width: 540,
       showCancelButton: true,
       confirmButtonText: "Ναι",
       cancelButtonText: "Άκυρο",
@@ -1123,6 +1194,9 @@ const AutoCustomersPage = () => {
     "Αποθήκευσε πρώτα τις αλλαγές σου.";
 
   // Badge so it's always clear what's on screen.
+  // Grouped skips for the live preview panel (same summary the confirm dialog uses).
+  const previewSkips = useMemo(() => groupSkips(previewSummary), [previewSummary]);
+
   const previewBadgeText = !previewMeta
     ? "Φόρτωση…"
     : previewMeta.mode === "selected"
@@ -1539,6 +1613,50 @@ const AutoCustomersPage = () => {
             />
             )}
           </div>
+
+          {/* Skip list: WHO was not booked and WHY. Out-of-series (working as intended)
+              is separated from double-bookings/manual skips that need attention. Same
+              summary the confirm dialog uses, so preview and push never diverge. */}
+          {(previewSkips.outOfSeries.length > 0 || previewSkips.needsAttention.length > 0) && (
+            <div className="mt-3 space-y-2 text-sm">
+              {previewSkips.outOfSeries.length > 0 && (
+                <div className="rounded-lg border border-sky-500/30 bg-sky-500/10 px-3 py-2">
+                  <p className="mb-1 font-semibold text-sky-200">
+                    Εκτός σειράς — δεν κλείστηκαν ({previewSkips.outOfSeries.length})
+                  </p>
+                  <ul className="space-y-0.5 text-sky-100/90">
+                    {previewSkips.outOfSeries.map((s, i) => (
+                      <li key={`oos-${i}`} className="flex justify-between gap-3">
+                        <span>
+                          {s.customerName || "—"}
+                          <span className="text-sky-300/60"> · {s.barber}</span>
+                        </span>
+                        <span className="whitespace-nowrap text-sky-300/80">{skipReasonGreek(s)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {previewSkips.needsAttention.length > 0 && (
+                <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2">
+                  <p className="mb-1 font-semibold text-amber-200">
+                    ⚠ Χρειάζονται προσοχή ({previewSkips.needsAttention.length})
+                  </p>
+                  <ul className="space-y-0.5 text-amber-100/90">
+                    {previewSkips.needsAttention.map((s, i) => (
+                      <li key={`attn-${i}`} className="flex justify-between gap-3">
+                        <span>
+                          {s.customerName || "—"}
+                          <span className="text-amber-300/60"> · {s.barber}</span>
+                        </span>
+                        <span className="whitespace-nowrap text-amber-300/80">{skipReasonGreek(s)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
         </section>
       </div>
 
