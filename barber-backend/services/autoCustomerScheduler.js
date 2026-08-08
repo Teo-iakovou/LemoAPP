@@ -77,6 +77,7 @@ const buildScheduleMap = (appointments) => {
       start,
       end,
       type: appt.type,
+      customerName: appt.customerName,
     });
   });
 
@@ -96,10 +97,19 @@ const slotConflicts = (events = [], start, durationMin) => {
   });
 };
 
-const addEventToSchedule = (scheduleMap, barber, start, durationMin, type = "appointment") => {
+// Overlapping events at a slot — used to name WHO already holds a conflicting slot so the
+// skip report is actionable ("διπλή κράτηση με <name>") instead of a bare "double booking".
+const findSlotConflicts = (events = [], start, durationMin) => {
+  const end = start.clone().add(durationMin, "minutes");
+  return events.filter(
+    (evt) => CONFLICT_TYPES.has(evt.type) && start.isBefore(evt.end) && end.isAfter(evt.start)
+  );
+};
+
+const addEventToSchedule = (scheduleMap, barber, start, durationMin, type = "appointment", customerName = null) => {
   if (!scheduleMap.has(barber)) scheduleMap.set(barber, []);
   const end = start.clone().add(durationMin, "minutes");
-  scheduleMap.get(barber).push({ start, end, type });
+  scheduleMap.get(barber).push({ start, end, type, customerName });
 };
 
 const sendConfirmationSMS = async (appointment, barber) => {
@@ -361,6 +371,14 @@ const generateAutoAppointments = async ({
       }
 
       if (!matchedStart) {
+        // Name who already holds the intended slot, so the skip row is actionable.
+        const conflictWith = [
+          ...new Set(
+            findSlotConflicts(scheduleForBarber, desiredStart, duration)
+              .map((evt) => evt.customerName)
+              .filter(Boolean)
+          ),
+        ];
         summary.push({
           autoCustomerId: customerId,
           customerName: customer.customerName,
@@ -368,6 +386,7 @@ const generateAutoAppointments = async ({
           scheduledFor: occurrence.toISOString(),
           status: "skipped",
           reason,
+          conflictWith,
           shiftMinutes: 0,
           smsStatus: "n/a",
         });
@@ -397,7 +416,7 @@ const generateAutoAppointments = async ({
       if (customerId) {
         existingAutoSet.add(finalKey);
       }
-      addEventToSchedule(scheduleMap, targetBarber, matchedStart.clone(), duration);
+      addEventToSchedule(scheduleMap, targetBarber, matchedStart.clone(), duration, "appointment", customer.customerName);
       if (customerId) {
         touchedCustomers.add(customerId);
       }
@@ -611,6 +630,7 @@ const generateAutoAppointments = async ({
         nextOccurrence: item.nextOccurrence ? new Date(item.nextOccurrence) : undefined,
         status: item.status,
         reason: item.reason,
+        conflictWith: item.conflictWith,
         shiftMinutes: item.shiftMinutes,
         smsStatus: item.smsStatus,
         smsReason: item.smsReason,

@@ -19,6 +19,8 @@ const resultSummarySchema = new mongoose.Schema(
       enum: ["inserted", "moved", "skipped", "existing"],
     },
     reason: String,
+    // For conflict skips: names already holding the intended slot.
+    conflictWith: [String],
     shiftMinutes: Number,
     smsStatus: String,
     smsReason: String,

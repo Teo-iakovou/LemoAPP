@@ -39,10 +39,13 @@ const alignToWeekday = (startDate, targetDay) => {
 };
 
 // --- Skip-reason display for the auto-customers push (preview + confirm dialog) ---
-// The push summary contains rows with status "skipped"/"existing": customers that were
-// NOT booked. We show them, grouped so "working as intended" (their turn is a different
-// week — out-of-phase for this window) is visually separate from "needs your attention"
-// (a real double-booking or a manual skip).
+// The push summary has one row PER OCCURRENCE with status "skipped"/"existing". We group
+// them by CUSTOMER (one entry each, with all affected occurrences) and split into THREE
+// buckets by meaning:
+//   • outOfSeries    — their turn is a different week (working as intended).
+//   • alreadyBooked  — the slot is taken by their OWN existing appointment, or already
+//                      created (correctly skipped, no action).
+//   • needsAttention — the slot is taken by ANOTHER customer (real double-booking).
 const skipDayMonth = (iso) => {
   if (!iso) return "—";
   const d = new Date(iso);
@@ -50,34 +53,71 @@ const skipDayMonth = (iso) => {
   return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
 };
 
-const OUT_OF_SERIES_REASONS = new Set(["out-of-window", "after-until"]);
-
-const skipReasonGreek = (row) => {
-  const next = skipDayMonth(row.nextOccurrence || row.scheduledFor);
-  switch (row.reason) {
-    case "out-of-window":
-      return `εκτός σειράς — επόμενο ${next}`;
-    case "after-until":
-      return `μετά το «Έως» — επόμενο ${next}`;
-    case "conflict":
-    case "override-conflict":
-      return "διπλή κράτηση εκείνη την ώρα";
-    case "manual-skip":
-      return "εξαιρέθηκε χειροκίνητα (skip)";
-    case "already-created":
-    case "override-already-created":
-      return "υπάρχει ήδη στο ημερολόγιο";
-    default:
-      return row.reason || "εξαιρέθηκε";
-  }
+const skipDateTime = (iso) => {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  const p = (n) => String(n).padStart(2, "0");
+  return `${p(d.getDate())}/${p(d.getMonth() + 1)} ${p(d.getHours())}:${p(d.getMinutes())}`;
 };
 
-// Split a push summary into the two skip buckets shown to the user.
+const OUT_OF_SERIES_REASONS = new Set(["out-of-window", "after-until"]);
+const CONFLICT_REASONS = new Set(["conflict", "override-conflict"]);
+
+// Conflicting names that are NOT the customer themselves = a real cross-customer clash.
+const otherConflictNames = (row) =>
+  (row.conflictWith || []).filter((n) => n && n !== row.customerName);
+const isCrossConflict = (row) =>
+  CONFLICT_REASONS.has(row.reason) && otherConflictNames(row).length > 0;
+
+// One-line label for an out-of-series customer (they have exactly one such occurrence).
+const outOfSeriesLabel = (row) => {
+  const next = skipDayMonth(row.nextOccurrence || row.scheduledFor);
+  return row.reason === "after-until"
+    ? `μετά το «Έως» — επόμενο ${next}`
+    : `εκτός σειράς — επόμενο ${next}`;
+};
+
+// Detail for one occurrence: date/time + why. Distinguishes a real clash with another
+// customer from the customer's own already-booked slot.
+const occurrenceLabel = (row) => {
+  const when = skipDateTime(row.scheduledFor);
+  if (CONFLICT_REASONS.has(row.reason)) {
+    const others = otherConflictNames(row);
+    return others.length ? `${when} — διπλή κράτηση με ${others.join(", ")}` : `${when} — ήδη κλεισμένο`;
+  }
+  if (row.reason === "manual-skip") return `${when} — εξαιρέθηκε χειροκίνητα`;
+  if (row.reason === "already-created" || row.reason === "override-already-created")
+    return `${when} — υπάρχει ήδη`;
+  return `${when} — ${row.reason || "εξαιρέθηκε"}`;
+};
+
+// Group skip rows by customer -> one entry per customer with all affected occurrences,
+// then bucket by meaning (a cross-customer clash wins; else out-of-series; else already-booked).
 const groupSkips = (summary = []) => {
   const skipped = summary.filter((s) => s.status === "skipped" || s.status === "existing");
+  const byCustomer = new Map();
+  for (const s of skipped) {
+    const key = s.autoCustomerId ? String(s.autoCustomerId) : `name:${s.customerName}`;
+    if (!byCustomer.has(key)) {
+      byCustomer.set(key, { customerName: s.customerName, barber: s.barber, occurrences: [] });
+    }
+    byCustomer.get(key).occurrences.push(s);
+  }
+  const groups = [...byCustomer.values()].map((g) => {
+    g.occurrences.sort((a, b) => new Date(a.scheduledFor) - new Date(b.scheduledFor));
+    const bucket = g.occurrences.some(isCrossConflict)
+      ? "needsAttention"
+      : g.occurrences.some((o) => OUT_OF_SERIES_REASONS.has(o.reason))
+      ? "outOfSeries"
+      : "alreadyBooked";
+    return { ...g, count: g.occurrences.length, bucket };
+  });
+  groups.sort((a, b) => (a.customerName || "").localeCompare(b.customerName || ""));
   return {
-    outOfSeries: skipped.filter((s) => OUT_OF_SERIES_REASONS.has(s.reason)),
-    needsAttention: skipped.filter((s) => !OUT_OF_SERIES_REASONS.has(s.reason)),
+    outOfSeries: groups.filter((g) => g.bucket === "outOfSeries"),
+    alreadyBooked: groups.filter((g) => g.bucket === "alreadyBooked"),
+    needsAttention: groups.filter((g) => g.bucket === "needsAttention"),
   };
 };
 
@@ -949,22 +989,32 @@ const AutoCustomersPage = () => {
     }
 
     // Skips must be visible on the SAME dry-run the confirmation is built from (identical to
-    // what the real push will do), grouped so out-of-series is separate from double-bookings.
-    const { outOfSeries, needsAttention } = groupSkips(drySummary);
-    const skipRowHtml = (s) =>
+    // what the real push will do), grouped by meaning so the real double-bookings stand out.
+    const { outOfSeries, alreadyBooked, needsAttention } = groupSkips(drySummary);
+    const oosRowHtml = (g) =>
       `<li style="display:flex;justify-content:space-between;gap:12px;padding:1px 0">` +
-      `<span>${escapeHtml(s.customerName || "—")}<span style="opacity:.6"> · ${escapeHtml(s.barber || "")}</span></span>` +
-      `<span style="opacity:.85;white-space:nowrap">${escapeHtml(skipReasonGreek(s))}</span></li>`;
-    const skipBlock = (title, rows, color) =>
-      rows.length
+      `<span>${escapeHtml(g.customerName || "—")}<span style="opacity:.6"> · ${escapeHtml(g.barber || "")}</span></span>` +
+      `<span style="opacity:.85;white-space:nowrap">${escapeHtml(outOfSeriesLabel(g.occurrences[0]))}</span></li>`;
+    const detailRowHtml = (g) =>
+      `<li style="padding:3px 0">` +
+      `<div style="display:flex;justify-content:space-between;gap:12px"><span><b>${escapeHtml(g.customerName || "—")}</b><span style="opacity:.6"> · ${escapeHtml(g.barber || "")}</span></span>` +
+      `<span style="opacity:.7;white-space:nowrap">${g.count} ${g.count === 1 ? "περίπτωση" : "περιπτώσεις"}</span></div>` +
+      `<ul style="margin:2px 0 0;padding:0 0 0 12px;list-style:none;font-size:12px;opacity:.85">${g.occurrences
+        .map((o) => `<li>${escapeHtml(occurrenceLabel(o))}</li>`)
+        .join("")}</ul></li>`;
+    const skipBlock = (title, groups, color, rowFn) =>
+      groups.length
         ? `<div style="margin-top:10px;text-align:left">` +
-          `<div style="font-weight:600;color:${color}">${title} (${rows.length})</div>` +
-          `<ul style="margin:4px 0 0;padding:0;list-style:none;font-size:13px;max-height:180px;overflow:auto">${rows.map(skipRowHtml).join("")}</ul></div>`
+          `<div style="font-weight:600;color:${color}">${title} (${groups.length})</div>` +
+          `<ul style="margin:4px 0 0;padding:0;list-style:none;font-size:13px;max-height:220px;overflow:auto">${groups
+            .map(rowFn)
+            .join("")}</ul></div>`
         : "";
     const confirmHtml =
       `<p>Θα δημιουργηθούν <b>${plannedCount}</b> ραντεβού για <b>${selectedCount}</b> επιλεγμένους πελάτες.</p>` +
-      skipBlock("Εκτός σειράς — δεν θα κλειστούν", outOfSeries, "#38bdf8") +
-      skipBlock("⚠ Χρειάζονται προσοχή", needsAttention, "#f59e0b") +
+      skipBlock("Εκτός σειράς — δεν θα κλειστούν", outOfSeries, "#38bdf8", oosRowHtml) +
+      skipBlock("Ήδη στο ημερολόγιο", alreadyBooked, "#9ca3af", detailRowHtml) +
+      skipBlock("⚠ Διπλή κράτηση με άλλον πελάτη", needsAttention, "#f59e0b", detailRowHtml) +
       `<p style="margin-top:12px">Συνέχεια;</p>`;
 
     const confirmPush = await MySwal.fire({
@@ -1614,10 +1664,13 @@ const AutoCustomersPage = () => {
             )}
           </div>
 
-          {/* Skip list: WHO was not booked and WHY. Out-of-series (working as intended)
-              is separated from double-bookings/manual skips that need attention. Same
-              summary the confirm dialog uses, so preview and push never diverge. */}
-          {(previewSkips.outOfSeries.length > 0 || previewSkips.needsAttention.length > 0) && (
+          {/* Skip list: WHO was not booked and WHY, grouped by customer and by meaning.
+              Blue = out-of-series (intended), gray = already on the calendar (no action),
+              amber = real double-booking with another customer. Built from the same dry-run
+              summary the push uses, so preview and push never diverge. */}
+          {(previewSkips.outOfSeries.length > 0 ||
+            previewSkips.alreadyBooked.length > 0 ||
+            previewSkips.needsAttention.length > 0) && (
             <div className="mt-3 space-y-2 text-sm">
               {previewSkips.outOfSeries.length > 0 && (
                 <div className="rounded-lg border border-sky-500/30 bg-sky-500/10 px-3 py-2">
@@ -1625,13 +1678,42 @@ const AutoCustomersPage = () => {
                     Εκτός σειράς — δεν κλείστηκαν ({previewSkips.outOfSeries.length})
                   </p>
                   <ul className="space-y-0.5 text-sky-100/90">
-                    {previewSkips.outOfSeries.map((s, i) => (
+                    {previewSkips.outOfSeries.map((g, i) => (
                       <li key={`oos-${i}`} className="flex justify-between gap-3">
                         <span>
-                          {s.customerName || "—"}
-                          <span className="text-sky-300/60"> · {s.barber}</span>
+                          {g.customerName || "—"}
+                          <span className="text-sky-300/60"> · {g.barber}</span>
                         </span>
-                        <span className="whitespace-nowrap text-sky-300/80">{skipReasonGreek(s)}</span>
+                        <span className="whitespace-nowrap text-sky-300/80">
+                          {outOfSeriesLabel(g.occurrences[0])}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {previewSkips.alreadyBooked.length > 0 && (
+                <div className="rounded-lg border border-gray-500/30 bg-gray-500/10 px-3 py-2">
+                  <p className="mb-1 font-semibold text-gray-200">
+                    Ήδη στο ημερολόγιο ({previewSkips.alreadyBooked.length})
+                  </p>
+                  <ul className="space-y-1.5 text-gray-200/90">
+                    {previewSkips.alreadyBooked.map((g, i) => (
+                      <li key={`have-${i}`}>
+                        <div className="flex justify-between gap-3">
+                          <span className="font-medium">
+                            {g.customerName || "—"}
+                            <span className="text-gray-400/70"> · {g.barber}</span>
+                          </span>
+                          <span className="whitespace-nowrap text-gray-400/70">
+                            {g.count} {g.count === 1 ? "περίπτωση" : "περιπτώσεις"}
+                          </span>
+                        </div>
+                        <ul className="mt-0.5 space-y-0.5 pl-3 text-xs text-gray-300/70">
+                          {g.occurrences.map((o, j) => (
+                            <li key={`have-${i}-${j}`}>{occurrenceLabel(o)}</li>
+                          ))}
+                        </ul>
                       </li>
                     ))}
                   </ul>
@@ -1640,16 +1722,25 @@ const AutoCustomersPage = () => {
               {previewSkips.needsAttention.length > 0 && (
                 <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2">
                   <p className="mb-1 font-semibold text-amber-200">
-                    ⚠ Χρειάζονται προσοχή ({previewSkips.needsAttention.length})
+                    ⚠ Διπλή κράτηση με άλλον πελάτη ({previewSkips.needsAttention.length})
                   </p>
-                  <ul className="space-y-0.5 text-amber-100/90">
-                    {previewSkips.needsAttention.map((s, i) => (
-                      <li key={`attn-${i}`} className="flex justify-between gap-3">
-                        <span>
-                          {s.customerName || "—"}
-                          <span className="text-amber-300/60"> · {s.barber}</span>
-                        </span>
-                        <span className="whitespace-nowrap text-amber-300/80">{skipReasonGreek(s)}</span>
+                  <ul className="space-y-1.5 text-amber-100/90">
+                    {previewSkips.needsAttention.map((g, i) => (
+                      <li key={`attn-${i}`}>
+                        <div className="flex justify-between gap-3">
+                          <span className="font-medium">
+                            {g.customerName || "—"}
+                            <span className="text-amber-300/60"> · {g.barber}</span>
+                          </span>
+                          <span className="whitespace-nowrap text-amber-300/70">
+                            {g.count} {g.count === 1 ? "περίπτωση" : "περιπτώσεις"}
+                          </span>
+                        </div>
+                        <ul className="mt-0.5 space-y-0.5 pl-3 text-xs text-amber-200/80">
+                          {g.occurrences.map((o, j) => (
+                            <li key={`attn-${i}-${j}`}>{occurrenceLabel(o)}</li>
+                          ))}
+                        </ul>
                       </li>
                     ))}
                   </ul>
