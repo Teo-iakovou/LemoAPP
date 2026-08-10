@@ -370,6 +370,30 @@ const generateAutoAppointments = async ({
         }
       }
 
+      // Intentional double-booking: no free 0/+15/+30 slot, but this card allows stacking.
+      // Book at the exact desired time on top of the existing appointment(s) instead of
+      // skipping. Stay within the window / until, and (for non-overrides) the same weekday.
+      let stackedOverlap = false;
+      let overlapWith = [];
+      if (!matchedStart && customer.allowOverlap) {
+        const inWindow =
+          !desiredStart.isAfter(toMomentRange) &&
+          !(untilMoment && desiredStart.isAfter(untilMoment)) &&
+          (overrideEntry || desiredStart.day() === occurrence.day());
+        if (inWindow) {
+          overlapWith = [
+            ...new Set(
+              findSlotConflicts(scheduleForBarber, desiredStart, duration)
+                .map((evt) => evt.customerName)
+                .filter(Boolean)
+            ),
+          ];
+          matchedStart = desiredStart.clone();
+          appliedShift = 0;
+          stackedOverlap = true;
+        }
+      }
+
       if (!matchedStart) {
         // Name who already holds the intended slot, so the skip row is actionable.
         const conflictWith = [
@@ -445,6 +469,8 @@ const generateAutoAppointments = async ({
             originalPlannedTime: occurrence.toISOString(),
             shiftMinutes: appliedShift,
             overrideApplied: Boolean(overrideEntry),
+            overlapAllowed: stackedOverlap || undefined,
+            overlapWith: stackedOverlap ? overlapWith : undefined,
           },
         });
 
@@ -465,13 +491,17 @@ const generateAutoAppointments = async ({
           durationMin: duration,
           status: appliedShift === 0 ? "inserted" : "moved",
           shiftMinutes: appliedShift,
-          reason: overrideEntry
+          reason: stackedOverlap
+            ? "overlap"
+            : overrideEntry
             ? appliedShift === 0
               ? "override-scheduled"
               : `override-shifted-by-${appliedShift}`
             : appliedShift === 0
             ? "scheduled"
             : `shifted-by-${appliedShift}`,
+          overlap: stackedOverlap || undefined,
+          overlapWith: stackedOverlap ? overlapWith : undefined,
           smsStatus: "dry-run",
         });
       }
@@ -572,8 +602,13 @@ const generateAutoAppointments = async ({
 
       for (const { appointment } of events) {
         const shift = appointment.meta?.shiftMinutes || 0;
+        const overlapAllowed = Boolean(appointment.meta?.overlapAllowed);
         const status = shift > 0 ? "moved" : "inserted";
-        const reason = shift > 0 ? `shifted-by-${shift}` : "scheduled";
+        const reason = overlapAllowed
+          ? "overlap"
+          : shift > 0
+          ? `shifted-by-${shift}`
+          : "scheduled";
         appointment.reminders.push({
           type: "confirmation",
           sentAt: new Date(),
@@ -594,6 +629,8 @@ const generateAutoAppointments = async ({
           status,
           shiftMinutes: shift,
           reason,
+          overlap: overlapAllowed || undefined,
+          overlapWith: overlapAllowed ? appointment.meta?.overlapWith : undefined,
           smsStatus,
           smsError: smsError || undefined,
         });

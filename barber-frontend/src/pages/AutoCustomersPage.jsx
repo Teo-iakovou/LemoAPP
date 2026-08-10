@@ -231,6 +231,7 @@ const emptyForm = {
   startFrom: toLocalDateString(new Date()),
   until: "",
   maxOccurrences: "10",
+  allowOverlap: false,
 };
 
 const toDateInput = (value) => {
@@ -640,6 +641,7 @@ const AutoCustomersPage = () => {
       startFrom: startIso,
       until: toDateInput(customer.until),
       maxOccurrences: customer.maxOccurrences ? String(customer.maxOccurrences) : "",
+      allowOverlap: Boolean(customer.allowOverlap),
     };
     setFormState(nextFormState);
     setInitialFormSnapshot(toComparableSnapshot(nextFormState));
@@ -746,6 +748,7 @@ const AutoCustomersPage = () => {
       startFrom: toUtcIsoFromLocalDate(formState.startFrom),
       until: untilIso,
       maxOccurrences: maxOccurrencesValue,
+      allowOverlap: Boolean(formState.allowOverlap),
     };
     return payload;
   };
@@ -1950,6 +1953,22 @@ const AutoCustomersPage = () => {
                   placeholderText="Επιλέξτε ημερομηνία"
                   isClearable
                 />
+              </label>
+              <label className="col-span-1 sm:col-span-2 flex items-start gap-2 text-sm rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 h-4 w-4 accent-amber-500"
+                  checked={Boolean(formState.allowOverlap)}
+                  onChange={(e) => handleFormChange("allowOverlap", e.target.checked)}
+                />
+                <span>
+                  <span className="font-medium text-amber-200">Επιτρέπεται διπλή κράτηση</span>
+                  <span className="block text-xs text-gray-400">
+                    Αν η ώρα είναι πιασμένη, ο πελάτης θα κλείνεται ΠΑΝΩ από το υπάρχον ραντεβού
+                    (αντί να παραλείπεται). Δοκιμάζει πρώτα ελεύθερο +15/+30 και μόνο αν δεν βρει
+                    στοιβάζει στην ακριβή ώρα.
+                  </span>
+                </span>
               </label>
               <div className="col-span-1 sm:col-span-2 flex flex-col sm:flex-row sm:justify-end gap-2 sm:gap-3 pt-3">
                 <button

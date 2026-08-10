@@ -56,6 +56,14 @@ const autoCustomerSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    // When true, the push may STACK this customer on top of an existing appointment at the
+    // same time (intentional double-booking, e.g. quick fill-in slots) instead of skipping
+    // for conflict. The scheduler still tries a free 0/+15/+30 slot first; only if none is
+    // free does it book at the exact time.
+    allowOverlap: {
+      type: Boolean,
+      default: false,
+    },
     maxOccurrences: {
       type: Number,
       min: 1,

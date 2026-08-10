@@ -258,6 +258,10 @@ const buildPayload = (body, { partial = false } = {}) => {
     payload.recursive = parseBoolean(body.recursive, true);
   }
 
+  if (body.allowOverlap !== undefined) {
+    payload.allowOverlap = parseBoolean(body.allowOverlap, false);
+  }
+
   if (body.active !== undefined) {
     payload.active = parseBoolean(body.active, true);
   }
