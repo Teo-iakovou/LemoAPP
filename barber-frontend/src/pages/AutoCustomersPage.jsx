@@ -121,6 +121,23 @@ const groupSkips = (summary = []) => {
   };
 };
 
+// Created rows and, of those, the intentionally STACKED ones (allowOverlap booked on top of
+// an existing appointment). Sorted by date for display.
+const groupCreated = (summary = []) => {
+  const created = summary.filter((s) => s.status === "inserted" || s.status === "moved");
+  const stacked = created
+    .filter((s) => s.overlap)
+    .sort((a, b) => new Date(a.scheduledFor) - new Date(b.scheduledFor));
+  return { createdCount: created.length, stacked };
+};
+
+// "⧉ πάνω από X, Y" label for a stacked created row.
+const stackedLabel = (row) => {
+  const when = skipDateTime(row.scheduledFor);
+  const over = (row.overlapWith || []).filter(Boolean);
+  return over.length ? `${when} — ⧉ πάνω από ${over.join(", ")}` : `${when} — ⧉ στοιβαγμένο`;
+};
+
 const escapeHtml = (value = "") =>
   String(value).replace(
     /[&<>"']/g,
@@ -1013,8 +1030,24 @@ const AutoCustomersPage = () => {
             .map(rowFn)
             .join("")}</ul></div>`
         : "";
+    const { stacked } = groupCreated(drySummary);
+    const stackedRowHtml = (r) =>
+      `<li style="display:flex;justify-content:space-between;gap:12px;padding:1px 0">` +
+      `<span>${escapeHtml(r.customerName || "—")}<span style="opacity:.6"> · ${escapeHtml(r.barber || "")}</span></span>` +
+      `<span style="opacity:.85;white-space:nowrap">${escapeHtml(stackedLabel(r))}</span></li>`;
+    const stackedBlock = stacked.length
+      ? `<div style="margin-top:10px;text-align:left">` +
+        `<div style="font-weight:600;color:#a78bfa">⧉ Στοιβαγμένα — διπλή κράτηση επιτρεπτή (${stacked.length})</div>` +
+        `<ul style="margin:4px 0 0;padding:0;list-style:none;font-size:13px;max-height:220px;overflow:auto">${stacked
+          .map(stackedRowHtml)
+          .join("")}</ul></div>`
+      : "";
+    const stackedHeader = stacked.length
+      ? ` <span style="color:#a78bfa">(${stacked.length} στοιβαγμένα ⧉)</span>`
+      : "";
     const confirmHtml =
-      `<p>Θα δημιουργηθούν <b>${plannedCount}</b> ραντεβού για <b>${selectedCount}</b> επιλεγμένους πελάτες.</p>` +
+      `<p>Θα δημιουργηθούν <b>${plannedCount}</b> ραντεβού${stackedHeader} για <b>${selectedCount}</b> επιλεγμένους πελάτες.</p>` +
+      stackedBlock +
       skipBlock("Εκτός σειράς — δεν θα κλειστούν", outOfSeries, "#38bdf8", oosRowHtml) +
       skipBlock("Ήδη στο ημερολόγιο", alreadyBooked, "#9ca3af", detailRowHtml) +
       skipBlock("⚠ Διπλή κράτηση με άλλον πελάτη", needsAttention, "#f59e0b", detailRowHtml) +
@@ -1249,6 +1282,7 @@ const AutoCustomersPage = () => {
   // Badge so it's always clear what's on screen.
   // Grouped skips for the live preview panel (same summary the confirm dialog uses).
   const previewSkips = useMemo(() => groupSkips(previewSummary), [previewSummary]);
+  const previewCreated = useMemo(() => groupCreated(previewSummary), [previewSummary]);
 
   const previewBadgeText = !previewMeta
     ? "Φόρτωση…"
@@ -1613,6 +1647,16 @@ const AutoCustomersPage = () => {
             {previewLoading && previewMeta && (
               <span className="text-xs text-gray-400">· φόρτωση…</span>
             )}
+            {previewMeta && !previewLoading && previewCreated.createdCount > 0 && (
+              <span className="ml-auto whitespace-nowrap text-xs">
+                {previewCreated.createdCount} ραντεβού
+                {previewCreated.stacked.length > 0 && (
+                  <span className="font-semibold text-violet-300">
+                    {" "}— {previewCreated.stacked.length} στοιβαγμένα ⧉
+                  </span>
+                )}
+              </span>
+            )}
           </div>
           <div
             className="auto-customers-preview overflow-x-auto max-w-full min-h-0"
@@ -1666,6 +1710,27 @@ const AutoCustomersPage = () => {
             />
             )}
           </div>
+
+          {/* Stacked (intentional double-booking): created ON TOP of an existing appointment
+              because the card has allowOverlap. Shown separately so it's obvious at a glance. */}
+          {previewCreated.stacked.length > 0 && (
+            <div className="mt-3 rounded-lg border border-violet-500/40 bg-violet-500/10 px-3 py-2 text-sm">
+              <p className="mb-1 font-semibold text-violet-200">
+                ⧉ Στοιβαγμένα — διπλή κράτηση επιτρεπτή ({previewCreated.stacked.length})
+              </p>
+              <ul className="space-y-0.5 text-violet-100/90">
+                {previewCreated.stacked.map((r, i) => (
+                  <li key={`stk-${i}`} className="flex justify-between gap-3">
+                    <span>
+                      {r.customerName || "—"}
+                      <span className="text-violet-300/60"> · {r.barber}</span>
+                    </span>
+                    <span className="whitespace-nowrap text-violet-300/80">{stackedLabel(r)}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           {/* Skip list: WHO was not booked and WHY, grouped by customer and by meaning.
               Blue = out-of-series (intended), gray = already on the calendar (no action),

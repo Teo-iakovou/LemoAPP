@@ -371,8 +371,10 @@ const generateAutoAppointments = async ({
       }
 
       // Intentional double-booking: no free 0/+15/+30 slot, but this card allows stacking.
-      // Book at the exact desired time on top of the existing appointment(s) instead of
-      // skipping. Stay within the window / until, and (for non-overrides) the same weekday.
+      // Book at the exact desired time ON TOP OF ANOTHER customer's appointment instead of
+      // skipping. Guard rails: only within the window/until (same weekday for non-overrides),
+      // and ONLY when the clash is with a DIFFERENT customer — never stack a customer on top
+      // of their OWN slot (that would just duplicate it; it stays a normal "already booked").
       let stackedOverlap = false;
       let overlapWith = [];
       if (!matchedStart && customer.allowOverlap) {
@@ -380,14 +382,15 @@ const generateAutoAppointments = async ({
           !desiredStart.isAfter(toMomentRange) &&
           !(untilMoment && desiredStart.isAfter(untilMoment)) &&
           (overrideEntry || desiredStart.day() === occurrence.day());
-        if (inWindow) {
-          overlapWith = [
-            ...new Set(
-              findSlotConflicts(scheduleForBarber, desiredStart, duration)
-                .map((evt) => evt.customerName)
-                .filter(Boolean)
-            ),
-          ];
+        const crossNames = [
+          ...new Set(
+            findSlotConflicts(scheduleForBarber, desiredStart, duration)
+              .map((evt) => evt.customerName)
+              .filter((n) => n && n !== customer.customerName)
+          ),
+        ];
+        if (inWindow && crossNames.length > 0) {
+          overlapWith = crossNames;
           matchedStart = desiredStart.clone();
           appliedShift = 0;
           stackedOverlap = true;
