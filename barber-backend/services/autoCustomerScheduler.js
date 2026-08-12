@@ -346,7 +346,10 @@ const generateAutoAppointments = async ({
       const targetBarber = overrideEntry?.barber || customer.barber;
       const duration = overrideEntry?.durationMin || defaultDuration;
 
-      const shiftCandidates = overrideEntry ? [0] : SHIFT_OPTIONS;
+      // Cards with allowOverlap book at their EXACT card time only — never try +15/+30. A
+      // shift would move the customer off their real slot and SMS them a wrong time. Free slot
+      // → take it; clash with ANOTHER customer → stack on it (below); self-clash → skip.
+      const shiftCandidates = overrideEntry || customer.allowOverlap ? [0] : SHIFT_OPTIONS;
 
       totals.attempted += 1;
       const scheduleForBarber = scheduleMap.get(targetBarber) || [];
@@ -370,11 +373,12 @@ const generateAutoAppointments = async ({
         }
       }
 
-      // Intentional double-booking: no free 0/+15/+30 slot, but this card allows stacking.
-      // Book at the exact desired time ON TOP OF ANOTHER customer's appointment instead of
-      // skipping. Guard rails: only within the window/until (same weekday for non-overrides),
-      // and ONLY when the clash is with a DIFFERENT customer — never stack a customer on top
-      // of their OWN slot (that would just duplicate it; it stays a normal "already booked").
+      // Intentional double-booking: the exact card slot clashes with ANOTHER customer, but this
+      // card allows stacking, so book at the exact card time on top instead of skipping.
+      // (allowOverlap cards never try +15/+30 — see shiftCandidates above — so this is always the
+      // exact time.) Guard rails: only within the window/until (same weekday for non-overrides),
+      // and ONLY when the clash is with a DIFFERENT customer — never stack a customer on top of
+      // their OWN slot (that would just duplicate it; it stays a normal "already booked").
       let stackedOverlap = false;
       let overlapWith = [];
       if (!matchedStart && customer.allowOverlap) {
