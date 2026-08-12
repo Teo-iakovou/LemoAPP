@@ -42,10 +42,11 @@ const alignToWeekday = (startDate, targetDay) => {
 // The push summary has one row PER OCCURRENCE with status "skipped"/"existing". We group
 // them by CUSTOMER (one entry each, with all affected occurrences) and split into THREE
 // buckets by meaning:
-//   • outOfSeries    — their turn is a different week (working as intended).
-//   • alreadyBooked  — the slot is taken by their OWN existing appointment, or already
-//                      created (correctly skipped, no action).
-//   • needsAttention — the slot is taken by ANOTHER customer (real double-booking).
+//   • outOfSeries   — their turn is a different week (working as intended).
+//   • alreadyBooked — the slot is taken by their OWN appointment / already created / manually
+//                     skipped (no action). Self-conflicts live here.
+//   • conflicts     — the slot is taken by ANOTHER customer. Collapsed and split into
+//                     recurring (same clash every time) vs one-off.
 const skipDayMonth = (iso) => {
   if (!iso) return "—";
   const d = new Date(iso);
@@ -61,14 +62,20 @@ const skipDateTime = (iso) => {
   return `${p(d.getDate())}/${p(d.getMonth() + 1)} ${p(d.getHours())}:${p(d.getMinutes())}`;
 };
 
+const WD_EL = ["Κυρ", "Δευ", "Τρι", "Τετ", "Πεμ", "Παρ", "Σαβ"];
+const skipWeekdayTime = (iso) => {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  const p = (n) => String(n).padStart(2, "0");
+  return `${WD_EL[d.getDay()]} ${p(d.getHours())}:${p(d.getMinutes())}`;
+};
+
 const OUT_OF_SERIES_REASONS = new Set(["out-of-window", "after-until"]);
 const CONFLICT_REASONS = new Set(["conflict", "override-conflict"]);
 
 // Conflicting names that are NOT the customer themselves = a real cross-customer clash.
 const otherConflictNames = (row) =>
   (row.conflictWith || []).filter((n) => n && n !== row.customerName);
-const isCrossConflict = (row) =>
-  CONFLICT_REASONS.has(row.reason) && otherConflictNames(row).length > 0;
 
 // One-line label for an out-of-series customer (they have exactly one such occurrence).
 const outOfSeriesLabel = (row) => {
@@ -92,32 +99,75 @@ const occurrenceLabel = (row) => {
   return `${when} — ${row.reason || "εξαιρέθηκε"}`;
 };
 
-// Group skip rows by customer -> one entry per customer with all affected occurrences,
-// then bucket by meaning (a cross-customer clash wins; else out-of-series; else already-booked).
+// Bucket skip rows by MEANING, per occurrence:
+//   • outOfSeries    — their turn is a different week (grouped by customer).
+//   • alreadyBooked  — the slot is taken by the customer's OWN appointment / already created
+//     / manually skipped (grouped by customer). Self-conflicts live here, never in conflicts.
+//   • conflicts      — the slot is taken by ANOTHER customer. Collapsed by
+//     (customer + same other(s) + same weekday + time), then split into recurring (>=2, the
+//     same clash every time) and one-off (once).
 const groupSkips = (summary = []) => {
-  const skipped = summary.filter((s) => s.status === "skipped" || s.status === "existing");
-  const byCustomer = new Map();
-  for (const s of skipped) {
-    const key = s.autoCustomerId ? String(s.autoCustomerId) : `name:${s.customerName}`;
-    if (!byCustomer.has(key)) {
-      byCustomer.set(key, { customerName: s.customerName, barber: s.barber, occurrences: [] });
+  const rows = summary.filter((s) => s.status === "skipped" || s.status === "existing");
+
+  const outRows = [];
+  const grayRows = [];
+  const crossRows = [];
+  for (const r of rows) {
+    if (OUT_OF_SERIES_REASONS.has(r.reason)) {
+      outRows.push(r);
+    } else if (CONFLICT_REASONS.has(r.reason)) {
+      const others = [...new Set(otherConflictNames(r))];
+      if (others.length) crossRows.push({ ...r, others });
+      else grayRows.push(r); // self-conflict -> already booked, not a real conflict
+    } else {
+      grayRows.push(r); // manual-skip / already-created / existing
     }
-    byCustomer.get(key).occurrences.push(s);
   }
-  const groups = [...byCustomer.values()].map((g) => {
-    g.occurrences.sort((a, b) => new Date(a.scheduledFor) - new Date(b.scheduledFor));
-    const bucket = g.occurrences.some(isCrossConflict)
-      ? "needsAttention"
-      : g.occurrences.some((o) => OUT_OF_SERIES_REASONS.has(o.reason))
-      ? "outOfSeries"
-      : "alreadyBooked";
-    return { ...g, count: g.occurrences.length, bucket };
+
+  const byCustomer = (arr) => {
+    const m = new Map();
+    for (const r of arr) {
+      const key = r.autoCustomerId ? String(r.autoCustomerId) : `name:${r.customerName}`;
+      if (!m.has(key)) m.set(key, { customerName: r.customerName, barber: r.barber, occurrences: [] });
+      m.get(key).occurrences.push(r);
+    }
+    return [...m.values()]
+      .map((g) => {
+        g.occurrences.sort((a, b) => new Date(a.scheduledFor) - new Date(b.scheduledFor));
+        return { ...g, count: g.occurrences.length };
+      })
+      .sort((a, b) => (a.customerName || "").localeCompare(b.customerName || ""));
+  };
+
+  const cm = new Map();
+  for (const r of crossRows) {
+    const others = r.others.slice().sort().join(", ");
+    const d = new Date(r.scheduledFor);
+    const key = `${r.customerName}|${r.barber}|${others}|${d.getDay()}|${d.getHours()}:${d.getMinutes()}`;
+    if (!cm.has(key)) {
+      cm.set(key, {
+        customerName: r.customerName,
+        barber: r.barber,
+        others,
+        weekdayTime: skipWeekdayTime(r.scheduledFor),
+        dates: [],
+      });
+    }
+    cm.get(key).dates.push(r.scheduledFor);
+  }
+  const collapsed = [...cm.values()].map((g) => {
+    g.dates.sort((a, b) => new Date(a) - new Date(b));
+    return { ...g, count: g.dates.length, firstDM: skipDayMonth(g.dates[0]), dateList: g.dates.map(skipDayMonth) };
   });
-  groups.sort((a, b) => (a.customerName || "").localeCompare(b.customerName || ""));
+  const recurring = collapsed.filter((g) => g.count >= 2).sort((a, b) => b.count - a.count);
+  const oneOff = collapsed
+    .filter((g) => g.count === 1)
+    .sort((a, b) => new Date(a.dates[0]) - new Date(b.dates[0]));
+
   return {
-    outOfSeries: groups.filter((g) => g.bucket === "outOfSeries"),
-    alreadyBooked: groups.filter((g) => g.bucket === "alreadyBooked"),
-    needsAttention: groups.filter((g) => g.bucket === "needsAttention"),
+    outOfSeries: byCustomer(outRows),
+    alreadyBooked: byCustomer(grayRows),
+    conflicts: { recurring, oneOff, total: recurring.length + oneOff.length },
   };
 };
 
@@ -1010,7 +1060,7 @@ const AutoCustomersPage = () => {
 
     // Skips must be visible on the SAME dry-run the confirmation is built from (identical to
     // what the real push will do), grouped by meaning so the real double-bookings stand out.
-    const { outOfSeries, alreadyBooked, needsAttention } = groupSkips(drySummary);
+    const { outOfSeries, alreadyBooked, conflicts } = groupSkips(drySummary);
     const oosRowHtml = (g) =>
       `<li style="display:flex;justify-content:space-between;gap:12px;padding:1px 0">` +
       `<span>${escapeHtml(g.customerName || "—")}<span style="opacity:.6"> · ${escapeHtml(g.barber || "")}</span></span>` +
@@ -1045,12 +1095,32 @@ const AutoCustomersPage = () => {
     const stackedHeader = stacked.length
       ? ` <span style="color:#a78bfa">(${stacked.length} στοιβαγμένα ⧉)</span>`
       : "";
+    const conflictRowHtml = (g, recurring) =>
+      `<li style="display:flex;justify-content:space-between;gap:12px;padding:1px 0">` +
+      `<span><b>${escapeHtml(g.customerName || "—")}</b><span style="opacity:.5"> · ${escapeHtml(g.barber || "")}</span></span>` +
+      `<span style="opacity:.85;white-space:nowrap">με ${escapeHtml(g.others)} · ${escapeHtml(g.weekdayTime)} · ${
+        recurring ? `${g.count}× (από ${g.firstDM})` : g.firstDM
+      }</span></li>`;
+    const conflictSub = (title, arr, recurring) =>
+      arr.length
+        ? `<div style="margin-top:6px"><div style="font-size:11px;text-transform:uppercase;letter-spacing:.04em;opacity:.85;color:#f59e0b">${title} (${arr.length})</div>` +
+          `<ul style="margin:2px 0 0;padding:0;list-style:none;font-size:13px">${arr
+            .map((g) => conflictRowHtml(g, recurring))
+            .join("")}</ul></div>`
+        : "";
+    const conflictsBlock = conflicts.total
+      ? `<div style="margin-top:10px;text-align:left;max-height:240px;overflow:auto">` +
+        `<div style="font-weight:600;color:#f59e0b">Δεν κλείστηκαν — πιασμένη ώρα (${conflicts.total})</div>` +
+        conflictSub("⟳ Επαναλαμβάνεται κάθε φορά", conflicts.recurring, true) +
+        conflictSub("Μεμονωμένα", conflicts.oneOff, false) +
+        `</div>`
+      : "";
     const confirmHtml =
       `<p>Θα δημιουργηθούν <b>${plannedCount}</b> ραντεβού${stackedHeader} για <b>${selectedCount}</b> επιλεγμένους πελάτες.</p>` +
       stackedBlock +
       skipBlock("Εκτός σειράς — δεν θα κλειστούν", outOfSeries, "#38bdf8", oosRowHtml) +
       skipBlock("Ήδη στο ημερολόγιο", alreadyBooked, "#9ca3af", detailRowHtml) +
-      skipBlock("⚠ Διπλή κράτηση με άλλον πελάτη", needsAttention, "#f59e0b", detailRowHtml) +
+      conflictsBlock +
       `<p style="margin-top:12px">Συνέχεια;</p>`;
 
     const confirmPush = await MySwal.fire({
@@ -1738,7 +1808,7 @@ const AutoCustomersPage = () => {
               summary the push uses, so preview and push never diverge. */}
           {(previewSkips.outOfSeries.length > 0 ||
             previewSkips.alreadyBooked.length > 0 ||
-            previewSkips.needsAttention.length > 0) && (
+            previewSkips.conflicts.total > 0) && (
             <div className="mt-3 space-y-2 text-sm">
               {previewSkips.outOfSeries.length > 0 && (
                 <div className="rounded-lg border border-sky-500/30 bg-sky-500/10 px-3 py-2">
@@ -1787,31 +1857,61 @@ const AutoCustomersPage = () => {
                   </ul>
                 </div>
               )}
-              {previewSkips.needsAttention.length > 0 && (
+              {previewSkips.conflicts.total > 0 && (
                 <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2">
-                  <p className="mb-1 font-semibold text-amber-200">
-                    ⚠ Διπλή κράτηση με άλλον πελάτη ({previewSkips.needsAttention.length})
+                  <p className="mb-1.5 font-semibold text-amber-200">
+                    Δεν κλείστηκαν — πιασμένη ώρα ({previewSkips.conflicts.total})
                   </p>
-                  <ul className="space-y-1.5 text-amber-100/90">
-                    {previewSkips.needsAttention.map((g, i) => (
-                      <li key={`attn-${i}`}>
-                        <div className="flex justify-between gap-3">
-                          <span className="font-medium">
-                            {g.customerName || "—"}
-                            <span className="text-amber-300/60"> · {g.barber}</span>
-                          </span>
-                          <span className="whitespace-nowrap text-amber-300/70">
-                            {g.count} {g.count === 1 ? "περίπτωση" : "περιπτώσεις"}
-                          </span>
-                        </div>
-                        <ul className="mt-0.5 space-y-0.5 pl-3 text-xs text-amber-200/80">
-                          {g.occurrences.map((o, j) => (
-                            <li key={`attn-${i}-${j}`}>{occurrenceLabel(o)}</li>
-                          ))}
-                        </ul>
-                      </li>
-                    ))}
-                  </ul>
+                  {previewSkips.conflicts.recurring.length > 0 && (
+                    <div className="mb-2">
+                      <p className="mb-0.5 text-xs font-medium uppercase tracking-wide text-amber-300/80">
+                        ⟳ Επαναλαμβάνεται κάθε φορά ({previewSkips.conflicts.recurring.length})
+                      </p>
+                      <ul className="space-y-0.5 text-amber-100/90">
+                        {previewSkips.conflicts.recurring.map((g, i) => (
+                          <li key={`rec-${i}`}>
+                            <details className="group">
+                              <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
+                                <span>
+                                  <span className="inline-block text-amber-300/60 transition-transform group-open:rotate-90">
+                                    ▸
+                                  </span>{" "}
+                                  <span className="font-medium">{g.customerName || "—"}</span>
+                                  <span className="text-amber-300/50"> · {g.barber}</span>
+                                </span>
+                                <span className="whitespace-nowrap text-amber-300/80">
+                                  με {g.others} · {g.weekdayTime} · {g.count}× (από {g.firstDM})
+                                </span>
+                              </summary>
+                              <div className="mt-0.5 pl-4 text-xs text-amber-200/70">
+                                {g.dateList.join(", ")}
+                              </div>
+                            </details>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {previewSkips.conflicts.oneOff.length > 0 && (
+                    <div>
+                      <p className="mb-0.5 text-xs font-medium uppercase tracking-wide text-amber-300/80">
+                        Μεμονωμένα ({previewSkips.conflicts.oneOff.length})
+                      </p>
+                      <ul className="space-y-0.5 text-amber-100/90">
+                        {previewSkips.conflicts.oneOff.map((g, i) => (
+                          <li key={`one-${i}`} className="flex justify-between gap-3">
+                            <span>
+                              <span className="font-medium">{g.customerName || "—"}</span>
+                              <span className="text-amber-300/50"> · {g.barber}</span>
+                            </span>
+                            <span className="whitespace-nowrap text-amber-300/80">
+                              με {g.others} · {g.weekdayTime} · {g.firstDM}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
