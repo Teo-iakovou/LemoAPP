@@ -8,7 +8,13 @@ const AutoGenerationBatch = require("../models/autoGenerationBatch");
 const { upsertCustomerFromIdentity } = require("../utils/customerSync");
 
 const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
-const VALID_CADENCE = new Set([1, 2, 4]);
+// Single source of truth: derive the allowed cadences from the model's schema enum, so this
+// validator can never drift out of sync with the DB constraint again. (It was hardcoded to
+// [1, 2, 4] while the enum + the UI dropdown allowed [1, 2, 3, 4, 5], which 400'd valid "3"/"5"
+// selections.) autoCustomer.js is the one place to edit the allowed set from now on.
+const VALID_CADENCE = new Set(
+  AutoCustomer.schema.path("cadenceWeeks").options.enum || [1, 2, 3, 4, 5]
+);
 const VALID_BARBERS = new Set(["ΛΕΜΟ", "ΦΟΡΟΥ", "ΚΟΥΣΙΗΣ"]);
 
 const normalizePhone = (input = "") => String(input).replace(/\s+/g, "").trim();
@@ -211,7 +217,7 @@ const buildPayload = (body, { partial = false } = {}) => {
   if (body.cadenceWeeks !== undefined || !partial) {
     const cadence = parseNumber(body.cadenceWeeks);
     if (cadence === undefined || !VALID_CADENCE.has(cadence)) {
-      errors.push("cadenceWeeks must be 1, 2, or 4.");
+      errors.push(`cadenceWeeks must be one of: ${[...VALID_CADENCE].join(", ")}.`);
     } else {
       payload.cadenceWeeks = cadence;
     }
