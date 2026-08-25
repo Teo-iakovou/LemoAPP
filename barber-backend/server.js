@@ -30,6 +30,10 @@ dotenv.config();
 connectDB();
 
 const app = express();
+// Behind Railway's single proxy: trust exactly one hop so req.ip is the real client
+// (from X-Forwarded-For) and express-rate-limit can key on it. NOT `true` — that would let a
+// client spoof X-Forwarded-For to bypass the booking rate limit.
+app.set("trust proxy", 1);
 const PORT = process.env.PORT || 5002;
 // Add Helmet middleware
 
