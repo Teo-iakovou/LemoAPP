@@ -622,46 +622,79 @@ const AutoCustomersPage = () => {
     return base;
   }
 
-  // Renewal ("Ανανέωση προγράμματος"): restart a customer's recurring schedule from
-  // TODAY, on that customer's own weekday. The card's existing `until` is the end
-  // boundary and is carried through UNCHANGED — never recomputed from maxOccurrences,
-  // never moved. weekday/time/barber/cadence/maxOccurrences are never changed either.
+  // Renewal ("Ανανέωση προγράμματος"): CONTINUE a customer's recurring schedule, preserving
+  // its phase — never reset it to "today". We advance the card's OWN startFrom forward in
+  // whole cadenceWeeks steps until it lands on/after today. Whole-week steps keep the weekday
+  // AND the phase offset between paired cards (e.g. two biweeklies on alternating weeks), so
+  // they no longer collapse onto the same week the way "next weekday from today" did.
   //
-  // A card whose `until` leaves no room for the new start is not renewed at all: moving
-  // its end date silently is exactly the kind of hidden write that destroyed 51 cards on
-  // 21/07, so it is reported for manual attention instead.
+  // weekday/time/barber/cadence/maxOccurrences are never written. `until` is kept verbatim
+  // UNLESS advancing startFrom forward would truncate the run off the end (see below) — moving
+  // an end date otherwise is the hidden-write class that damaged 51 cards on 21/07.
   const computeRenewal = (customer) => {
     const weekday = Number(customer.weekday ?? 1);
+    // Guard the loop: a 0 / NaN / missing cadence would never advance -> infinite loop.
+    const cadence =
+      Number(customer.cadenceWeeks) >= 1 ? Math.floor(Number(customer.cadenceWeeks)) : 1;
+    const maxOcc =
+      Number(customer.maxOccurrences) >= 1 ? Math.floor(Number(customer.maxOccurrences)) : 1;
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    // Today advanced to this customer's own next weekday occurrence. When today already
-    // IS their weekday the offset is 0 and the new start is today — the backend floors
-    // every occurrence at "now" (autoCustomerScheduler :183, :295), so a slot earlier
-    // today rolls to the next cadence step there rather than being booked in the past.
-    const newStart = alignToWeekday(today, weekday);
+    // The card's own startFrom as its LOCAL calendar day (same normalisation the write uses).
+    const startLocalDay = parseLocalDateString(toLocalDateString(new Date(customer.startFrom)));
+    let newStart = startLocalDay ? new Date(startLocalDay.getTime()) : new Date(today.getTime());
+
+    // Step forward by whole cadence weeks until on/after today. cadence >= 1 guarantees each
+    // step advances >= 7 days, so this always terminates; the counter is a belt-and-suspenders
+    // backstop against pathological input and also tells us whether startFrom actually moved.
+    let steps = 0;
+    while (newStart < today && steps < 100000) {
+      newStart = addDays(newStart, cadence * 7);
+      steps += 1;
+    }
     newStart.setHours(0, 0, 0, 0);
 
-    // Passed through verbatim, NOT reformatted: re-deriving it via
-    // toLocalDateString/toUtcIsoFromLocalDate would snap a value that is not at UTC
-    // midnight onto midnight, i.e. a silent edit to the very field we promise to keep.
-    const until = customer.until ?? null;
-
-    // Day-level comparison in local terms, matching how the rest of this file compares
-    // dates. Only used to classify — never written back.
-    const untilDay = until
-      ? parseLocalDateString(toLocalDateString(new Date(until)))
-      : null;
-    const untilValid = untilDay && !Number.isNaN(untilDay.getTime());
-
-    let skipReason = null;
-    if (untilValid) {
-      if (untilDay < today) skipReason = "past";
-      else if (untilDay < newStart) skipReason = "before-start";
+    // Tripwire (0 cards today): startFrom should already sit on the card's weekday. If it ever
+    // drifts, snap forward to the card's weekday so we never write a startFrom on the wrong day,
+    // and flag it so the confirm dialog can warn.
+    const weekdayMismatch = !startLocalDay || startLocalDay.getDay() !== weekday;
+    if (weekdayMismatch) {
+      newStart = alignToWeekday(newStart, weekday);
+      newStart.setHours(0, 0, 0, 0);
     }
 
-    return { newStart, until, untilDay: untilValid ? untilDay : null, skipReason };
+    // `until` (verbatim unless extended): re-deriving an unchanged value would snap a non-UTC-
+    // midnight date onto midnight — a silent edit — so we forward the raw value untouched.
+    const originalUntil = customer.until ?? null;
+    const originalUntilDay = originalUntil
+      ? parseLocalDateString(toLocalDateString(new Date(originalUntil)))
+      : null;
+    const originalUntilValid = originalUntilDay && !Number.isNaN(originalUntilDay.getTime());
+
+    // A series whose `until` is already in the PAST is finished — never silently resurrected by
+    // a renewal click. Flagged for manual attention, not written.
+    let skipReason = null;
+    if (originalUntilValid && originalUntilDay < today) skipReason = "past";
+
+    // Extend `until` ONLY when advancing startFrom forward (steps > 0) would push the last of the
+    // maxOccurrences occurrences past a now-too-early `until`, i.e. the card would lose an
+    // appointment off the end purely because its end date stayed put. Then move it to cover the
+    // full run: newStart + cadence*(maxOccurrences-1). Cards that did not move are never touched.
+    let until = originalUntil;
+    let untilDay = originalUntilValid ? originalUntilDay : null;
+    let untilExtended = false;
+    if (!skipReason && steps > 0 && originalUntilValid) {
+      const lastOccurrence = addDays(newStart, cadence * (maxOcc - 1) * 7);
+      if (originalUntilDay < lastOccurrence) {
+        until = toUtcIsoFromLocalDate(toLocalDateString(lastOccurrence));
+        untilDay = parseLocalDateString(toLocalDateString(lastOccurrence));
+        untilExtended = true;
+      }
+    }
+
+    return { newStart, until, untilDay, skipReason, weekdayMismatch, untilExtended };
   };
 
   const handleEdit = (customer, occurrenceDate, options = {}) => {
@@ -1209,7 +1242,9 @@ const AutoCustomersPage = () => {
 
       const renewable = plans.filter((plan) => !plan.skipReason);
       const expired = plans.filter((plan) => plan.skipReason === "past");
-      const tooEarly = plans.filter((plan) => plan.skipReason === "before-start");
+      // Tripwire + auto-handled end-date moves, surfaced in the confirm dialog.
+      const mismatched = plans.filter((plan) => !plan.skipReason && plan.weekdayMismatch);
+      const extended = plans.filter((plan) => !plan.skipReason && plan.untilExtended);
 
       const cellStyle = {
         padding: "6px 10px",
@@ -1234,6 +1269,40 @@ const AutoCustomersPage = () => {
           </div>
         );
 
+      // Red tripwire: a card whose startFrom weekday no longer matches its weekday field was
+      // snapped back onto the weekday. Should be empty; if it fires, something upstream drifted.
+      const mismatchBlock = mismatched.length > 0 && (
+        <div style={{ marginTop: 14 }}>
+          <p style={{ ...noteStyle, color: "#b91c1c" }}>
+            ⚠ Προσοχή: {mismatched.length} κάρτα(-ες) είχαν ημέρα έναρξης που δεν ταιριάζει με το
+            weekday τους — ευθυγραμμίστηκαν ξανά στη σωστή ημέρα:
+          </p>
+          <ul style={listStyle}>
+            {mismatched.map((plan) => (
+              <li key={plan.customer._id}>
+                {plan.customer.customerName} → {formatShortDate(plan.newStart)}
+              </li>
+            ))}
+          </ul>
+        </div>
+      );
+
+      // The end date was moved forward so the card keeps its full run of appointments.
+      const extendedBlock = extended.length > 0 && (
+        <div style={{ marginTop: 14 }}>
+          <p style={noteStyle}>
+            Επεκτάθηκε το «Έως» ώστε να μη χαθούν ραντεβού ({extended.length}):
+          </p>
+          <ul style={listStyle}>
+            {extended.map((plan) => (
+              <li key={plan.customer._id}>
+                {plan.customer.customerName} → {plan.untilDay ? formatShortDate(plan.untilDay) : "—"}
+              </li>
+            ))}
+          </ul>
+        </div>
+      );
+
       if (renewable.length === 0) {
         await MySwal.fire({
           title: "Ανανέωση προγράμματος",
@@ -1243,10 +1312,6 @@ const AutoCustomersPage = () => {
             <div style={{ textAlign: "left" }}>
               <p>Κανένας πελάτης δεν μπορεί να ανανεωθεί.</p>
               {skippedBlock("Χρειάζονται προσοχή (η λήξη τους έχει περάσει)", expired)}
-              {skippedBlock(
-                "Χρειάζονται προσοχή (η λήξη τους είναι πριν από τη νέα έναρξη)",
-                tooEarly
-              )}
             </div>
           ),
           confirmButtonText: "Εντάξει",
@@ -1272,7 +1337,7 @@ const AutoCustomersPage = () => {
                   <tr style={{ background: "#f3f4f6" }}>
                     <th style={{ ...cellStyle, textAlign: "left" }}>Πελάτης</th>
                     <th style={{ ...cellStyle, textAlign: "left" }}>Νέα έναρξη</th>
-                    <th style={{ ...cellStyle, textAlign: "left" }}>Έως (αμετάβλητο)</th>
+                    <th style={{ ...cellStyle, textAlign: "left" }}>Έως</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1282,6 +1347,9 @@ const AutoCustomersPage = () => {
                       <td style={cellStyle}>{formatShortDate(plan.newStart)}</td>
                       <td style={cellStyle}>
                         {plan.untilDay ? formatShortDate(plan.untilDay) : "—"}
+                        {plan.untilExtended && (
+                          <span style={{ color: "#b45309", fontWeight: 600 }}> (επεκτάθηκε)</span>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -1291,11 +1359,9 @@ const AutoCustomersPage = () => {
             <p style={{ marginTop: 14, fontWeight: 600 }}>
               Θα ανανεωθεί το πρόγραμμα για {renewable.length} πελάτες. Συνέχεια;
             </p>
+            {mismatchBlock}
+            {extendedBlock}
             {skippedBlock("Χρειάζονται προσοχή (η λήξη τους έχει περάσει)", expired)}
-            {skippedBlock(
-              "Χρειάζονται προσοχή (η λήξη τους είναι πριν από τη νέα έναρξη)",
-              tooEarly
-            )}
           </div>
         ),
         showCancelButton: true,
@@ -1310,10 +1376,10 @@ const AutoCustomersPage = () => {
       );
       await Promise.all(updates);
       await loadCustomers();
-      const skippedCount = expired.length + tooEarly.length;
       toast.success(
         `Ανανεώθηκε το πρόγραμμα για ${renewable.length} πελάτες.` +
-          (skippedCount > 0 ? ` ${skippedCount} χρειάζονται προσοχή.` : "")
+          (expired.length > 0 ? ` ${expired.length} χρειάζονται προσοχή.` : "") +
+          (extended.length > 0 ? ` ${extended.length} με επέκταση «Έως».` : "")
       );
 
       // Renewal already wrote the correct values onto each card, so the preview must run
