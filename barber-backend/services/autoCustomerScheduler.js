@@ -172,6 +172,11 @@ const generateAutoAppointments = async ({
   countOverride,
   dryRun = true,
   initiatedBy,
+  // Ad-hoc, per-run force-overlap: a Set of `${autoCustomerId}_${occurrenceValueMs}` keys.
+  // Each key marks ONE conflicting occurrence the operator explicitly ticked in the confirm
+  // dialog to double-book. Unlike the card's persistent `allowOverlap`, this applies only to
+  // this run and only to the exact occurrences listed. Empty/undefined => no forced overlaps.
+  forceOverlapKeys = null,
 }) => {
   if (!Array.isArray(customers) || customers.length === 0) {
     return {
@@ -323,6 +328,11 @@ const generateAutoAppointments = async ({
 
       const occurrenceValue = occurrence.valueOf();
 
+      // Did the operator tick THIS occurrence for forced double-booking in the confirm dialog?
+      // (Key = autoCustomerId + the occurrence's exact ms, identical to what the UI sent back.)
+      const forceKey = customerId ? `${customerId}_${occurrenceValue}` : null;
+      const forced = Boolean(forceOverlapKeys && forceKey && forceOverlapKeys.has(forceKey));
+
       if (skippedSet.has(occurrenceValue)) {
         summary.push({
           autoCustomerId: customerId,
@@ -349,7 +359,8 @@ const generateAutoAppointments = async ({
       // Cards with allowOverlap book at their EXACT card time only — never try +15/+30. A
       // shift would move the customer off their real slot and SMS them a wrong time. Free slot
       // → take it; clash with ANOTHER customer → stack on it (below); self-clash → skip.
-      const shiftCandidates = overrideEntry || customer.allowOverlap ? [0] : SHIFT_OPTIONS;
+      const shiftCandidates =
+        overrideEntry || customer.allowOverlap || forced ? [0] : SHIFT_OPTIONS;
 
       totals.attempted += 1;
       const scheduleForBarber = scheduleMap.get(targetBarber) || [];
@@ -381,7 +392,7 @@ const generateAutoAppointments = async ({
       // their OWN slot (that would just duplicate it; it stays a normal "already booked").
       let stackedOverlap = false;
       let overlapWith = [];
-      if (!matchedStart && customer.allowOverlap) {
+      if (!matchedStart && (customer.allowOverlap || forced)) {
         const inWindow =
           !desiredStart.isAfter(toMomentRange) &&
           !(untilMoment && desiredStart.isAfter(untilMoment)) &&
@@ -419,6 +430,7 @@ const generateAutoAppointments = async ({
           reason,
           conflictWith,
           shiftMinutes: 0,
+          forced: forced || undefined,
           smsStatus: "n/a",
         });
         totals.skipped += 1;
@@ -437,6 +449,7 @@ const generateAutoAppointments = async ({
           status: "existing",
           reason: overrideEntry ? "override-already-created" : "already-created",
           shiftMinutes: appliedShift,
+          forced: forced || undefined,
           smsStatus: "n/a",
         });
         totals.existing += 1;
@@ -478,6 +491,7 @@ const generateAutoAppointments = async ({
             overrideApplied: Boolean(overrideEntry),
             overlapAllowed: stackedOverlap || undefined,
             overlapWith: stackedOverlap ? overlapWith : undefined,
+            forced: forced || undefined,
           },
         });
 
@@ -509,6 +523,7 @@ const generateAutoAppointments = async ({
             : `shifted-by-${appliedShift}`,
           overlap: stackedOverlap || undefined,
           overlapWith: stackedOverlap ? overlapWith : undefined,
+          forced: forced || undefined,
           smsStatus: "dry-run",
         });
       }
@@ -573,6 +588,9 @@ const generateAutoAppointments = async ({
             status: shift > 0 ? "moved" : "inserted",
             shiftMinutes: shift,
             reason: shift > 0 ? `shifted-by-${shift}` : "scheduled",
+            overlap: appointment.meta?.overlapAllowed || undefined,
+            overlapWith: appointment.meta?.overlapAllowed ? appointment.meta?.overlapWith : undefined,
+            forced: appointment.meta?.forced || undefined,
             smsStatus: "missing-phone",
           });
         });
@@ -638,6 +656,7 @@ const generateAutoAppointments = async ({
           reason,
           overlap: overlapAllowed || undefined,
           overlapWith: overlapAllowed ? appointment.meta?.overlapWith : undefined,
+          forced: appointment.meta?.forced || undefined,
           smsStatus,
           smsError: smsError || undefined,
         });

@@ -151,12 +151,17 @@ const groupSkips = (summary = []) => {
         others,
         weekdayTime: skipWeekdayTime(r.scheduledFor),
         dates: [],
+        // Identity of each collapsed occurrence, kept so a one-off row can offer a
+        // force-overlap checkbox that sends { autoCustomerId, at } back to the push.
+        occ: [],
       });
     }
     cm.get(key).dates.push(r.scheduledFor);
+    cm.get(key).occ.push({ id: r.autoCustomerId, at: r.scheduledFor });
   }
   const collapsed = [...cm.values()].map((g) => {
     g.dates.sort((a, b) => new Date(a) - new Date(b));
+    g.occ.sort((a, b) => new Date(a.at) - new Date(b.at));
     return { ...g, count: g.dates.length, firstDM: skipDayMonth(g.dates[0]), dateList: g.dates.map(skipDayMonth) };
   });
   const recurring = collapsed.filter((g) => g.count >= 2).sort((a, b) => b.count - a.count);
@@ -1095,12 +1100,23 @@ const AutoCustomersPage = () => {
     const stackedHeader = stacked.length
       ? ` <span style="color:#a78bfa">(${stacked.length} στοιβαγμένα ⧉)</span>`
       : "";
-    const conflictRowHtml = (g, recurring) =>
-      `<li style="display:flex;justify-content:space-between;gap:12px;padding:1px 0">` +
-      `<span><b>${escapeHtml(g.customerName || "—")}</b><span style="opacity:.5"> · ${escapeHtml(g.barber || "")}</span></span>` +
-      `<span style="opacity:.85;white-space:nowrap">με ${escapeHtml(g.others)} · ${escapeHtml(g.weekdayTime)} · ${
-        recurring ? `${g.count}× (από ${g.firstDM})` : g.firstDM
-      }</span></li>`;
+    // One-off rows carry a force-overlap checkbox: tick it to book the double on the exact
+    // clashing slot instead of skipping. data-ac / data-at identify the occurrence sent back
+    // to the push. Recurring rows get no checkbox (a single tick can't sanely mean "all N").
+    const conflictRowHtml = (g, recurring) => {
+      const occ = !recurring && Array.isArray(g.occ) ? g.occ[0] : null;
+      const box =
+        occ && occ.id
+          ? `<input type="checkbox" class="lemo-ovl" data-ac="${escapeHtml(String(occ.id))}" data-at="${escapeHtml(occ.at)}" style="margin-right:8px;vertical-align:middle;cursor:pointer" title="Κλείσε διπλό ραντεβού σε αυτή την ώρα — θα σταλεί SMS όπως σε κάθε ραντεβού">`
+          : "";
+      return (
+        `<li style="display:flex;justify-content:space-between;gap:12px;padding:1px 0;align-items:center">` +
+        `<span>${box}<b>${escapeHtml(g.customerName || "—")}</b><span style="opacity:.5"> · ${escapeHtml(g.barber || "")}</span></span>` +
+        `<span style="opacity:.85;white-space:nowrap">με ${escapeHtml(g.others)} · ${escapeHtml(g.weekdayTime)} · ${
+          recurring ? `${g.count}× (από ${g.firstDM})` : g.firstDM
+        }</span></li>`
+      );
+    };
     const conflictSub = (title, arr, recurring) =>
       arr.length
         ? `<div style="margin-top:6px"><div style="font-size:11px;text-transform:uppercase;letter-spacing:.04em;opacity:.85;color:#f59e0b">${title} (${arr.length})</div>` +
@@ -1108,11 +1124,15 @@ const AutoCustomersPage = () => {
             .map((g) => conflictRowHtml(g, recurring))
             .join("")}</ul></div>`
         : "";
+    const oneOffHint = conflicts.oneOff.length
+      ? `<div style="font-size:11px;opacity:.9;margin-top:6px;color:#a78bfa">☑ Τσέκαρε ένα μεμονωμένο για να κλειστεί <b>διπλό</b> στην ίδια ώρα. Θα λάβει <b>SMS επιβεβαίωσης</b> όπως κάθε ραντεβού.</div>`
+      : "";
     const conflictsBlock = conflicts.total
       ? `<div style="margin-top:10px;text-align:left;max-height:240px;overflow:auto">` +
         `<div style="font-weight:600;color:#f59e0b">Δεν κλείστηκαν — πιασμένη ώρα (${conflicts.total})</div>` +
         conflictSub("⟳ Επαναλαμβάνεται κάθε φορά", conflicts.recurring, true) +
         conflictSub("Μεμονωμένα", conflicts.oneOff, false) +
+        oneOffHint +
         `</div>`
       : "";
     const confirmHtml =
@@ -1131,12 +1151,20 @@ const AutoCustomersPage = () => {
       showCancelButton: true,
       confirmButtonText: "Ναι",
       cancelButtonText: "Άκυρο",
+      // Collect any ticked one-off conflicts so the real push can force-book them as doubles.
+      preConfirm: () =>
+        Array.from(document.querySelectorAll(".lemo-ovl:checked")).map((b) => ({
+          autoCustomerId: b.getAttribute("data-ac"),
+          at: b.getAttribute("data-at"),
+        })),
     });
 
     if (!confirmPush.isConfirmed) {
       setPushSubmitting(false);
       return;
     }
+
+    const overlapOccurrences = Array.isArray(confirmPush.value) ? confirmPush.value : [];
 
     try {
       const payload = {
@@ -1145,11 +1173,53 @@ const AutoCustomersPage = () => {
         count: countOverrideValue,
         dryRun: false,
         customerIds: selectedIds,
+        ...(overlapOccurrences.length ? { overlapOccurrences } : {}),
       };
       toast("Οι πελάτες προστίθενται στο ημερολόγιο...");
       setPushOpen(false);
-      await pushAutoCustomers(payload);
+      const pushRes = await pushAutoCustomers(payload);
       toast.success(`Προστέθηκαν στο ημερολόγιο οι επιλεγμένοι πελάτες (${selectedCount}).`);
+
+      // Report back what actually happened to each ticked (forced) occurrence: stacked (and on
+      // top of whom), booked normally because the slot freed up, already existed, or still
+      // couldn't be booked. A ticked box must never silently do nothing.
+      if (overlapOccurrences.length) {
+        const forcedRows = (pushRes?.data?.summary || []).filter((s) => s && s.forced);
+        const describe = (s) => {
+          const when = skipDateTime(s.scheduledFor);
+          const who = `${escapeHtml(s.customerName || "—")}<span style="opacity:.5"> · ${escapeHtml(s.barber || "")}</span>`;
+          if ((s.status === "inserted" || s.status === "moved") && s.overlap) {
+            const on = Array.isArray(s.overlapWith) && s.overlapWith.length ? s.overlapWith.join(", ") : "άλλο ραντεβού";
+            return { color: "#a78bfa", icon: "⧉", text: `${who} — ${escapeHtml(when)} · διπλό πάνω σε ${escapeHtml(on)}` };
+          }
+          if (s.status === "inserted" || s.status === "moved") {
+            return { color: "#34d399", icon: "✓", text: `${who} — ${escapeHtml(when)} · κλείστηκε κανονικά (ελευθερώθηκε η ώρα)` };
+          }
+          if (s.status === "existing") {
+            return { color: "#9ca3af", icon: "•", text: `${who} — ${escapeHtml(when)} · υπήρχε ήδη` };
+          }
+          const withNames = Array.isArray(s.conflictWith) && s.conflictWith.length ? ` (με ${escapeHtml(s.conflictWith.join(", "))})` : "";
+          return { color: "#f59e0b", icon: "✕", text: `${who} — ${escapeHtml(when)} · δεν κλείστηκε${withNames}` };
+        };
+        const rowsHtml = forcedRows
+          .map((s) => {
+            const d = describe(s);
+            return `<li style="padding:2px 0"><span style="color:${d.color};font-weight:700">${d.icon}</span> ${d.text}</li>`;
+          })
+          .join("");
+        await MySwal.fire({
+          title: "Διπλά ραντεβού — αποτέλεσμα",
+          icon: forcedRows.some((s) => s.status === "skipped") ? "warning" : "success",
+          width: 540,
+          html:
+            `<p style="text-align:left">Ζητήθηκαν <b>${overlapOccurrences.length}</b> διπλά ραντεβού:</p>` +
+            `<ul style="margin:6px 0 0;padding:0;list-style:none;font-size:13px;text-align:left;max-height:300px;overflow:auto">${
+              rowsHtml || `<li style="opacity:.7">Δεν βρέθηκαν εγγραφές — έλεγξε το ημερολόγιο.</li>`
+            }</ul>`,
+          confirmButtonText: "OK",
+        });
+      }
+
       clearCustomerSelection();
       // Kept even though the fields no longer touch the cards. They are a one-shot
       // override for the run that just finished, and the selection is cleared right

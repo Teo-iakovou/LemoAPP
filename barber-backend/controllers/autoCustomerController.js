@@ -662,6 +662,7 @@ const pushAutoCustomers = async (req, res, next) => {
       includeInactive = false,
       includePaused = false,
       customerIds,
+      overlapOccurrences,
     } = req.body || {};
 
     // Bulk TEMPORARY-override semantics: "Από" (from), "Έως" (to) and "Αριθμός" (count)
@@ -768,6 +769,26 @@ const pushAutoCustomers = async (req, res, next) => {
     // on-phase occurrence falls outside the window is SKIPPED (and reported), not re-phased.
     const isDryRun = parseBoolean(dryRun, false);
 
+    // Per-occurrence force-overlap: the operator ticked specific one-off conflicts in the
+    // confirm dialog to double-book them. Each entry is { autoCustomerId, at }. Build the
+    // Set of `${id}_${ms}` keys the scheduler matches occurrences against. Malformed entries
+    // are dropped silently — an empty/absent list means "no forced overlaps" (default behaviour,
+    // byte-identical to before). Applies to dryRun too, so the confirm preview can show the
+    // stacked result before committing.
+    let forceOverlapKeys = null;
+    if (Array.isArray(overlapOccurrences) && overlapOccurrences.length) {
+      forceOverlapKeys = new Set();
+      for (const entry of overlapOccurrences) {
+        const id = entry?.autoCustomerId;
+        const at = entry?.at;
+        if (!id || !mongoose.Types.ObjectId.isValid(String(id))) continue;
+        const ms = new Date(at).getTime();
+        if (!Number.isFinite(ms)) continue;
+        forceOverlapKeys.add(`${String(id)}_${ms}`);
+      }
+      if (forceOverlapKeys.size === 0) forceOverlapKeys = null;
+    }
+
     const result = await generateAutoAppointments({
       customers,
       rangeStart: fromDate || undefined,
@@ -775,6 +796,7 @@ const pushAutoCustomers = async (req, res, next) => {
       countOverride: countValue,
       dryRun: isDryRun,
       initiatedBy: req.user?._id,
+      forceOverlapKeys,
     });
 
     res.json({ success: true, data: result });
