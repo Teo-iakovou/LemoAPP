@@ -32,6 +32,14 @@ const autoRetryFailedSMS = async () => {
             const result = await sendSMS(appointment.phoneNumber, message, {
               smsType: "24-hour",
             });
+
+            // 429: a rate limit must NEVER consume the single retry. Leave the reminder
+            // exactly as-is (status stays "failed", retryCount unchanged) so the next run retries it.
+            if (result?.rateLimited) {
+              console.warn(`⏳ Auto-retry rate limited (429) for ${appointment.customerName} — leaving reminder for next run.`);
+              continue;
+            }
+
             reminder.messageId = result.message_id || null;
             reminder.status = result.success ? "sent" : "failed";
             reminder.sentAt = new Date();

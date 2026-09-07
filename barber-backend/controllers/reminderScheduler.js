@@ -3,6 +3,10 @@ const ScheduledMessage = require("../models/ScheduledMessage");
 const { sendSMS } = require("../utils/smsService");
 const moment = require("moment-timezone");
 
+// Inter-send pacing so a single tick can't fire a burst of messages at the SMS provider.
+const SMS_SEND_DELAY_MS = Number(process.env.SMS_SEND_DELAY_MS) || 250;
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
 const sendReminders = async (options = {}) => {
   const dryRun = Boolean(options?.dryRun);
   const limit = Number(options?.limit) || 0;
@@ -126,6 +130,28 @@ const sendReminders = async (options = {}) => {
         const result = await sendSMS(appointment.phoneNumber, message, {
           smsType: "24-hour",
         });
+
+        // 429: NOT sent. sendSMS no longer throws on rate limit, so guard it explicitly —
+        // otherwise the `|| "sent"` fallback below would mark this unsent reminder "sent" and it
+        // would be silently lost. Mark it "failed" (no retryCount bump) so the next tick and the
+        // auto-retry sweep both re-send it, then STOP the whole batch: once the provider is rate-
+        // limiting us the remaining sends will 429 too. The next tick resumes where we left off.
+        if (result?.rateLimited) {
+          await Appointment.updateOne(
+            { _id: appointment._id, "reminders._id": reminderId },
+            {
+              $set: {
+                "reminders.$.status": "failed",
+                "reminders.$.sentAt": new Date(),
+                "reminders.$.error": "sms.to rate limited (429)",
+              },
+            }
+          );
+          console.warn(
+            `[${timestamp}] ⏳ Rate limited (429) — reminder for ${appointment.customerName} (${appointmentTimeAthens}) left unsent, stopping this tick; will retry.`
+          );
+          break;
+        }
 
         const successStatus = result?.success ? "sent" : result?.status || "sent";
         await Appointment.updateOne(
@@ -296,6 +322,25 @@ async function processScheduledMessages() {
       const result = await sendSMS(msg.phoneNumber, resolved.message, {
         smsType: "recurrence-followup",
       });
+
+      // sms.to rate limit: STOP the whole tick immediately. Do not mark this message sent —
+      // push its sendAt forward and leave it "pending" so the next tick retries it (and every
+      // still-due message after it, untouched). break, don't continue.
+      if (result && result.rateLimited) {
+        const backoffMs = result.retryAfterMs || 60000;
+        const nextSendAt = new Date(Date.now() + backoffMs);
+        await ScheduledMessage.updateOne(
+          { _id: msg._id },
+          { $set: { sendAt: nextSendAt } }
+        );
+        console.warn(
+          `[recurrence-followup][RATE-LIMITED] msg=${msg._id} phone=${msg.phoneNumber} — ` +
+            `sms.to returned 429; deferring sendAt to ${nextSendAt.toISOString()} ` +
+            `(backoff ${backoffMs}ms), status left pending, stopping this tick.`
+        );
+        break;
+      }
+
       await ScheduledMessage.updateOne({ _id: msg._id }, { $set: { status: "sent" } });
 
       // Forensic log: exactly what was promised vs what actually went out, so "what did we
@@ -340,6 +385,10 @@ async function processScheduledMessages() {
         `[recurrence-followup][FAILED] msg=${msg._id} phone=${msg.phoneNumber}: ${e.message}`
       );
     }
+
+    // Pace sends: only reached after an actual send attempt (sent or failed). The skip/resolve-
+    // error paths `continue` above this, and the rate-limit path `break`s — so neither is delayed.
+    await sleep(SMS_SEND_DELAY_MS);
   }
 }
 

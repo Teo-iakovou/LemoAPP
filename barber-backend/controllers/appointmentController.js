@@ -832,8 +832,12 @@ const deleteAppointment = async (req, res, next) => {
             .format("DD/MM/YYYY HH:mm");
           const message = `Θα θέλαμε να σας ενημερώσουμε ότι το ραντεβού σας για ${formattedDateTime} ακυρώνεται.\nWe would like to inform you that your appointment for ${formattedDateTime} has been canceled.`;
 
-          await sendSMS(deletedAppointment.phoneNumber, message, { smsType: "deletion" });
-          console.log("📲 Deletion SMS sent successfully");
+          const delResult = await sendSMS(deletedAppointment.phoneNumber, message, { smsType: "deletion" });
+          if (delResult?.rateLimited) {
+            console.warn("⏳ Deletion SMS rate limited (429) — not delivered.");
+          } else {
+            console.log("📲 Deletion SMS sent successfully");
+          }
         } catch (smsError) {
           console.error("❌ Failed to send deletion SMS:", smsError.message);
         }

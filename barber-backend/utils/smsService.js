@@ -13,6 +13,19 @@ function smsSendingEnabled() {
   return process.env.NODE_ENV === "production";
 }
 
+// Parse an HTTP Retry-After header into milliseconds. Accepts either a delta-seconds integer
+// ("120") or an HTTP-date; returns null when absent/unparseable so the caller can pick its own
+// default backoff. A date in the past clamps to 0.
+function parseRetryAfterMs(headerValue) {
+  if (headerValue == null) return null;
+  const raw = String(headerValue).trim();
+  if (raw === "") return null;
+  if (/^\d+$/.test(raw)) return Number(raw) * 1000;
+  const when = Date.parse(raw);
+  if (Number.isNaN(when)) return null;
+  return Math.max(0, when - Date.now());
+}
+
 const sendSMS = async (to, message, options = {}) => {
   const smsType = options.smsType || "unknown";
   const senderId = options.senderId || "Lemo Barber";
@@ -192,6 +205,26 @@ const sendSMS = async (to, message, options = {}) => {
     formattedNumber = normalizeNumber(to);
     return await sendViaSmsTo(formattedNumber);
   } catch (error) {
+    // A 429 from sms.to is a RATE LIMIT, not a provider outage. Failing over to WebSMS would
+    // just push the same burst at a second provider (and cost a second message). Surface it
+    // structurally instead so the caller can back off and retry later. Do NOT fall through to
+    // the WebSMS fallback and do NOT throw.
+    if (error.response?.status === 429) {
+      const retryAfterMs = parseRetryAfterMs(error.response?.headers?.["retry-after"]);
+      console.warn(
+        `SMS.to rate limited (429)${
+          retryAfterMs != null ? ` retryAfter=${retryAfterMs}ms` : " (no Retry-After header)"
+        }`,
+        {
+          recipient: formattedNumber,
+          senderId,
+          smsType,
+          messagePreview: String(message || "").slice(0, 60),
+        }
+      );
+      return { success: false, rateLimited: true, retryAfterMs };
+    }
+
     const detail = error.response?.data || error.message;
     const body =
       typeof detail === "string" ? detail : JSON.stringify(detail);

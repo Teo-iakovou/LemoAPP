@@ -53,6 +53,17 @@ const sendNewYearSMS = async ({ force = false } = {}) => {
 
     try {
       const result = await sendSMS(phone, NEW_YEAR_MESSAGE);
+
+      // 429: not sent. Do NOT stamp lastNewYearSMS — that dedup is keyed by year and would
+      // suppress every resend, silently dropping the message. Count it failed and move on.
+      if (result?.rateLimited) {
+        stats.failed += 1;
+        console.warn(
+          `[${timestamp}] ⏳ New Year SMS rate limited (429) for ${phone} — not marked sent.`
+        );
+        continue;
+      }
+
       customer.lastNewYearSMS = nowAthens.toDate();
       await customer.save();
 

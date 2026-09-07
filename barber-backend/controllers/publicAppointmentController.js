@@ -185,7 +185,10 @@ const cancelUpcomingAppointment = async (req, res, next) => {
         .tz("Europe/Athens")
         .format("DD/MM/YYYY HH:mm");
       const message = `Θα θέλαμε να σας ενημερώσουμε ότι το ραντεβού σας για ${formattedDateTime} ακυρώνεται.\nWe would like to inform you that your appointment for ${formattedDateTime} has been canceled.`;
-      await sendSMS(appointment.phoneNumber, message);
+      const cancelSms = await sendSMS(appointment.phoneNumber, message);
+      if (cancelSms?.rateLimited) {
+        console.warn("⏳ Cancellation SMS rate limited (429) — not delivered.");
+      }
     } catch (smsError) {
       console.error("Failed to send cancellation SMS:", smsError.message);
     }
@@ -280,7 +283,10 @@ const rescheduleAppointment = async (req, res, next) => {
       .format("DD/MM/YYYY HH:mm");
     try {
       const message = `Το ραντεβού σας στο LEMO BARBER SHOP στις ${oldFormattedDate} άλλαξε για ${newFormattedDate}.\nYour appointment at LEMO BARBER SHOP on ${oldFormattedDate} has been rescheduled to ${newFormattedDate}.`;
-      await sendSMS(appointment.phoneNumber, message);
+      const rescheduleSms = await sendSMS(appointment.phoneNumber, message);
+      if (rescheduleSms?.rateLimited) {
+        console.warn("⏳ Reschedule SMS rate limited (429) — not delivered.");
+      }
     } catch (smsError) {
       console.error("Failed to send reschedule SMS:", smsError.message);
     }

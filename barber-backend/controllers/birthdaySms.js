@@ -49,6 +49,13 @@ const sendBirthdaySMS = async () => {
       try {
         const result = await sendSMS(customer.phoneNumber, message);
 
+        // 429: not sent. Do NOT stamp lastBirthdaySMS — that dedup would suppress the resend
+        // and silently drop the birthday message. Log and skip; it can go out on a later run.
+        if (result?.rateLimited) {
+          console.warn(`⏳ Birthday SMS rate limited (429) for ${customer.phoneNumber} — not marked sent.`);
+          continue;
+        }
+
         // Save lastBirthdaySMS to avoid duplicate sends
         customer.lastBirthdaySMS = nowAthens.toDate();
         await customer.save();

@@ -251,7 +251,16 @@ const requestPasswordReset = async (req, res, next) => {
 
     const friendlyName = user.displayName || user.username || "πελάτη";
     const message = `Αγαπητέ/ή ${friendlyName}, ο κωδικός OTP είναι: ${otp}`;
-    await sendSMS(user.phoneNumber, message);
+    const smsResult = await sendSMS(user.phoneNumber, message);
+
+    // 429: the OTP was NOT delivered. sendSMS no longer throws on rate limit, so returning 200
+    // here would tell the user "sent" while they never receive the code. Surface it so they retry.
+    if (smsResult?.rateLimited) {
+      return res.status(429).json({
+        error:
+          "Πάρα πολλές προσπάθειες. Δοκιμάστε ξανά σε λίγο. / Too many attempts. Please try again shortly.",
+      });
+    }
 
     res.status(200).json({ message: "OTP sent successfully" });
   } catch (error) {
