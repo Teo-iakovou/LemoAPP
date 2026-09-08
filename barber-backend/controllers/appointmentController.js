@@ -7,6 +7,7 @@ const { resolveBarberScope } = require("../utils/appointmentScope");
 
 const moment = require("moment-timezone");
 const { getUserIdFromRequest, getPublicUserIdFromRequest, hasBearerToken } = require("../utils/auth");
+const mongoose = require("mongoose");
 function normalizePhone(input = "") {
   try {
     return String(input)
@@ -114,6 +115,13 @@ const createAppointment = async (req, res, next) => {
       return res
         .status(401)
         .json({ error: "Η συνεδρία έληξε, συνδεθείτε ξανά." });
+    }
+
+    // Multi-slot booking: when the request carries slots[], create the whole group atomically in
+    // one transaction (overlap-check every slot + insert all, all-or-nothing). Single bookings
+    // (no slots[]) fall through to the unchanged path below — byte-identical to before.
+    if (Array.isArray(req.body.slots) && req.body.slots.length > 0) {
+      return await createMultiSlotBooking(req, res, { userId, isStaff });
     }
 
     const {
@@ -479,6 +487,196 @@ const createAppointment = async (req, res, next) => {
     });
   } catch (error) {
     next(error);
+  }
+};
+
+// Multi-slot public booking: create up to MAX_SLOTS_PER_BOOKING (default 2) appointments in ONE
+// submit, ATOMICALLY. Every slot's public overlap check AND all inserts run inside a single
+// Mongoose transaction (Atlas is a replica set), so a conflict on any slot — or an 11000 from
+// the uniq_public_confirmed_slot index — rolls back the entire group. We never leave one slot
+// committed and the other not. All rows share a generated groupId; customerName is always the
+// booker, with bookedFor holding the other person's name per slot when present.
+const createMultiSlotBooking = async (req, res, { userId, isStaff }) => {
+  try {
+    const MAX_SLOTS = Math.max(1, parseInt(process.env.MAX_SLOTS_PER_BOOKING, 10) || 2);
+    const { customerName, phoneNumber, dateOfBirth } = req.body;
+    const slots = req.body.slots;
+
+    if (slots.length > MAX_SLOTS) {
+      return res.status(400).json({
+        error: `Μπορείτε να κλείσετε το πολύ ${MAX_SLOTS} ραντεβού μαζί. / You can book at most ${MAX_SLOTS} appointments together.`,
+      });
+    }
+    if (!customerName || !phoneNumber) {
+      return res.status(400).json({ error: "Customer name and phone number are required." });
+    }
+
+    // Validate + normalize every slot BEFORE any DB work (no partial state on a bad request).
+    const nowUtc = moment().utc();
+    const prepared = [];
+    for (let i = 0; i < slots.length; i++) {
+      const s = slots[i] || {};
+      const when = moment(s.appointmentDateTime).utc();
+      if (!when.isValid()) {
+        return res.status(400).json({ error: `Slot ${i + 1}: invalid appointment time.` });
+      }
+      if (when.isBefore(nowUtc)) {
+        return res.status(400).json({ error: `Slot ${i + 1}: appointment is in the past.` });
+      }
+      const duration = 40;
+      prepared.push({
+        index: i,
+        startUtc: when.toDate(),
+        endUtc: when.clone().add(duration, "minutes").toDate(),
+        barber: normalizeBarber(s.barber) || "ΛΕΜΟ",
+        duration,
+        bookedFor:
+          typeof s.bookedFor === "string" && s.bookedFor.trim() ? s.bookedFor.trim() : undefined,
+        athens: when.clone().tz("Europe/Athens"),
+      });
+    }
+
+    // Sync the BOOKER's customer record once — separate collection, idempotent, and not part of
+    // the appointment atomicity guarantee, so it stays outside the transaction.
+    const incomingName = typeof customerName === "string" ? customerName.trim() : "";
+    const { normalized: normalizedPhoneInput, variants: phoneLookupVariants } =
+      buildPhoneLookupVariants(phoneNumber);
+    const fallbackPhone = normalizedPhoneInput || String(phoneNumber || "").trim();
+    if (!fallbackPhone) {
+      return res.status(400).json({ error: "Valid phone number is required." });
+    }
+    try {
+      await upsertCustomerFromIdentity({
+        name: incomingName || fallbackPhone,
+        phoneNumber: fallbackPhone,
+        barber: prepared[0].barber,
+        dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
+      });
+    } catch (upsertError) {
+      if (upsertError.code !== 11000) throw upsertError;
+    }
+    const customer = phoneLookupVariants.length
+      ? await Customer.findOne({ $or: phoneLookupVariants })
+      : await Customer.findOne({ phoneNumber: fallbackPhone });
+    if (!customer) {
+      return res.status(500).json({ error: "Failed to sync customer record." });
+    }
+    const bookerName = customer.name || incomingName || customerName;
+    const phone = customer.phoneNumber;
+    const groupId = new mongoose.Types.ObjectId().toString();
+    const origin = isStaff ? "admin" : "public";
+
+    // ── Atomic group insert ──────────────────────────────────────────────────────
+    const session = await mongoose.startSession();
+    let created = [];
+    let conflictSlot = null;
+    try {
+      await session.withTransaction(async () => {
+        created = []; // reset in case withTransaction retries on a transient error
+        // 1) Overlap check for EVERY slot, inside the txn. Public callers only — staff bypass,
+        //    exactly like the single-slot path. Read within the session for a consistent view.
+        if (!isStaff) {
+          for (const p of prepared) {
+            const conflict = await Appointment.findOne({
+              barber: p.barber,
+              appointmentStatus: "confirmed",
+              type: { $in: ["appointment", "break", "lock"] },
+              appointmentDateTime: { $lt: p.endUtc },
+              endTime: { $gt: p.startUtc },
+            }).session(session);
+            if (conflict) {
+              conflictSlot = p.index + 1;
+              const err = new Error(`slot-conflict-${p.index}`);
+              err.slotConflict = true;
+              throw err; // aborts the whole transaction
+            }
+          }
+        }
+        // 2) Insert every slot in the same txn. A concurrent booking that slipped past the check
+        //    above trips the uniq_public_confirmed_slot index (11000) here, aborting the group.
+        for (const p of prepared) {
+          const doc = new Appointment({
+            customerName: bookerName,
+            phoneNumber: phone,
+            appointmentDateTime: p.startUtc,
+            barber: p.barber,
+            duration: p.duration,
+            appointmentStatus: "confirmed",
+            type: "appointment",
+            endTime: p.endUtc,
+            user: userId || undefined,
+            origin,
+            groupId,
+            bookedFor: p.bookedFor,
+          });
+          await doc.save({ session });
+          created.push(doc);
+        }
+      });
+    } catch (err) {
+      await session.endSession();
+      if (err.slotConflict || err.code === 11000) {
+        let which = conflictSlot;
+        if (which == null && err.code === 11000) {
+          const kv = err.keyValue || {};
+          const idx = prepared.findIndex(
+            (p) =>
+              p.barber === kv.barber &&
+              kv.appointmentDateTime &&
+              new Date(p.startUtc).getTime() === new Date(kv.appointmentDateTime).getTime()
+          );
+          which = idx >= 0 ? idx + 1 : "?";
+        }
+        return res.status(409).json({
+          error: `Η ώρα του ραντεβού ${which} μόλις κλείστηκε. Επιλέξτε άλλη ώρα. / Appointment ${which} was just taken. Please pick another time.`,
+          conflictSlot: which,
+        });
+      }
+      console.error("❌ Multi-slot booking failed:", err.message);
+      return res.status(500).json({ error: "Failed to create appointments." });
+    }
+    await session.endSession();
+
+    // Confirmation SMS: ONCE per group, listing every slot, with bookedFor noted per line.
+    // Recorded on the first appointment of the group. (All slots are future — validated above.)
+    try {
+      const lines = prepared.map((p) => {
+        const b = getBarberDisplayName(p.barber);
+        const t = p.athens.format("DD/MM/YYYY HH:mm");
+        return {
+          gr: p.bookedFor ? `${t} με ${b} (για ${p.bookedFor})` : `${t} με ${b}`,
+          en: p.bookedFor ? `${t} with ${b} (for ${p.bookedFor})` : `${t} with ${b}`,
+        };
+      });
+      const message =
+        `Επιβεβαιώνουμε τα ραντεβού σας στο LEMO BARBER SHOP:\n` +
+        lines.map((l) => `• ${l.gr}`).join("\n") +
+        `\nWe confirm your appointments at LEMO BARBER SHOP:\n` +
+        lines.map((l) => `• ${l.en}`).join("\n");
+      const result = await sendSMS(phone, message, { smsType: "confirmation" });
+      created[0].reminders.push({
+        type: "confirmation",
+        sentAt: new Date(),
+        messageId: result?.message_id || result?.messageId || null,
+        status: result?.success ? "sent" : "failed",
+        messageText: message,
+        senderId: "Lemo Barber",
+        retryCount: 0,
+      });
+      await created[0].save();
+    } catch (smsError) {
+      console.error("❌ Failed to send multi-slot confirmation SMS:", smsError.message);
+    }
+
+    return res.status(201).json({
+      message: "Appointments created successfully.",
+      customer: { name: customer.name, phoneNumber: customer.phoneNumber },
+      groupId,
+      appointments: created,
+    });
+  } catch (error) {
+    console.error("❌ Multi-slot booking error:", error.message);
+    return res.status(500).json({ error: "Failed to create appointments." });
   }
 };
 

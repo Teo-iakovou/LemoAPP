@@ -85,7 +85,12 @@ const sendReminders = async (options = {}) => {
         .tz(tz)
         .format("DD/MM/YYYY HH:mm");
 
-      const message = `Υπενθύμιση για το ραντεβού σας αύριο στις ${appointmentTimeAthens} στο Lemo Barber Shop. Reminder for your appointment tomorrow at ${appointmentTimeAthens} at Lemo Barber Shop.`;
+      // When the slot was booked for someone else (multi-slot bookedFor), the reminder must say
+      // it's for THAT person — the booker's phone still receives it. Otherwise the wording is
+      // unchanged from before.
+      const message = appointment.bookedFor
+        ? `Υπενθύμιση: το ραντεβού για ${appointment.bookedFor} είναι αύριο στις ${appointmentTimeAthens} στο Lemo Barber Shop. Reminder: the appointment for ${appointment.bookedFor} is tomorrow at ${appointmentTimeAthens} at Lemo Barber Shop.`
+        : `Υπενθύμιση για το ραντεβού σας αύριο στις ${appointmentTimeAthens} στο Lemo Barber Shop. Reminder for your appointment tomorrow at ${appointmentTimeAthens} at Lemo Barber Shop.`;
 
       const claimed = await Appointment.findOneAndUpdate(
         {

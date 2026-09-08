@@ -125,6 +125,20 @@ const appointmentSchema = new mongoose.Schema({
     default: undefined,
   },
 
+  // Multi-slot booking: appointments created in one public submit share a groupId so the
+  // calendar can mark them as a pair. Optional/sparse — single bookings never set it.
+  groupId: {
+    type: String,
+    sparse: true,
+    index: true,
+  },
+  // When a slot is booked for someone other than the booker, their name goes here.
+  // customerName stays the BOOKER's name, so all reminder/lookup code is unaffected.
+  bookedFor: {
+    type: String,
+    trim: true,
+  },
+
   reminders: [
     {
       type: { type: String, required: true },
