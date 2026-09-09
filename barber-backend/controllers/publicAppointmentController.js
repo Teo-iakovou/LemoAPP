@@ -120,6 +120,9 @@ const getAppointmentsForPublicUser = async (req, res, next) => {
         endTime: 1,
         repeatInterval: 1,
         repeatCount: 1,
+        // Multi-slot: the cancel dialog names the surviving sibling, so it needs these.
+        groupId: 1,
+        bookedFor: 1,
         _id: 1,
       }
     )
