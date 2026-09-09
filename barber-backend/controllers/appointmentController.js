@@ -968,7 +968,20 @@ const updateAppointment = async (req, res, next) => {
       console.log("📵 No Update SMS sent because appointment is in the past.");
     }
 
-    await appointment.save();
+    try {
+      await appointment.save();
+    } catch (saveError) {
+      // This admin move landed on a slot already held by a PUBLIC confirmed booking, tripping the
+      // uniq_public_confirmed_slot partial index (11000). updateAppointment is admin-only and
+      // admins may intentionally double-book, so mark this row admin-managed (excluded from that
+      // partial index) and place it anyway instead of surfacing a 500.
+      if (saveError.code === 11000) {
+        appointment.origin = "admin";
+        await appointment.save();
+      } else {
+        throw saveError;
+      }
+    }
 
     res.status(200).json({
       success: true,

@@ -167,10 +167,14 @@ const [isLoading, setIsLoading] = useState(true);  // ✅ Fetch appointments
       return;
     }
 
-    if (hasMoveConflict({ eventId: event.id, barber: currentEvent.barber, start: nextStart, end: nextEnd })) {
-      toast.error("Μη έγκυρη μετακίνηση: υπάρχει σύγκρουση με ραντεβού/κλείδωμα/διάλειμμα.");
-      return;
-    }
+    // Overlap no longer blocks a move — an admin may intentionally place an appointment onto an
+    // occupied slot (double-booking). We still detect it so the confirmation can warn.
+    const overlaps = hasMoveConflict({
+      eventId: event.id,
+      barber: currentEvent.barber,
+      start: nextStart,
+      end: nextEnd,
+    });
 
     // Resize: persist immediately, no confirmation needed.
     if (action === "resize") {
@@ -202,7 +206,9 @@ const [isLoading, setIsLoading] = useState(true);  // ✅ Fetch appointments
 
     const result = await MySwal.fire({
       title: "Είστε σίγουροι;",
-      text: `Θέλετε να μετακινήσετε το ${typeLabel};`,
+      text: overlaps
+        ? `Θέλετε να μετακινήσετε το ${typeLabel}; Προσοχή: η ώρα είναι ήδη πιασμένη — θα γίνει διπλή κράτηση.`
+        : `Θέλετε να μετακινήσετε το ${typeLabel};`,
       icon: "warning",
       showCancelButton: true,
       confirmButtonColor: "#a78bfa",
