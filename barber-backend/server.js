@@ -138,19 +138,11 @@ if (process.env.NODE_ENV === "production") {
     }
   });
 
-  // Retry reminders whose SMS failed. autoRetryFailedSMS was imported but never scheduled
-  // (dead wiring) — wired here rather than deleted because it is a genuine safety net for
-  // transient SMS failures. Every 15 minutes keeps a failed "tomorrow" reminder recoverable
-  // while it is still relevant, and its internal retryCount<1 guard bounds each reminder to a
-  // single extra attempt so this can never loop-resend.
-  cron.schedule("7,22,37,52 * * * *", async () => {
-    console.log(`[${new Date().toISOString()}] 🔁 Running failed-SMS auto-retry...`);
-    try {
-      await autoRetryFailedSMS();
-    } catch (error) {
-      console.error("❌ Error while auto-retrying failed SMS:", error.message);
-    }
-  });
+  // DISABLED 2026-09-09 (incident): autoRetryFailedSMS was resending historical failed
+  // reminders unfiltered (no type / date / recency filter, no cap), spamming customers.
+  // Do NOT re-enable without: a reminder TYPE filter, appointmentDateTime >= now, a
+  // "failed within last N hours" cutoff, and a per-run send cap.
+  // cron.schedule("7,22,37,52 * * * *", async () => { await autoRetryFailedSMS(); });
   
 
 
