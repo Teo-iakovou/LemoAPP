@@ -3,3 +3,8 @@
 
 # build output — Netlify runs its own vite build; see commit message
 dist/
+
+# One-off incident apology script — hardcoded customer PII, never commit
+barber-backend/incidentApology.js
+# Local script send-logs — contain phone numbers
+*.log
