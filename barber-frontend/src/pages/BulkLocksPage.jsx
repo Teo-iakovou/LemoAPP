@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "react-hot-toast";
 import { FiPlus } from "react-icons/fi";
 import {
-  createAppointment,
+  createLockSeriesBatch,
   deleteAppointment,
   fetchRecentLocks,
   updateAppointment,
@@ -528,25 +528,23 @@ const BulkLocksPage = () => {
     });
   };
 
-  const buildPayload = (lock) => {
-    const [hours, minutes] = lock.time.split(":").map(Number);
-    const start = new Date(
-      lock.date.getFullYear(),
-      lock.date.getMonth(),
-      lock.date.getDate(),
-      hours,
-      minutes,
+  // Combine a pending lock's local date + "HH:mm" into an absolute instant.
+  // TIMEZONE ASSUMPTION: this uses the ADMIN BROWSER's local zone. Every lock instant is
+  // therefore only correct if that zone is the shop's (Europe/Athens / Asia/Nicosia, which
+  // are DST-equivalent). The server enforces this via the `timezone` field sent below and
+  // rejects the whole batch otherwise, so a mis-zoned machine can never silently store
+  // hour-shifted locks.
+  const combineToISO = (date, time) => {
+    const [hours, minutes] = time.split(":").map(Number);
+    return new Date(
+      date.getFullYear(),
+      date.getMonth(),
+      date.getDate(),
+      Number.isFinite(hours) ? hours : 0,
+      Number.isFinite(minutes) ? minutes : 0,
       0,
       0
-    );
-
-    return {
-      barber: lock.barber,
-      type: "lock",
-      appointmentDateTime: start.toISOString(),
-      duration: lock.duration,
-      lockReason: lock.recurring ? "ΜΟΝΙΜΟ" : lock.lockReason,
-    };
+    ).toISOString();
   };
 
   const handleSubmit = async () => {
@@ -558,33 +556,86 @@ const BulkLocksPage = () => {
     setSubmitting(true);
     setResults([]);
 
+    // Group recurring locks by the SAME key PendingLocksTable uses, so what we submit matches
+    // the preview exactly — including any occurrences the user deleted/edited.
+    const groupMap = new Map();
+    sortedLocks.forEach((lock) => {
+      if (!lock?.recurring) return;
+      const weekday = lock.weekday ?? lock.date.getDay();
+      const key = `${lock.barber}-${weekday}-${lock.time}-${lock.duration}`;
+      if (!groupMap.has(key)) groupMap.set(key, { key, locks: [] });
+      groupMap.get(key).locks.push(lock);
+    });
+    groupMap.forEach((g) => g.locks.sort((a, b) => a.date - b.date));
+
+    // Every submittable unit becomes a "series" so ALL locks go in ONE request (no per-request
+    // fan-out, so bookingLimiter is fully out of this flow): multi-occurrence recurring groups
+    // (ΜΟΝΙΜΟ), plus each one-off lock as a single-occurrence series carrying its own lockReason.
+    // seriesGroups[s].locks[i] maps positionally to series[s].occurrences[i] for exact result
+    // mapping back to the pending rows.
+    const seriesGroups = [];
+    const groupedLockIds = new Set();
+    groupMap.forEach((g) => {
+      if (g.locks.length > 1) {
+        seriesGroups.push({ locks: g.locks, recurring: true });
+        g.locks.forEach((l) => groupedLockIds.add(l.id));
+      }
+    });
+    sortedLocks
+      .filter((l) => !groupedLockIds.has(l.id))
+      .forEach((l) => seriesGroups.push({ locks: [l], recurring: false }));
+
+    if (seriesGroups.length === 0) {
+      setSubmitting(false);
+      return;
+    }
+
+    const seriesPayload = seriesGroups.map((g) => {
+      const first = g.locks[0];
+      return {
+        barber: first.barber,
+        duration: first.duration,
+        // Recurring → ΜΟΝΙΜΟ (the server enforces this regardless); one-off → its own reason
+        // (normally empty). The server rejects a one-off that tries to use ΜΟΝΙΜΟ.
+        lockReason: g.recurring ? "ΜΟΝΙΜΟ" : first.lockReason || "",
+        occurrences: g.locks.map((l) => combineToISO(l.date, l.time)),
+      };
+    });
+
     const summary = [];
 
-    for (const lock of sortedLocks) {
-      const payload = buildPayload(lock);
-      try {
-        const response = await createAppointment(payload);
-        summary.push({
-          status: "success",
-          lock,
-          responseId:
-            response?._id ||
-            response?.id ||
-            response?.appointment?._id ||
-            response?.appointment?.id ||
-            null,
-        });
-      } catch (error) {
-        console.error("Failed to create lock", error);
-        summary.push({
-          status: "error",
-          lock,
-          message:
-            error?.response?.data?.message ||
-            error?.message ||
-            "Κάτι πήγε στραβά.",
-        });
-      }
+    try {
+      const response = await createLockSeriesBatch({
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        series: seriesPayload,
+      });
+      const byIndex = new Map((response?.results || []).map((r) => [r.index, r]));
+      seriesGroups.forEach((g, s) => {
+        const result = byIndex.get(s);
+        if (result?.status === "ok") {
+          g.locks.forEach((lock, i) => {
+            summary.push({
+              status: "success",
+              lock,
+              responseId: result.createdIds?.[i] || null,
+            });
+          });
+        } else {
+          // Series failed server-side → its transaction rolled back, ZERO created.
+          const message = result?.message || "Κάτι πήγε στραβά.";
+          g.locks.forEach((lock) => summary.push({ status: "error", lock, message }));
+        }
+      });
+    } catch (error) {
+      console.error("Lock series batch rejected", error);
+      const message =
+        error?.message === "SESSION_EXPIRED"
+          ? "Η συνεδρία έληξε, συνδεθείτε ξανά."
+          : error?.message || "Κάτι πήγε στραβά.";
+      // Whole-batch rejection (validation/timezone/401) → ZERO locks written for ALL series.
+      seriesGroups.forEach((g) => {
+        g.locks.forEach((lock) => summary.push({ status: "error", lock, message }));
+      });
     }
 
     const successEntries = summary.filter((item) => item.status === "success");

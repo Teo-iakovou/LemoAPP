@@ -680,6 +680,174 @@ const createMultiSlotBooking = async (req, res, { userId, isStaff }) => {
   }
 };
 
+// ── Bulk LOCK batch (staff only) ──────────────────────────────────────────────────────────
+// Contract: { timezone, series: [{ barber, duration, lockReason, occurrences: [ISO,…] }] }.
+// The client sends EXPLICIT instants straight from the preview, so the server does NO week
+// arithmetic and there is no DST math to get wrong — stored == previewed. A recurring group is
+// a series with many occurrences; a one-off lock is a series with exactly one. Server owns
+// origin ("admin"); it forces lockReason "ΜΟΝΙΜΟ" for recurring series and validates the
+// client's lockReason for one-offs (rejecting the reserved "ΜΟΝΙΜΟ" tag).
+//
+// Two-phase: (1) validate the ENTIRE batch — any failure returns 400 with ZERO writes;
+// (2) create each series in its OWN transaction (rollback boundary), returning per-series
+// results so one bad series never affects the others.
+const LOCK_MAX_OCCURRENCES = 60;    // per series (covers a 52-week weekly run + headroom)
+const LOCK_MAX_SERIES = 100;        // series per batch (each one-off is its own series)
+const LOCK_MAX_TOTAL = 500;         // total occurrences per batch
+const LOCK_MAX_DURATION = 600;      // minutes, matches schema MAX_APPOINTMENT_MINUTES
+const LOCK_MAX_REASON_LEN = 100;    // free-text lock reason length guard
+const LOCK_RECURRING_REASON = "ΜΟΝΙΜΟ"; // reserved: marks a recurring lock (drives UI grouping)
+const VALID_SHOP_TIMEZONES = new Set(["Europe/Athens", "Asia/Nicosia"]); // DST-equivalent
+const VALID_LOCK_BARBERS = ["ΛΕΜΟ", "ΦΟΡΟΥ", "ΚΟΥΣΙΗΣ"];
+
+const createLockSeriesBatch = async (req, res, next) => {
+  try {
+    // Route is behind requireUser → req.user is a staff account. Scope pins a 'calendar' user
+    // to their own barber (or 403 if none linked); admins are unrestricted.
+    const scope = resolveBarberScope(req.user);
+    if (scope.status) {
+      return res.status(scope.status).json({ error: scope.message });
+    }
+
+    const { timezone, series } = req.body || {};
+
+    // Timezone guard: every instant was computed from the admin browser's wall-clock, so its
+    // correctness depends on that browser being in the shop's zone. Reject otherwise.
+    if (!VALID_SHOP_TIMEZONES.has(timezone)) {
+      return res.status(400).json({
+        error:
+          "Η ζώνη ώρας του υπολογιστή πρέπει να είναι Κύπρου/Ελλάδας για κλείδωμα ωρών. / Your computer's timezone must be Cyprus/Greece (Europe/Athens or Asia/Nicosia) to create locks.",
+      });
+    }
+
+    if (!Array.isArray(series) || series.length === 0) {
+      return res.status(400).json({ error: "No lock series provided." });
+    }
+    if (series.length > LOCK_MAX_SERIES) {
+      return res.status(400).json({ error: `Too many series in one batch (max ${LOCK_MAX_SERIES}).` });
+    }
+
+    // ── Phase 1: validate everything BEFORE any write. Any failure → 400, nothing created. ──
+    // "Past" boundary is start-of-today in the shop zone (not `now`), so a lock earlier today
+    // is allowed — matching the single-lock path — while genuinely past days are rejected.
+    const shopStartOfToday = moment().tz("Europe/Athens").startOf("day");
+    const prepared = []; // per series: { barber, duration, lockReason, starts:[Date], ends:[Date] }
+    let totalOccurrences = 0;
+
+    for (let s = 0; s < series.length; s++) {
+      const item = series[s] || {};
+      const barber = normalizeBarber(item.barber);
+      if (!barber || !VALID_LOCK_BARBERS.includes(barber)) {
+        return res.status(400).json({ error: `Series ${s + 1}: unknown or missing barber.` });
+      }
+      if (scope.barber && barber !== scope.barber) {
+        return res.status(403).json({ error: `Series ${s + 1}: not permitted for this barber.` });
+      }
+
+      const duration = Number(item.duration);
+      if (!Number.isFinite(duration) || duration <= 0 || duration > LOCK_MAX_DURATION) {
+        return res.status(400).json({ error: `Series ${s + 1}: invalid duration.` });
+      }
+
+      const occ = Array.isArray(item.occurrences) ? item.occurrences : [];
+      if (occ.length === 0) {
+        return res.status(400).json({ error: `Series ${s + 1}: no occurrences.` });
+      }
+      if (occ.length > LOCK_MAX_OCCURRENCES) {
+        return res.status(400).json({ error: `Series ${s + 1}: too many occurrences (max ${LOCK_MAX_OCCURRENCES}).` });
+      }
+
+      // lockReason: recurring (>1 occurrence) is always the reserved tag; a one-off keeps its
+      // own trimmed reason but may NOT use the reserved tag (would misgroup it as recurring).
+      let lockReason;
+      if (occ.length > 1) {
+        lockReason = LOCK_RECURRING_REASON;
+      } else {
+        const raw = typeof item.lockReason === "string" ? item.lockReason.trim() : "";
+        if (raw === LOCK_RECURRING_REASON) {
+          return res.status(400).json({
+            error: `Series ${s + 1}: "${LOCK_RECURRING_REASON}" is reserved for recurring locks.`,
+          });
+        }
+        if (raw.length > LOCK_MAX_REASON_LEN) {
+          return res.status(400).json({ error: `Series ${s + 1}: lock reason too long.` });
+        }
+        lockReason = raw;
+      }
+
+      const starts = [];
+      const ends = [];
+      for (let i = 0; i < occ.length; i++) {
+        const m = moment(occ[i], moment.ISO_8601, true); // strict ISO parse
+        if (!m.isValid()) {
+          return res.status(400).json({ error: `Series ${s + 1}, occurrence ${i + 1}: invalid date.` });
+        }
+        if (m.isBefore(shopStartOfToday)) {
+          return res.status(400).json({ error: `Series ${s + 1}, occurrence ${i + 1}: date is before today.` });
+        }
+        starts.push(m.toDate());
+        ends.push(m.clone().add(duration, "minutes").toDate());
+      }
+
+      totalOccurrences += occ.length;
+      prepared.push({ barber, duration, lockReason, starts, ends });
+    }
+
+    if (totalOccurrences > LOCK_MAX_TOTAL) {
+      return res.status(400).json({ error: `Too many locks in one batch (max ${LOCK_MAX_TOTAL}).` });
+    }
+
+    // ── Phase 2: create each series in ITS OWN transaction. ─────────────────────────────────
+    // ROLLBACK BOUNDARY = session.withTransaction per series: all of a series' occurrences
+    // commit together or none do, and a failure in one series does NOT touch the others.
+    const userId = req.userId;
+    const results = [];
+    for (let s = 0; s < prepared.length; s++) {
+      const p = prepared[s];
+      const session = await mongoose.startSession();
+      let createdIds = [];
+      try {
+        await session.withTransaction(async () => {
+          createdIds = []; // reset in case withTransaction retries a transient error
+          for (let i = 0; i < p.starts.length; i++) {
+            const doc = new Appointment({
+              appointmentDateTime: p.starts[i],
+              endTime: p.ends[i],
+              barber: p.barber,
+              duration: p.duration,
+              appointmentStatus: "confirmed",
+              type: "lock",
+              lockReason: p.lockReason, // server-validated; recurring is forced to the reserved tag
+              origin: "admin",          // route is staff-only, so always admin
+              user: userId || undefined,
+            });
+            await doc.save({ session });
+            createdIds.push(String(doc._id));
+          }
+        });
+        // createdIds are in the SAME ORDER as the submitted occurrences, so the client maps
+        // each id back to the exact pending row by position (never by guessing).
+        results.push({ index: s, status: "ok", createdIds });
+      } catch (err) {
+        console.error(`❌ Lock series ${s + 1} failed (rolled back, 0 created):`, err.message);
+        results.push({
+          index: s,
+          status: "error",
+          message:
+            "Αποτυχία δημιουργίας. Δεν δημιουργήθηκε κανένα κλείδωμα αυτής της σειράς. / Failed; no locks created for this series.",
+        });
+      } finally {
+        await session.endSession();
+      }
+    }
+
+    // 200: the request itself was valid; per-series outcomes are in `results`.
+    return res.status(200).json({ results });
+  } catch (error) {
+    next(error);
+  }
+};
+
 // 🔄 Generate Recurring Appointments with Dynamic Week Intervals
 const generateRecurringAppointments = async ({
   customerName,
@@ -1217,6 +1385,7 @@ const getMyAppointments = async (req, res, next) => {
 };
 module.exports = {
   createAppointment,
+  createLockSeriesBatch,
   getAppointments,
   updateAppointment,
   deleteAppointment,

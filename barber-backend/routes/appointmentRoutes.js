@@ -1,6 +1,7 @@
 const express = require("express");
 const {
   createAppointment,
+  createLockSeriesBatch,
   getAppointments,
   updateAppointment,
   deleteAppointment,
@@ -29,6 +30,11 @@ const bookingLimiter = rateLimit({
 // PUBLIC: the booking site creates appointments here (anonymous or public-user
 // token). Staff callers are identified from their token inside the controller.
 router.post("/", bookingLimiter, createAppointment);
+
+// STAFF-ONLY bulk locks (Bulk Locks page): one request for the whole batch, each series
+// committed atomically server-side. Deliberately NOT behind bookingLimiter — it's a single
+// authenticated admin action, not a public booking. Does not touch the public POST "/" above.
+router.post("/lock-series", requireUser, createLockSeriesBatch);
 
 // Admin-only: returns full customer PII + reminder history, and has no callers in
 // either frontend. Locked rather than scoped.

@@ -501,6 +501,35 @@ export const createAppointment = async (appointmentData) => {
   return response.json();
 };
 
+// Create ALL bulk locks in ONE request. Body: { timezone, series: [{ barber, duration,
+// lockReason, occurrences: [ISO,…] }] }. Recurring groups are a series with many occurrences;
+// one-off locks are a series with exactly one. Each series is committed in its own server-side
+// transaction (all-or-nothing per series); the response carries per-series results so the
+// caller can mark exactly which series succeeded. Parses the error body so a whole-batch 400
+// (validation / timezone) surfaces its real message. Not behind bookingLimiter.
+export const createLockSeriesBatch = async (payload) => {
+  if (endSessionIfExpired()) {
+    throw new Error("SESSION_EXPIRED");
+  }
+  const token = localStorage.getItem("token");
+  const response = await apiFetch(`${API_BASE_URL}/appointments/lock-series`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(payload),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    // Whole-batch rejection (e.g. 400 validation / timezone) → nothing was written.
+    const err = new Error(data?.error || data?.message || "Failed to create locks.");
+    err.status = response.status;
+    throw err;
+  }
+  return data; // { results: [{ index, status: "ok"|"error", createdIds?, message? }] }
+};
+
 export const deleteAppointment = async (appointmentId, token) => {
   const response = await apiFetch(`${API_BASE_URL}/appointments/${appointmentId}`, {
     method: "DELETE",
