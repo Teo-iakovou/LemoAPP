@@ -60,6 +60,16 @@
   border: none;
 }
 
+/* Uniform-column day view: a small gap between adjacent event columns. The transparent
+   right border sits INSIDE the inline %-width (border-box), narrowing the visible block
+   without touching the column math; background-clip keeps the colour out of the gap.
+   Excludes lock badges (.rbc-event--lock) so they keep their full 18px. */
+.calendar-dark .rbc-day-slot .rbc-event:not(.rbc-event--lock) {
+  box-sizing: border-box;
+  border-right: 4px solid transparent;
+  background-clip: padding-box;
+}
+
 .calendar-dark .rbc-off-range-bg {
   background: rgba(0, 0, 0, 0.2);
 }

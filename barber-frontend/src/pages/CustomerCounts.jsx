@@ -329,7 +329,7 @@ const CustomerCounts = () => {
       <h1 className="text-2xl font-bold mb-4 text-white">ΠΕΛΑΤΕΣ</h1>
       {error && <div className="text-red-500">{error}</div>}
 
-      <div className="mb-6 flex items-center space-x-4">
+      <div className="mb-6 flex flex-wrap items-center gap-4">
         <div>
           <label className="block text-sm font-medium text-gray-300 mb-1">
             ΕΠΕΛΕΞΕ ΜΗΝΑ

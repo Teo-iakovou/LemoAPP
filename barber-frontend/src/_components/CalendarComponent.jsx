@@ -10,7 +10,7 @@ import "react-big-calendar/lib/css/react-big-calendar.css";
 import "react-big-calendar/lib/addons/dragAndDrop/styles.css";
 import "../styles/calendar-dark.css";
 import { getCustomerHexColor } from "../utils/customerColors";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 // Greek locale
 moment.locale("el");
@@ -24,6 +24,68 @@ moment.updateLocale("el", {
 });
 const localizer = momentLocalizer(moment);
 const DragAndDropCalendar = withDragAndDrop(BigCalendar);
+
+// --- Day time-grid: uniform equal-width columns --------------------------------------
+// Replaces react-big-calendar's default per-overlap-group sizing (lone event = full column,
+// group of 4 = 25% each) with columns of ONE fixed width for the whole day: every event is
+// the same narrow width, placed in its assigned column and left-aligned, empty space to the
+// right. Applied to the DAY view only (see dayLayoutAlgorithm prop).
+const DESKTOP_MIN_COLUMNS = 4; // the day always renders at least this many equal columns (desktop)
+
+// Factory returning a custom dayLayoutAlgorithm bound to a minimum column count. Kept as a
+// factory so the component can pass a smaller minimum on mobile (isMobile) instead of reading
+// component state from module scope. Keeps rbc's vertical placement (top/height from slotMetrics)
+// and only changes horizontal geometry: greedy first-free-column assignment; width/left come from
+// a single day-level column count, not the event's own group size.
+function makeUniformColumnsLayout(minColumns) {
+  return function uniformColumnsLayout({ events, slotMetrics, accessors }) {
+    const proxies = events.map((data) => {
+      const { start, end, top, height } = slotMetrics.getRange(
+        accessors.start(data),
+        accessors.end(data)
+      );
+      return { data, start, end, top, height, colIndex: 0 };
+    });
+
+    // Stable order: earliest start first, longer event first on ties.
+    proxies.sort((a, b) => a.start - b.start || b.end - a.end);
+
+    // Greedy first-free column: each event takes the lowest column whose previous event has
+    // already ended (no time overlap). columnEnds.length ends up == max simultaneous events.
+    const columnEnds = [];
+    for (const ev of proxies) {
+      let placed = false;
+      for (let c = 0; c < columnEnds.length; c++) {
+        if (ev.start >= columnEnds[c]) {
+          ev.colIndex = c;
+          columnEnds[c] = ev.end;
+          placed = true;
+          break;
+        }
+      }
+      if (!placed) {
+        ev.colIndex = columnEnds.length; // opens a new column
+        columnEnds.push(ev.end);
+      }
+    }
+
+    // All visible events (appointments + breaks/ΔΙΑΛΕΙΜΜΑ + locks) count toward concurrency.
+    const dayMaxConcurrency = columnEnds.length;
+    const columnCount = Math.max(dayMaxConcurrency, minColumns);
+    const colWidth = 100 / columnCount; // percent
+    // colIndex is always < columnsUsed <= columnCount, so no event can overflow the container.
+
+    return proxies.map((ev) => ({
+      event: ev.data,
+      style: {
+        top: ev.top,
+        height: ev.height,
+        width: colWidth,
+        xOffset: ev.colIndex * colWidth,
+      },
+    }));
+  };
+}
 
 const greekMonths = [
   "Ιανουάριος",
@@ -156,6 +218,13 @@ const CalendarComponent = ({
   const defaultCalendarView = isMobile ? Views.DAY : Views.WEEK;
   const [internalView, setInternalView] = useState(() => view || defaultCalendarView);
   const activeView = view || internalView;
+  // Mobile day columns at min 4 are too narrow (names truncate to ~6 chars), so use min 1 on
+  // phones — reuses the existing isMobile / matchMedia(768) state, no new breakpoint. Memoised
+  // so rbc doesn't recompute the layout from a new function identity on every render.
+  const dayLayout = useMemo(
+    () => makeUniformColumnsLayout(isMobile ? 1 : DESKTOP_MIN_COLUMNS),
+    [isMobile]
+  );
   const shouldUseHorizontalScroll = isMobile && activeView === Views.WEEK;
   const isMobileMonthView = isMobile && activeView === Views.MONTH;
   const { calendarMin, calendarMax } = getTimeBounds(events);
@@ -190,6 +259,8 @@ const CalendarComponent = ({
 
     if (event.type === "lock") {
       return {
+        // Tag lock badges so the day-view column-gap CSS can skip them (keep full 18px).
+        className: "rbc-event--lock",
         style: {
           ...baseStyle,
           backgroundColor: "transparent",
@@ -268,6 +339,7 @@ const CalendarComponent = ({
           max={calendarMax}
           step={40}
           timeslots={1}
+          dayLayoutAlgorithm={activeView === Views.DAY ? dayLayout : "overlap"}
           defaultView={defaultCalendarView}
           views={[Views.MONTH, Views.WEEK, Views.DAY, Views.AGENDA]}
           resizable={!disabled}

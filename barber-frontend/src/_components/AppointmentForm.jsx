@@ -453,6 +453,7 @@ const handleCustomerSelect = (e) => {
               popperClassName="z-[9999]"
               locale="el"
               popperPlacement="bottom"
+              withPortal
               wrapperClassName="w-full"
             />
           </div>
@@ -677,6 +678,7 @@ const handleCustomerSelect = (e) => {
       yearDropdownItemNumber={150}
       maxDate={new Date()}
       isClearable
+      withPortal
     />
   )}
 />

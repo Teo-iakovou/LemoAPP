@@ -78,7 +78,7 @@ const SmsStatusPage = () => {
       ) : appointments.length === 0 ? (
         <p className="text-gray-400">Δεν βρέθηκαν αποτελέσματα.</p>
       ) : (
-        <div className="overflow-y-auto max-h-[500px] rounded-lg shadow-lg border border-purple-800">
+        <div className="overflow-x-auto overflow-y-auto max-h-[500px] rounded-lg shadow-lg border border-purple-800">
           <table className="min-w-full text-sm text-left bg-[#0d1117]">
             <thead className="bg-purple-950 text-white text-md uppercase tracking-wide">
               <tr>
