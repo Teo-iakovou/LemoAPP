@@ -303,8 +303,9 @@ const handleCustomerSelect = (e) => {
   // Styles
   const fieldBase =
     "w-full px-4 py-2 rounded-lg border-2 bg-[#181a23] text-purple-100 border-purple-300 focus:ring-2 focus:ring-purple-300 focus:border-purple-400 outline-none placeholder:text-purple-300";
-  const labelClass =
-    "text-sm font-medium mb-1 text-purple-800 dark:text-purple-200";
+  // The modal background is always dark (#17182a), so labels must always be light —
+  // text-purple-800 was invisible (dark-on-dark) whenever the app wasn't in dark mode.
+  const labelClass = "block text-sm font-medium mb-1 text-purple-200";
   const buttonBase =
     "rounded-xl font-bold py-3 px-4 transition-all text-base shadow-button min-h-11";
   const primary = buttonBase + " bg-purple-600 text-white hover:bg-purple-700";
@@ -339,7 +340,7 @@ const handleCustomerSelect = (e) => {
           boxShadow: "0 10px 38px 0 rgba(80,16,111,0.18)",
         }}
       >
-        <h2 className="text-2xl font-bold text-center mb-4 text-purple-700 dark:text-purple-300">
+        <h2 className="text-xl sm:text-2xl font-bold text-center mb-4 text-purple-300">
           {isEditing ? "ΕΠΕΞΕΡΓΑΣΙΑ ΡΑΝΤΕΒΟΥ" : "ΚΛΕΙΣΤΕ ΕΝΑ ΡΑΝΤΕΒΟΥ"}
         </h2>
 

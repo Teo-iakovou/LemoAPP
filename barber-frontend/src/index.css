@@ -329,6 +329,63 @@ body {
   color: #ede9fe !important;
 }
 
+/* ---------------------------------------------------------------------------
+   Mobile fix for the fullscreen (withPortal) date/time pickers.
+   In portal mode react-datepicker enlarges day cells to 3rem and floats the
+   time column to the RIGHT, so on a phone the calendar+time is wider than the
+   viewport and the time column ends up off-screen and unreachable. On small
+   screens we shrink the cells, let the portal scroll, and STACK the time
+   column below the calendar (full width) so time is always visible/tappable.
+--------------------------------------------------------------------------- */
+@media (max-width: 640px) {
+  .react-datepicker__portal {
+    padding: 12px !important;
+    overflow-y: auto !important;
+    align-items: flex-start !important;
+  }
+
+  /* the portal blows day cells up to 3rem; that overflows narrow screens */
+  .react-datepicker__portal .react-datepicker__day,
+  .react-datepicker__portal .react-datepicker__day-name,
+  .react-datepicker__portal .react-datepicker__time-name {
+    width: 2.1rem !important;
+    line-height: 2.1rem !important;
+    margin: 0.14rem !important;
+  }
+  .react-datepicker__portal .react-datepicker__current-month {
+    font-size: 1.1rem !important;
+  }
+
+  /* stack calendar + time vertically instead of side-by-side floats */
+  .react-datepicker__portal .react-datepicker {
+    display: flex !important;
+    flex-direction: column !important;
+    max-width: calc(100vw - 24px) !important;
+  }
+  .react-datepicker__portal .react-datepicker__month-container {
+    float: none !important;
+    width: 100% !important;
+  }
+  .react-datepicker__portal .react-datepicker__time-container {
+    float: none !important;
+    width: 100% !important;
+    border-left: none !important;
+    border-top: 1.5px solid #a78bfa !important;
+  }
+  .react-datepicker__portal .react-datepicker__time,
+  .react-datepicker__portal .react-datepicker__time-box {
+    width: 100% !important;
+  }
+  .react-datepicker__portal .react-datepicker__time-list {
+    max-height: 32vh !important;
+  }
+  /* comfortable tap targets for the time slots */
+  .react-datepicker__portal .react-datepicker__time-list-item {
+    height: auto !important;
+    padding: 10px 0 !important;
+  }
+}
+
 .spinner-apple-sticks {
   width: 44px;
   height: 44px;
