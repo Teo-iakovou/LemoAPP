@@ -315,7 +315,7 @@ const handleCustomerSelect = (e) => {
     " bg-red-600 text-white hover:bg-red-700 focus:outline-none";
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center bg-black/50 px-2 sm:px-3 py-3 sm:py-6 overflow-y-auto">
+    <div className="fixed inset-0 z-[1400] flex items-start sm:items-center justify-center bg-black/50 px-2 sm:px-3 py-3 sm:py-6 overflow-y-auto">
       <div
         ref={formRef}
         className="
