@@ -455,6 +455,8 @@ const handleCustomerSelect = (e) => {
               locale="el"
               popperPlacement="bottom"
               withPortal
+              // readOnly stops iOS from raising the keyboard over the portal; you tap to pick.
+              readOnly
               wrapperClassName="w-full"
             />
           </div>

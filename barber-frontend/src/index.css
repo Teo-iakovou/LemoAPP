@@ -331,58 +331,50 @@ body {
 
 /* ---------------------------------------------------------------------------
    Mobile fix for the fullscreen (withPortal) date/time pickers.
-   In portal mode react-datepicker enlarges day cells to 3rem and floats the
-   time column to the RIGHT, so on a phone the calendar+time is wider than the
-   viewport and the time column ends up off-screen and unreachable. On small
-   screens we shrink the cells, let the portal scroll, and STACK the time
-   column below the calendar (full width) so time is always visible/tappable.
+   In portal mode react-datepicker enlarges day cells to 3rem, so the calendar
+   plus the (right-floated) time column is wider than a phone screen and the
+   time column ends up off-screen. Rather than stack them into a very tall
+   block, we shrink the cells so the calendar + time fit SIDE BY SIDE and the
+   whole picker stays compact and centered. (The inputs are also readOnly so
+   iOS doesn't raise the keyboard over the picker.)
 --------------------------------------------------------------------------- */
 @media (max-width: 640px) {
   .react-datepicker__portal {
     padding: 12px !important;
-    overflow-y: auto !important;
-    align-items: flex-start !important;
   }
 
-  /* the portal blows day cells up to 3rem; that overflows narrow screens */
+  /* shrink the enlarged portal cells so calendar + time fit within the viewport */
   .react-datepicker__portal .react-datepicker__day,
   .react-datepicker__portal .react-datepicker__day-name,
   .react-datepicker__portal .react-datepicker__time-name {
-    width: 2.1rem !important;
-    line-height: 2.1rem !important;
-    margin: 0.14rem !important;
+    width: 1.7rem !important;
+    line-height: 1.7rem !important;
+    margin: 0.12rem !important;
+    font-size: 0.9rem !important;
   }
   .react-datepicker__portal .react-datepicker__current-month {
-    font-size: 1.1rem !important;
+    font-size: 1rem !important;
   }
-
-  /* stack calendar + time vertically instead of side-by-side floats */
+  .react-datepicker__portal .react-datepicker__header {
+    padding-top: 10px !important;
+  }
   .react-datepicker__portal .react-datepicker {
-    display: flex !important;
-    flex-direction: column !important;
     max-width: calc(100vw - 24px) !important;
   }
-  .react-datepicker__portal .react-datepicker__month-container {
-    float: none !important;
-    width: 100% !important;
-  }
-  .react-datepicker__portal .react-datepicker__time-container {
-    float: none !important;
-    width: 100% !important;
-    border-left: none !important;
-    border-top: 1.5px solid #a78bfa !important;
-  }
-  .react-datepicker__portal .react-datepicker__time,
-  .react-datepicker__portal .react-datepicker__time-box {
-    width: 100% !important;
+
+  /* compact, readable time column next to the calendar */
+  .react-datepicker__portal .react-datepicker__time-container,
+  .react-datepicker__portal .react-datepicker__time-container .react-datepicker__time-box {
+    width: 72px !important;
   }
   .react-datepicker__portal .react-datepicker__time-list {
-    max-height: 32vh !important;
+    height: auto !important;
+    max-height: 15rem !important;
   }
-  /* comfortable tap targets for the time slots */
   .react-datepicker__portal .react-datepicker__time-list-item {
     height: auto !important;
-    padding: 10px 0 !important;
+    padding: 8px 0 !important;
+    font-size: 0.9rem !important;
   }
 }
 
