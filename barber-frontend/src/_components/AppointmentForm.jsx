@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, forwardRef } from "react";
 import { useForm, Controller } from "react-hook-form";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css"; 
@@ -9,6 +9,15 @@ import Swal from "sweetalert2";
 import withReactContent from "sweetalert2-react-content";
 import { getCustomerHexColor } from "../utils/customerColors";
 const DURATION_OPTIONS = [20, 30, 40, 60, 90, 120];
+
+// Custom input for the date/time picker: inputMode="none" tells mobile browsers not to
+// raise the virtual keyboard (which otherwise covered the portal picker), while the input
+// stays focusable so the calendar still opens on tap. All react-datepicker props (value,
+// onClick, onChange, onFocus/onBlur/onKeyDown, className, placeholder) are forwarded intact.
+const TapOnlyInput = forwardRef((props, ref) => (
+  <input ref={ref} {...props} inputMode="none" />
+));
+TapOnlyInput.displayName = "TapOnlyInput";
 // Calendar runs from 07:00 to 21:00, so a full-day break needs 14 hours (840 minutes).
 const BREAK_FULL_DAY_MINUTES = 14 * 60;
 const BREAK_FULL_DAY_HOURS = BREAK_FULL_DAY_MINUTES / 60;
@@ -455,8 +464,8 @@ const handleCustomerSelect = (e) => {
               locale="el"
               popperPlacement="bottom"
               withPortal
-              // readOnly stops iOS from raising the keyboard over the portal; you tap to pick.
-              readOnly
+              // Tap-only input: opens on tap but suppresses the mobile keyboard (inputMode=none).
+              customInput={<TapOnlyInput />}
               wrapperClassName="w-full"
             />
           </div>
