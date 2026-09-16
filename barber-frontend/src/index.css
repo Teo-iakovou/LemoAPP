@@ -330,6 +330,17 @@ body {
 }
 
 /* ---------------------------------------------------------------------------
+   SweetAlert2 must sit above every app overlay. Its default container z-index
+   is 1060, but the appointment-form modal is z-[1400] and the navbar is
+   z-[1200], so confirm/alert dialogs (e.g. the delete confirmation) were
+   rendering BEHIND them and looked unresponsive. A modal dialog should always
+   be topmost, so we lift it above everything (incl. the z-9999 date pickers).
+--------------------------------------------------------------------------- */
+.swal2-container {
+  z-index: 100000 !important;
+}
+
+/* ---------------------------------------------------------------------------
    Mobile fix for the fullscreen (withPortal) date/time pickers.
    In portal mode react-datepicker enlarges day cells to 3rem, so the calendar
    plus the (right-floated) time column is wider than a phone screen and the
