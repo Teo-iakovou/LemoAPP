@@ -16,13 +16,16 @@ import {
   FaUserCircle,
   FaSignOutAlt,
 } from "react-icons/fa";
+import { RefreshCcw } from "lucide-react";
 import Swal from "sweetalert2";
 import withReactContent from "sweetalert2-react-content";
 import LemoLogo from "../assets/LemoLogo.png";
 
 const Navbar = ({ isAuth, role, onLogout, calendarDark, onToggleCalendarDark }) => {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const dropdownRef = useRef(null);
+  const refreshTimeoutRef = useRef(null);
   const navigate = useNavigate();
   const location = useLocation();
   const isCalendarPage = location.pathname === "/calendar";
@@ -47,6 +50,38 @@ const Navbar = ({ isAuth, role, onLogout, calendarDark, onToggleCalendarDark }) 
       document.removeEventListener("mousedown", handleClickOutside);
     };
   }, []);
+
+  // Calendar refresh bridge: the hamburger lives here (shared Navbar) but the
+  // calendar's fetch lives in CalendarPage. We dispatch "calendar:refresh" and
+  // wait for CalendarPage to answer with "calendar:refresh:done". A 10s safety
+  // timeout clears the spinner if nobody answers (e.g. not on /calendar yet).
+  useEffect(() => {
+    const onRefreshDone = () => {
+      if (refreshTimeoutRef.current) {
+        clearTimeout(refreshTimeoutRef.current);
+        refreshTimeoutRef.current = null;
+      }
+      setIsRefreshing(false);
+    };
+    window.addEventListener("calendar:refresh:done", onRefreshDone);
+    return () => {
+      window.removeEventListener("calendar:refresh:done", onRefreshDone);
+      if (refreshTimeoutRef.current) {
+        clearTimeout(refreshTimeoutRef.current);
+        refreshTimeoutRef.current = null;
+      }
+    };
+  }, []);
+
+  const handleCalendarRefresh = () => {
+    if (isRefreshing) return; // guard against double-clicks
+    setIsRefreshing(true);
+    window.dispatchEvent(new CustomEvent("calendar:refresh"));
+    refreshTimeoutRef.current = setTimeout(() => {
+      refreshTimeoutRef.current = null;
+      setIsRefreshing(false);
+    }, 10000);
+  };
 
   const handleLogout = () => {
     MySwal.fire({
@@ -226,7 +261,21 @@ const Navbar = ({ isAuth, role, onLogout, calendarDark, onToggleCalendarDark }) 
 
       {/* Mobile menu — hamburger only, holds ALL features; hidden on desktop */}
       {isAuth && (
-        <div className="relative md:hidden" ref={dropdownRef}>
+        <div className="flex items-center gap-4 md:hidden">
+          {/* Calendar refresh — mobile only, next to the hamburger, on /calendar only */}
+          {isCalendarPage && (
+            <button
+              type="button"
+              onClick={handleCalendarRefresh}
+              disabled={isRefreshing}
+              aria-label="Ανανέωση ημερολογίου"
+              title="Ανανέωση"
+              className="text-white text-2xl hover:text-blue-500 transition-colors duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <RefreshCcw size={24} className={isRefreshing ? "animate-spin" : ""} />
+            </button>
+          )}
+          <div className="relative" ref={dropdownRef}>
           <button
             className="menu-button text-white text-2xl hover:text-blue-500 transition-colors duration-300"
             onClick={toggleDropdown}
@@ -347,6 +396,7 @@ const Navbar = ({ isAuth, role, onLogout, calendarDark, onToggleCalendarDark }) 
               </button>
             </div>
           )}
+          </div>
         </div>
       )}
     </nav>
