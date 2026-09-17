@@ -536,6 +536,27 @@ const createMultiSlotBooking = async (req, res, { userId, isStaff }) => {
       });
     }
 
+    // Reject a request whose OWN slots overlap each other (e.g. a same-date pair whose 40-min
+    // windows collide). The per-slot DB overlap check below only compares each slot against
+    // ALREADY-stored bookings, and the uniq_public_confirmed_slot index only guards identical
+    // start instants — neither catches two overlapping slots in the SAME request. Pure in-memory
+    // pairwise check using each slot's real startUtc/endUtc (half-open, same formula as the DB
+    // overlap query). Runs before any DB work, so it can't leave partial state.
+    for (let a = 0; a < prepared.length; a++) {
+      for (let b = a + 1; b < prepared.length; b++) {
+        const pa = prepared[a];
+        const pb = prepared[b];
+        if (pa.startUtc < pb.endUtc && pb.startUtc < pa.endUtc) {
+          return res.status(400).json({
+            error:
+              `Τα δύο ραντεβού επικαλύπτονται χρονικά. Επιλέξτε ώρες που δεν συμπίπτουν. / ` +
+              `The two appointments overlap in time. Please choose times that don't clash.`,
+            conflictSlot: pb.index + 1,
+          });
+        }
+      }
+    }
+
     // Sync the BOOKER's customer record once — separate collection, idempotent, and not part of
     // the appointment atomicity guarantee, so it stays outside the transaction.
     const incomingName = typeof customerName === "string" ? customerName.trim() : "";
