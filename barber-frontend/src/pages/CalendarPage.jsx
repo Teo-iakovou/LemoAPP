@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import Swal from "sweetalert2";
@@ -240,21 +240,41 @@ const [isLoading, setIsLoading] = useState(true);  // ✅ Fetch appointments
     }
   };
 
+  // Reusable so both the initial load AND the mobile refresh button (via the
+  // "calendar:refresh" event dispatched by the Navbar) hit the SAME fetch.
+  const loadUpcomingAppointments = useCallback(async () => {
+    const upcomingAppointments = await fetchUpcomingAppointments();
+    const events = upcomingAppointments.map(mapAppointmentToEvent);
+    setAppointments(events);
+  }, []);
+
   useEffect(() => {
-    const loadUpcomingAppointments = async () => {
-      try {
-        const upcomingAppointments = await fetchUpcomingAppointments();
-        const events = upcomingAppointments.map(mapAppointmentToEvent);
-        setAppointments(events);
-      } catch (error) {
+    loadUpcomingAppointments()
+      .catch((error) => {
         console.error("Error fetching upcoming appointments:", error);
-      } finally {
+      })
+      .finally(() => {
         setIsLoading(false);
+      });
+  }, [loadUpcomingAppointments]);
+
+  // Mobile refresh bridge: the button lives in the Navbar; it dispatches
+  // "calendar:refresh" and awaits "calendar:refresh:done" (success or error) so
+  // the Navbar can stop its spinner. Re-fetches appointments/breaks/locks.
+  useEffect(() => {
+    const onRefresh = async () => {
+      try {
+        await loadUpcomingAppointments();
+      } catch (error) {
+        console.error("Error refreshing calendar:", error);
+        toast.error("Αποτυχία ανανέωσης ημερολογίου.");
+      } finally {
+        window.dispatchEvent(new CustomEvent("calendar:refresh:done"));
       }
     };
-
-    loadUpcomingAppointments();
-  }, []);
+    window.addEventListener("calendar:refresh", onRefresh);
+    return () => window.removeEventListener("calendar:refresh", onRefresh);
+  }, [loadUpcomingAppointments]);
 
   // ✅ Fetch customers
   useEffect(() => {
