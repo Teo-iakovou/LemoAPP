@@ -2,94 +2,20 @@ const express = require("express");
 const router = express.Router();
 const Appointment = require("../models/appointment");
 const PublicBookingSettings = require("../models/publicBookingSettings");
-
-const CY_TIMEZONE = "Europe/Athens";
-const DEFAULT_OPEN_MINUTES = 9 * 60;
-const DEFAULT_CLOSE_MINUTES = 19 * 60 + 40;
-const DEFAULT_STEP_MINUTES = 40;
-const GREEK_TO_BARBER_KEY = {
-  "ΛΕΜΟ": "LEMO",
-  "ΦΟΡΟΥ": "FOROU",
-  "ΚΟΥΣΙΗΣ": "KOUSHIS",
-};
-
-function toLocalYMD(d) {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: CY_TIMEZONE,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(d);
-  const year = parts.find((p) => p.type === "year")?.value ?? "0000";
-  const month = parts.find((p) => p.type === "month")?.value ?? "01";
-  const day = parts.find((p) => p.type === "day")?.value ?? "01";
-  return `${year}-${month}-${day}`;
-}
-
-function parseYMD(s) {
-  const [y, m, d] = s.split("-").map(Number);
-  return new Date(Date.UTC(y, m - 1, d));
-}
-
-function zonedMinutes(date) {
-  const parts = new Intl.DateTimeFormat("en-GB", {
-    timeZone: CY_TIMEZONE,
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).formatToParts(date);
-  const hour = Number(parts.find((p) => p.type === "hour")?.value ?? "0");
-  const minute = Number(parts.find((p) => p.type === "minute")?.value ?? "0");
-  return hour * 60 + minute;
-}
-
-function businessWindow(date) {
-  const dow = date.getDay(); // 0 Sun ... 6 Sat
-  if (dow === 0 || dow === 1) return null; // closed Sun/Mon
-  if (dow === 6) return { open: 9 * 60, close: 18 * 60 + 20 }; // Sat 09:00–18:20 (last start 17:40)
-  return { open: 9 * 60, close: 19 * 60 + 40 }; // Tue–Fri 09:00–19:40 (last start 19:00)
-}
-
-function generateSlots({ date, duration = 40, step = 40, windowOverride = null }) {
-  const win = windowOverride || businessWindow(date);
-  if (!win) return [];
-  const out = [];
-  for (let t = win.open; t + duration <= win.close; t += step) {
-    // Do not exclude lunch by default; treat breaks via overlap logic
-    out.push(t);
-  }
-  return out;
-}
-
-function overlaps(aStart, aDur, bStart, bDur) {
-  const aEnd = aStart + aDur;
-  const bEnd = bStart + bDur;
-  return aStart < bEnd && bStart < aEnd;
-}
-
-function minutesToHHMM(totalMinutes) {
-  const h = String(Math.floor(totalMinutes / 60)).padStart(2, "0");
-  const m = String(totalMinutes % 60).padStart(2, "0");
-  return `${h}:${m}`;
-}
-
-function hhmmToMinutes(value) {
-  const match = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(value || "");
-  if (!match) return null;
-  return Number(match[1]) * 60 + Number(match[2]);
-}
-
-function getScopedSettingList(doc, listName, scopedName, barberGreekValue) {
-  const globalList = Array.isArray(doc?.[listName]) ? doc[listName] : [];
-  const scopedMap = doc?.[scopedName] && typeof doc[scopedName] === "object" ? doc[scopedName] : null;
-  const barberKey = GREEK_TO_BARBER_KEY[String(barberGreekValue || "").trim().toUpperCase()];
-  if (!barberKey || !scopedMap) return globalList;
-  if (Object.prototype.hasOwnProperty.call(scopedMap, barberKey)) {
-    const scoped = scopedMap[barberKey];
-    return Array.isArray(scoped) ? scoped : [];
-  }
-  return globalList;
-}
+// Shared booking rules (single source of truth for windows/closed-day precedence).
+const {
+  DEFAULT_OPEN_MINUTES,
+  DEFAULT_CLOSE_MINUTES,
+  toLocalYMD,
+  parseYMD,
+  zonedMinutes,
+  businessWindow,
+  generateSlots,
+  overlaps,
+  minutesToHHMM,
+  hhmmToMinutes,
+  getScopedSettingList,
+} = require("../services/bookingRules");
 
 // Core month availability computation reused by multiple routes
 async function buildMonthAvailability({ from, to, barber, includeSlots, includeAll }) {

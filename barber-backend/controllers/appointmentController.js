@@ -1,6 +1,8 @@
 const Appointment = require("../models/appointment");
 const Customer = require("../models/customer");
 const User = require("../models/user");
+const PublicBookingSettings = require("../models/publicBookingSettings");
+const { assertSlotBookable } = require("../services/bookingRules");
 const { sendSMS } = require("../utils/smsService")
 const { upsertCustomerFromIdentity } = require("../utils/customerSync");
 const { resolveBarberScope } = require("../utils/appointmentScope");
@@ -552,6 +554,42 @@ const createMultiSlotBooking = async (req, res, { userId, isStaff }) => {
               `Τα δύο ραντεβού επικαλύπτονται χρονικά. Επιλέξτε ώρες που δεν συμπίπτουν. / ` +
               `The two appointments overlap in time. Please choose times that don't clash.`,
             conflictSlot: pb.index + 1,
+          });
+        }
+      }
+    }
+
+    // Enforce the public booking rules (closed weekdays/months, blocked/allowed dates, special
+    // hours, business window, booking horizon) for PUBLIC callers — the same rules the availability
+    // API and the public site apply, via the shared bookingRules module. Staff bypass (like the DB
+    // overlap check below), so an admin can still place a slot on a normally-closed day. Runs before
+    // any DB write, so a rejection leaves no partial state.
+    if (!isStaff) {
+      const REASON_TEXT = {
+        past: { gr: "έχει ήδη περάσει", en: "is in the past" },
+        "outside-horizon": { gr: "είναι εκτός της περιόδου κρατήσεων", en: "is outside the booking window" },
+        "blocked-date": { gr: "είναι σε μη διαθέσιμη ημερομηνία", en: "is on an unavailable date" },
+        "closed-month": { gr: "είναι σε κλειστό μήνα", en: "is in a closed month" },
+        "closed-weekday": { gr: "είναι σε κλειστή ημέρα", en: "is on a closed day" },
+        "outside-hours": { gr: "είναι εκτός ωραρίου λειτουργίας", en: "is outside opening hours" },
+      };
+      const settingsDoc = await PublicBookingSettings.getSingleton();
+      for (const p of prepared) {
+        const reason = assertSlotBookable({
+          startUtc: p.startUtc,
+          endUtc: p.endUtc,
+          barber: p.barber,
+          settings: settingsDoc,
+          now: nowUtc.toDate(),
+        });
+        if (reason) {
+          const text = REASON_TEXT[reason] || { gr: "δεν είναι διαθέσιμο", en: "is not available" };
+          return res.status(400).json({
+            error:
+              `Το ραντεβού ${p.index + 1} ${text.gr}. Επιλέξτε άλλη ώρα. / ` +
+              `Appointment ${p.index + 1} ${text.en}. Please pick another time.`,
+            reason,
+            conflictSlot: p.index + 1,
           });
         }
       }
