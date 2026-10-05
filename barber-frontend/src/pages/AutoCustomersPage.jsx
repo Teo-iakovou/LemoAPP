@@ -694,7 +694,24 @@ const AutoCustomersPage = () => {
       }
     }
 
-    return { newStart, until, untilDay, skipReason, weekdayMismatch, untilExtended };
+    // Expired cards are still skipped by default, but we pre-compute what a renewal WOULD write
+    // so the confirm dialog can offer an explicit opt-in. The revived run keeps the card's OWN
+    // original length (until − startFrom), shifted to the new start — no invented end date.
+    let revive = null;
+    if (skipReason === "past" && startLocalDay) {
+      const spanDays = Math.max(
+        0,
+        Math.round((originalUntilDay.getTime() - startLocalDay.getTime()) / 86400000)
+      );
+      const revivedUntilDay = addDays(newStart, spanDays);
+      revivedUntilDay.setHours(0, 0, 0, 0);
+      revive = {
+        until: toUtcIsoFromLocalDate(toLocalDateString(revivedUntilDay)),
+        untilDay: revivedUntilDay,
+      };
+    }
+
+    return { newStart, until, untilDay, skipReason, weekdayMismatch, untilExtended, revive };
   };
 
   const handleEdit = (customer, occurrenceDate, options = {}) => {
@@ -1181,8 +1198,23 @@ const AutoCustomersPage = () => {
       };
       toast("Οι πελάτες προστίθενται στο ημερολόγιο...");
       setPushOpen(false);
-      await pushAutoCustomers(payload);
-      toast.success(`Προστέθηκαν στο ημερολόγιο οι επιλεγμένοι πελάτες (${selectedCount}).`);
+      const result = await pushAutoCustomers(payload);
+      // Report what the backend ACTUALLY created, not the selection size — a push where
+      // every occurrence was skipped (expired `until`, already booked, conflicts) must not
+      // look like a success.
+      const realTotals = result?.data?.totals || {};
+      const createdCount = (realTotals.inserted || 0) + (realTotals.moved || 0);
+      const skippedCount = realTotals.skipped || 0;
+      if (createdCount > 0) {
+        toast.success(
+          `Δημιουργήθηκαν ${createdCount} ραντεβού στο ημερολόγιο` +
+            (skippedCount ? ` (${skippedCount} παραλείφθηκαν).` : ".")
+        );
+      } else {
+        toast.error(
+          `Δεν δημιουργήθηκε κανένα ραντεβού (${skippedCount} παραλείφθηκαν — ήδη κλεισμένα, πιασμένη ώρα ή έληξε το πρόγραμμα).`
+        );
+      }
       clearCustomerSelection();
       // Kept even though the fields no longer touch the cards. They are a one-shot
       // override for the run that just finished, and the selection is cleared right
@@ -1303,7 +1335,29 @@ const AutoCustomersPage = () => {
         </div>
       );
 
-      if (renewable.length === 0) {
+      // Expired cards are only renewed on explicit opt-in (checkbox below). Pre-ticked when the
+      // admin deliberately selected cards; unticked for an "all customers" renewal.
+      const revivable = expired.filter((plan) => plan.revive);
+      const reviveCheckboxId = "renew-include-expired";
+      const reviveBlock = revivable.length > 0 && (
+        <div style={{ marginTop: 14 }}>
+          <label style={{ ...noteStyle, display: "flex", gap: 8, alignItems: "center", cursor: "pointer" }}>
+            <input id={reviveCheckboxId} type="checkbox" defaultChecked={useSelection} />
+            Ανανέωση και των ληγμένων ({revivable.length}) — ίδια διάρκεια, από τη νέα έναρξη:
+          </label>
+          <ul style={listStyle}>
+            {revivable.map((plan) => (
+              <li key={plan.customer._id}>
+                {plan.customer.customerName} — έληξε {plan.untilDay ? formatShortDate(plan.untilDay) : "—"} →{" "}
+                {formatShortDate(plan.newStart)} έως {formatShortDate(plan.revive.untilDay)}
+              </li>
+            ))}
+          </ul>
+        </div>
+      );
+      const unrevivable = expired.filter((plan) => !plan.revive);
+
+      if (renewable.length === 0 && revivable.length === 0) {
         await MySwal.fire({
           title: "Ανανέωση προγράμματος",
           width: 680,
@@ -1324,6 +1378,7 @@ const AutoCustomersPage = () => {
         width: 680,
         html: (
           <div style={{ textAlign: "left" }}>
+            {renewable.length > 0 && (
             <div
               style={{
                 maxHeight: 340,
@@ -1356,29 +1411,50 @@ const AutoCustomersPage = () => {
                 </tbody>
               </table>
             </div>
-            <p style={{ marginTop: 14, fontWeight: 600 }}>
-              Θα ανανεωθεί το πρόγραμμα για {renewable.length} πελάτες. Συνέχεια;
-            </p>
+            )}
+            {renewable.length > 0 && (
+              <p style={{ marginTop: 14, fontWeight: 600 }}>
+                Θα ανανεωθεί το πρόγραμμα για {renewable.length} πελάτες. Συνέχεια;
+              </p>
+            )}
             {mismatchBlock}
             {extendedBlock}
-            {skippedBlock("Χρειάζονται προσοχή (η λήξη τους έχει περάσει)", expired)}
+            {reviveBlock}
+            {skippedBlock("Χρειάζονται προσοχή (η λήξη τους έχει περάσει)", unrevivable)}
           </div>
         ),
         showCancelButton: true,
         confirmButtonText: "Ναι",
         cancelButtonText: "Άκυρο",
+        preConfirm: () => {
+          const box = Swal.getPopup()?.querySelector(`#${reviveCheckboxId}`);
+          const includeExpired = Boolean(box?.checked);
+          if (renewable.length === 0 && !includeExpired) {
+            Swal.showValidationMessage("Τσέκαρε την ανανέωση των ληγμένων για να συνεχίσεις.");
+            return false;
+          }
+          return { includeExpired };
+        },
       });
 
       if (!confirmed.isConfirmed) return;
 
-      const updates = renewable.map((plan) =>
-        updateAutoCustomer(plan.customer._id, buildRenewalPayload(plan.newStart, plan.until))
-      );
+      const revived = confirmed.value?.includeExpired ? revivable : [];
+      const updates = [
+        ...renewable.map((plan) =>
+          updateAutoCustomer(plan.customer._id, buildRenewalPayload(plan.newStart, plan.until))
+        ),
+        ...revived.map((plan) =>
+          updateAutoCustomer(plan.customer._id, buildRenewalPayload(plan.newStart, plan.revive.until))
+        ),
+      ];
       await Promise.all(updates);
       await loadCustomers();
+      const stillExpired = expired.length - revived.length;
       toast.success(
-        `Ανανεώθηκε το πρόγραμμα για ${renewable.length} πελάτες.` +
-          (expired.length > 0 ? ` ${expired.length} χρειάζονται προσοχή.` : "") +
+        `Ανανεώθηκε το πρόγραμμα για ${renewable.length + revived.length} πελάτες.` +
+          (revived.length > 0 ? ` ${revived.length} ληγμένοι ανανεώθηκαν.` : "") +
+          (stillExpired > 0 ? ` ${stillExpired} χρειάζονται προσοχή.` : "") +
           (extended.length > 0 ? ` ${extended.length} με επέκταση «Έως».` : "")
       );
 
@@ -1390,7 +1466,7 @@ const AutoCustomersPage = () => {
       // Show the result on THIS page: jump the preview to the earliest new start and
       // refresh the on-page dry-run preview. Nothing is written to the Calendar page.
       // Only the customers actually written — skipped ones were not renewed.
-      const earliestStart = renewable
+      const earliestStart = [...renewable, ...revived]
         .map((plan) => plan.newStart)
         .filter((date) => date && !Number.isNaN(date.getTime()))
         .sort((a, b) => a.getTime() - b.getTime())[0];
