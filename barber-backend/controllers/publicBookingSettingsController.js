@@ -23,6 +23,7 @@ function serializeSettings(doc) {
       specialDayHours: {},
       extraDaySlots: {},
       barberPrices: {},
+      barberPriceHidden: {},
       visibleMonthCount: DEFAULT_VISIBLE_MONTH_COUNT,
       updatedAt: null,
       updatedBy: null,
@@ -53,6 +54,7 @@ function serializeSettings(doc) {
           )
         : {},
     barberPrices: normalizeBarberPrices(doc.barberPrices),
+    barberPriceHidden: normalizeBarberPriceHidden(doc.barberPriceHidden),
     visibleMonthCount: clampVisibleMonthCount(doc.visibleMonthCount),
     updatedAt: doc.updatedAt || null,
     updatedBy: doc.updatedBy || null,
@@ -152,6 +154,16 @@ function normalizeBarberPrices(value) {
   return out;
 }
 
+// Only barbers explicitly hidden are kept: { KOUSHIS: true }.
+function normalizeBarberPriceHidden(value) {
+  if (!value || typeof value !== "object") return {};
+  const out = {};
+  BARBER_KEYS.forEach((key) => {
+    if (value[key] === true) out[key] = true;
+  });
+  return out;
+}
+
 function normalizeScopedMonths(value) {
   if (!value || typeof value !== "object") return {};
   const out = {};
@@ -245,6 +257,9 @@ const updateSettings = async (req, res, next) => {
     doc.specialDayHours = specialDayHours;
     doc.extraDaySlots = extraDaySlots;
     doc.barberPrices = normalizeBarberPrices(req.body?.barberPrices || doc.barberPrices);
+    doc.barberPriceHidden = normalizeBarberPriceHidden(
+      req.body?.barberPriceHidden !== undefined ? req.body.barberPriceHidden : doc.barberPriceHidden
+    );
     doc.visibleMonthCount = visibleMonthCount;
     doc.barberClosedMonths = normalizeScopedMonths(req.body?.barberClosedMonths || doc.barberClosedMonths);
     doc.barberBlockedDates = normalizeScopedDates(req.body?.barberBlockedDates || doc.barberBlockedDates);

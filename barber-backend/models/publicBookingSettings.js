@@ -35,6 +35,11 @@ const publicBookingSettingsSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.Mixed,
       default: () => ({}),
     },
+    // { LEMO: true } hides that barber's price on the public site.
+    barberPriceHidden: {
+      type: mongoose.Schema.Types.Mixed,
+      default: () => ({}),
+    },
     visibleMonthCount: {
       type: Number,
       default: 2,
