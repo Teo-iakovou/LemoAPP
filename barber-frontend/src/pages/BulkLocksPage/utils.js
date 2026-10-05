@@ -335,8 +335,14 @@ export const aggregateLocks = (locks) => {
     }
   });
 
+  // Week order: Monday → Sunday, then by time of day, then barber, then first date.
+  const weekdayRank = (day) => ((day ?? 0) + 6) % 7; // Mon=0 … Sun=6
   result.sort(
-    (a, b) => a.startDate - b.startDate || a.time.localeCompare(b.time)
+    (a, b) =>
+      weekdayRank(a.weekday) - weekdayRank(b.weekday) ||
+      a.time.localeCompare(b.time) ||
+      String(a.barber || "").localeCompare(String(b.barber || "")) ||
+      a.startDate - b.startDate
   );
 
   return result;
