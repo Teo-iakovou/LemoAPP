@@ -22,6 +22,8 @@ const MySwal = withReactContent(Swal);
 
 const CalendarPage = ({ darkCalendar = false, defaultBarber = null }) => {
   const [appointments, setAppointments] = useState([]);
+  // Controlled calendar date so the mobile refresh button can jump back to today.
+  const [calendarDate, setCalendarDate] = useState(() => new Date());
   const [customers, setCustomers] = useState([]); // Add customers state
   const [selectedDate, setSelectedDate] = useState(null);
   const [selectedAppointment, setSelectedAppointment] = useState(null);
@@ -263,6 +265,7 @@ const [isLoading, setIsLoading] = useState(true);  // ✅ Fetch appointments
   // the Navbar can stop its spinner. Re-fetches appointments/breaks/locks.
   useEffect(() => {
     const onRefresh = async () => {
+      setCalendarDate(new Date()); // refresh also brings the calendar back to today
       try {
         await loadUpcomingAppointments();
       } catch (error) {
@@ -528,6 +531,8 @@ const [isLoading, setIsLoading] = useState(true);  // ✅ Fetch appointments
           onSelectSlot={handleSelectSlot}
           onSelectEvent={handleSelectEvent}
           onUpdateAppointment={handleCalendarEventUpdate}
+          date={calendarDate}
+          onNavigate={setCalendarDate}
         />
       </div>
     )}
