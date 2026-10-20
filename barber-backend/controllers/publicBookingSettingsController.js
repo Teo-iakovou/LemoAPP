@@ -4,6 +4,19 @@ const MIN_VISIBLE_MONTHS = 1;
 const MAX_VISIBLE_MONTHS = 6;
 const DEFAULT_VISIBLE_MONTH_COUNT = 2;
 const BARBER_KEYS = ["LEMO", "FOROU", "KOUSHIS"];
+const ANNOUNCEMENT_MAX_LENGTH = 300;
+const ANNOUNCEMENT_TONES = ["info", "warning"];
+
+function normalizeAnnouncement(value) {
+  const src = value && typeof value === "object" ? value : {};
+  const text = String(src.text || "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, ANNOUNCEMENT_MAX_LENGTH);
+  const tone = ANNOUNCEMENT_TONES.includes(src.tone) ? src.tone : "info";
+  // An empty announcement can never be "on".
+  return { enabled: Boolean(src.enabled) && text.length > 0, text, tone };
+}
 
 function clampVisibleMonthCount(value) {
   const num = Number(value);
@@ -25,6 +38,7 @@ function serializeSettings(doc) {
       barberPrices: {},
       barberPriceHidden: {},
       visibleMonthCount: DEFAULT_VISIBLE_MONTH_COUNT,
+      announcement: normalizeAnnouncement(null),
       updatedAt: null,
       updatedBy: null,
     };
@@ -56,6 +70,7 @@ function serializeSettings(doc) {
     barberPrices: normalizeBarberPrices(doc.barberPrices),
     barberPriceHidden: normalizeBarberPriceHidden(doc.barberPriceHidden),
     visibleMonthCount: clampVisibleMonthCount(doc.visibleMonthCount),
+    announcement: normalizeAnnouncement(doc.announcement),
     updatedAt: doc.updatedAt || null,
     updatedBy: doc.updatedBy || null,
   };
@@ -272,7 +287,23 @@ const updateSettings = async (req, res, next) => {
   }
 };
 
+// Announcement banner — its own endpoint so it only ever touches `announcement`: it can't
+// overwrite availability settings with a stale copy, and availability saves never touch it.
+const updateAnnouncement = async (req, res, next) => {
+  try {
+    const doc = await PublicBookingSettings.getSingleton();
+    doc.announcement = normalizeAnnouncement(req.body?.announcement ?? req.body);
+    doc.markModified("announcement");
+    doc.updatedBy = req.publicUserId || null;
+    await doc.save();
+    res.json({ settings: serializeSettings(doc) });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getSettings,
   updateSettings,
+  updateAnnouncement,
 };

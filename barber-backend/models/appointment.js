@@ -55,14 +55,15 @@ const appointmentSchema = new mongoose.Schema({
     validate: {
       validator: function (value) {
         if (typeof value !== "number") return false;
-        if (this.type === "break") {
+        // Breaks and locks may span the whole 07:00-21:00 day (full-day lock).
+        if (this.type === "break" || this.type === "lock") {
           return value <= MAX_BREAK_MINUTES;
         }
         return value <= MAX_APPOINTMENT_MINUTES;
       },
       message: function () {
-        return this.type === "break"
-          ? `Break duration cannot exceed ${MAX_BREAK_MINUTES} minutes.`
+        return this.type === "break" || this.type === "lock"
+          ? `Break/lock duration cannot exceed ${MAX_BREAK_MINUTES} minutes.`
           : `Duration cannot exceed ${MAX_APPOINTMENT_MINUTES} minutes.`;
       },
     },

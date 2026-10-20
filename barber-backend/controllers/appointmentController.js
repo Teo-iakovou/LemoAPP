@@ -538,17 +538,17 @@ const createMultiSlotBooking = async (req, res, { userId, isStaff }) => {
       });
     }
 
-    // Reject a request whose OWN slots overlap each other (e.g. a same-date pair whose 40-min
-    // windows collide). The per-slot DB overlap check below only compares each slot against
-    // ALREADY-stored bookings, and the uniq_public_confirmed_slot index only guards identical
-    // start instants — neither catches two overlapping slots in the SAME request. Pure in-memory
-    // pairwise check using each slot's real startUtc/endUtc (half-open, same formula as the DB
-    // overlap query). Runs before any DB work, so it can't leave partial state.
+    // Reject a request whose OWN slots overlap each other for the SAME barber (e.g. a same-date
+    // pair with one barber whose 40-min windows collide). Two DIFFERENT barbers at the same time
+    // is allowed (e.g. two people booked together, one chair each) — each slot is still checked
+    // against already-stored bookings for its own barber below. The per-slot DB check and the
+    // uniq_public_confirmed_slot index can't catch two colliding slots in the SAME request, so this
+    // pure in-memory pairwise check runs first, before any DB work (no partial state).
     for (let a = 0; a < prepared.length; a++) {
       for (let b = a + 1; b < prepared.length; b++) {
         const pa = prepared[a];
         const pb = prepared[b];
-        if (pa.startUtc < pb.endUtc && pb.startUtc < pa.endUtc) {
+        if (pa.barber === pb.barber && pa.startUtc < pb.endUtc && pb.startUtc < pa.endUtc) {
           return res.status(400).json({
             error:
               `Τα δύο ραντεβού επικαλύπτονται χρονικά. Επιλέξτε ώρες που δεν συμπίπτουν. / ` +

@@ -40,6 +40,12 @@ const publicBookingSettingsSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.Mixed,
       default: () => ({}),
     },
+    // Site-wide announcement banner shown on the public site:
+    // { enabled: Boolean, text: String, tone: "info" | "warning" }
+    announcement: {
+      type: mongoose.Schema.Types.Mixed,
+      default: () => ({ enabled: false, text: "", tone: "info" }),
+    },
     visibleMonthCount: {
       type: Number,
       default: 2,

@@ -22,6 +22,10 @@ TapOnlyInput.displayName = "TapOnlyInput";
 const BREAK_FULL_DAY_MINUTES = 14 * 60;
 const BREAK_FULL_DAY_HOURS = BREAK_FULL_DAY_MINUTES / 60;
 const BREAK_MIN_MINUTES = 5;
+// A full-day lock covers the same 07:00-21:00 window, starting at 07:00 of the chosen day.
+const FULL_DAY_START_HOUR = 7;
+const isFullDayLock = (data) =>
+  data?.type === "lock" && (data.duration || 0) >= BREAK_FULL_DAY_MINUTES;
 
 
 
@@ -79,6 +83,7 @@ function AppointmentForm({
       ? (appointmentData.duration || 0) >= BREAK_FULL_DAY_MINUTES
       : false
   );
+  const [lockFullDay, setLockFullDay] = useState(() => isFullDayLock(appointmentData));
   const [lockReasonValue, setLockReasonValue] = useState(
     appointmentData?.lockReason || ""
   );
@@ -133,6 +138,7 @@ function AppointmentForm({
           ? (appointmentData.duration || 0) >= BREAK_FULL_DAY_MINUTES
           : false
       );
+      setLockFullDay(isFullDayLock(appointmentData));
       setLockReasonValue(appointmentData.lockReason || "");
     }
   }, [appointmentData, setValue]);
@@ -217,8 +223,9 @@ const handleCustomerSelect = (e) => {
       setError("Ημερομηνία/ώρα υποχρεωτικό πεδίο.");
       return;
     }
+    const lockIsFullDay = appointmentType === "lock" && lockFullDay;
     if (
-      (appointmentType === "appointment" || appointmentType === "lock") &&
+      (appointmentType === "appointment" || (appointmentType === "lock" && !lockIsFullDay)) &&
       (!manualDuration || manualDuration < 10 || manualDuration > 600)
     ) {
       setError("Διάρκεια 10-600 λεπτά.");
@@ -242,7 +249,13 @@ const handleCustomerSelect = (e) => {
         ? breakFullDay
           ? BREAK_FULL_DAY_MINUTES
           : manualDuration
+        : lockIsFullDay
+        ? BREAK_FULL_DAY_MINUTES
         : manualDuration;
+
+    // Full-day lock always starts at 07:00 of the chosen day, whatever time was picked.
+    const startDate = new Date(appointmentDateTime);
+    if (lockIsFullDay) startDate.setHours(FULL_DAY_START_HOUR, 0, 0, 0);
 
     const payload = {
       ...appointmentData,
@@ -251,7 +264,7 @@ const handleCustomerSelect = (e) => {
       barber: data.barber || "ΛΕΜΟ",
       duration: finalDuration,
       type: appointmentType || "appointment",
-      appointmentDateTime: new Date(appointmentDateTime).toISOString(),
+      appointmentDateTime: startDate.toISOString(),
       recurrence:
         recurrence !== "none" ? recurrence : null,
       repeatInterval:
@@ -589,7 +602,22 @@ const handleCustomerSelect = (e) => {
                 </label>
               </div>
             )}
-            {appointmentType === "break" && breakFullDay ? (
+            {appointmentType === "lock" && (
+              <div className="flex items-center gap-2 mt-2 mb-3 text-sm text-purple-200">
+                <input
+                  id="lockFullDay"
+                  type="checkbox"
+                  checked={lockFullDay}
+                  onChange={(e) => setLockFullDay(e.target.checked)}
+                  className="h-4 w-4 rounded border-purple-400 bg-[#181a23] text-purple-400 focus:ring-purple-400"
+                />
+                <label htmlFor="lockFullDay" className="cursor-pointer select-none">
+                  Κλείδωσε όλη την ημέρα (07:00 - 21:00)
+                </label>
+              </div>
+            )}
+            {(appointmentType === "break" && breakFullDay) ||
+            (appointmentType === "lock" && lockFullDay) ? (
               <div className={`${fieldBase} flex items-center justify-between`}>
                 <span>Ολόκληρη ημέρα</span>
                 <span className="font-semibold text-purple-100">
@@ -636,7 +664,7 @@ const handleCustomerSelect = (e) => {
                     placeholder="π.χ. 75"
                     required={
                       appointmentType === "appointment" ||
-                      appointmentType === "lock" ||
+                      (appointmentType === "lock" && !lockFullDay) ||
                       (appointmentType === "break" && !breakFullDay)
                     }
                   />
