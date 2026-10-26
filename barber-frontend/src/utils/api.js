@@ -572,7 +572,11 @@ export const patchCustomer = async (id, data) => {
 // { items: [...], unreadCount } — scoped server-side ('calendar' users: own barber only).
 export const fetchCancellations = async () => {
   const res = await apiFetch(`${API_BASE_URL}/cancellations`);
-  if (!res.ok) throw new Error("Failed to fetch cancellations.");
+  if (!res.ok) {
+    const err = new Error("Failed to fetch cancellations.");
+    err.status = res.status; // 403 = not the owner → the bell hides itself
+    throw err;
+  }
   return res.json();
 };
 

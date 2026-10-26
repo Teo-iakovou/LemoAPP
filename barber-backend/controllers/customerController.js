@@ -4,7 +4,7 @@ const User = require("../models/user");
 const moment = require("moment");
 const jwt = require("jsonwebtoken");
 
-const ALLOWED_COUNTS_USERNAMES = new Set(["lemo"]);
+const { isOwner } = require("../utils/ownerAccess");
 
 function parseDateOfBirthInput(rawValue) {
   if (rawValue === undefined) {
@@ -58,8 +58,7 @@ async function ensureCountsAccess(req, res) {
     return null;
   }
 
-  const username = String(user.username || "").trim().toLowerCase();
-  if (!ALLOWED_COUNTS_USERNAMES.has(username)) {
+  if (!isOwner(user)) {
     res.status(403).json({ message: "Access restricted for this page" });
     return null;
   }

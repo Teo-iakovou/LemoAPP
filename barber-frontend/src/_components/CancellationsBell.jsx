@@ -37,19 +37,31 @@ export default function CancellationsBell({ className = "" }) {
   const [unread, setUnread] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  // null = not known yet (render nothing), true = owner, false = no access (stays hidden).
+  const [allowed, setAllowed] = useState(null);
+  const allowedRef = useRef(null);
   const ref = useRef(null);
 
   // The navbar mounts one bell for desktop and one for mobile (one is CSS-hidden); only the
   // visible one polls. `force` is used when the user opens the panel.
   const load = useCallback(async (force = false) => {
+    if (allowedRef.current === false) return null;
     if (!force && ref.current && ref.current.offsetParent === null) return null;
     try {
       const data = await fetchCancellations();
       setItems(Array.isArray(data?.items) ? data.items : []);
       setUnread(Number(data?.unreadCount) || 0);
       setError("");
+      allowedRef.current = true;
+      setAllowed(true);
       return data;
-    } catch {
+    } catch (err) {
+      // Owner-only (same rule as Customer Counts): anyone else never sees the bell.
+      if (err?.status === 403 || err?.status === 401) {
+        allowedRef.current = false;
+        setAllowed(false);
+        return null;
+      }
       setError("Αποτυχία φόρτωσης.");
       return null;
     }
@@ -93,6 +105,8 @@ export default function CancellationsBell({ className = "" }) {
       markCancellationsSeen().catch(() => {});
     }
   };
+
+  if (!allowed) return null;
 
   return (
     <div className={`relative ${className}`} ref={ref}>

@@ -1,6 +1,6 @@
 const express = require("express");
 const requireUser = require("../middlewares/requireUser");
-const requireCalendarOrAdmin = require("../middlewares/requireCalendarOrAdmin");
+const requireOwner = require("../middlewares/requireOwner");
 const {
   listCancellations,
   markCancellationsSeen,
@@ -8,7 +8,8 @@ const {
 
 const router = express.Router();
 
-router.get("/", requireUser, requireCalendarOrAdmin, listCancellations);
-router.post("/seen", requireUser, requireCalendarOrAdmin, markCancellationsSeen);
+// Owner-only, like the Customer Counts page.
+router.get("/", requireUser, requireOwner, listCancellations);
+router.post("/seen", requireUser, requireOwner, markCancellationsSeen);
 
 module.exports = router;
