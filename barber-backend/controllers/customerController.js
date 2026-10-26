@@ -129,6 +129,7 @@ const getCustomerCounts = async (req, res, next) => {
         $lte: endOfMonth.toDate(),
       },
       ...typeMatch,
+      noShow: { $ne: true }, // "Δεν ήρθε" isn't a visit
     });
 
     const forouCount = await Appointment.countDocuments({
@@ -138,6 +139,7 @@ const getCustomerCounts = async (req, res, next) => {
         $lte: endOfMonth.toDate(),
       },
       ...typeMatch,
+      noShow: { $ne: true }, // "Δεν ήρθε" isn't a visit
     });
 
     const koushisCount = await Appointment.countDocuments({
@@ -147,6 +149,7 @@ const getCustomerCounts = async (req, res, next) => {
         $lte: endOfMonth.toDate(),
       },
       ...typeMatch,
+      noShow: { $ne: true }, // "Δεν ήρθε" isn't a visit
     });
 
     res.status(200).json({
@@ -189,6 +192,7 @@ const getWeeklyCustomerCounts = async (req, res, next) => {
         $lte: endOfWeek.toDate(),
       },
       ...weeklyTypeMatch,
+      noShow: { $ne: true }, // "Δεν ήρθε" isn't a visit
     });
 
     const forouWeeklyCount = await Appointment.countDocuments({
@@ -198,6 +202,7 @@ const getWeeklyCustomerCounts = async (req, res, next) => {
         $lte: endOfWeek.toDate(),
       },
       ...weeklyTypeMatch,
+      noShow: { $ne: true }, // "Δεν ήρθε" isn't a visit
     });
 
     const koushisWeeklyCount = await Appointment.countDocuments({
@@ -207,6 +212,7 @@ const getWeeklyCustomerCounts = async (req, res, next) => {
         $lte: endOfWeek.toDate(),
       },
       ...weeklyTypeMatch,
+      noShow: { $ne: true }, // "Δεν ήρθε" isn't a visit
     });
 
     res.status(200).json({

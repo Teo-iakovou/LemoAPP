@@ -567,3 +567,43 @@ export const patchCustomer = async (id, data) => {
   if (!res.ok) throw new Error("Failed to update customer");
   return res.json();
 };
+
+// --- Cancellations bell -------------------------------------------------------
+// { items: [...], unreadCount } — scoped server-side ('calendar' users: own barber only).
+export const fetchCancellations = async () => {
+  const res = await apiFetch(`${API_BASE_URL}/cancellations`);
+  if (!res.ok) throw new Error("Failed to fetch cancellations.");
+  return res.json();
+};
+
+export const markCancellationsSeen = async () => {
+  const res = await apiFetch(`${API_BASE_URL}/cancellations/seen`, { method: "POST" });
+  if (!res.ok) throw new Error("Failed to mark cancellations as seen.");
+  return res.json();
+};
+
+// --- "Δεν ήρθε" (no-show) -----------------------------------------------------
+export const setAppointmentNoShow = async (appointmentId, noShow) => {
+  const res = await apiFetch(`${API_BASE_URL}/appointments/${appointmentId}/no-show`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ noShow: Boolean(noShow) }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.message || "Αποτυχία ενημέρωσης.");
+  return data;
+};
+
+// { "<last 8 phone digits>": count } for every customer with at least one no-show.
+export const fetchNoShowCounts = async () => {
+  try {
+    const res = await apiFetch(`${API_BASE_URL}/appointments/no-shows`);
+    if (!res.ok) return {};
+    const data = await res.json();
+    return data?.counts || {};
+  } catch {
+    return {};
+  }
+};
+
+export const phoneKey = (phone) => String(phone || "").replace(/\D+/g, "").slice(-8);

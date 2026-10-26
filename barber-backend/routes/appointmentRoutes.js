@@ -9,8 +9,11 @@ const {
   getUpcomingAppointments,
   getRecentLocks,
   getMyAppointments,
+  setNoShow,
+  getNoShowCounts,
 } = require("../controllers/appointmentController");
 const requireUser = require("../middlewares/requireUser");
+const requireCalendarOrAdmin = require("../middlewares/requireCalendarOrAdmin");
 const requireFullAdmin = require("../middlewares/requireFullAdmin");
 // const validatePassword = require("../middlewares/validatePassword");
 const rateLimit = require("express-rate-limit");
@@ -39,6 +42,10 @@ router.post("/lock-series", requireUser, createLockSeriesBatch);
 // Admin-only: returns full customer PII + reminder history, and has no callers in
 // either frontend. Locked rather than scoped.
 router.get("/", requireUser, requireFullAdmin, getAppointments);
+
+// "Δεν ήρθε" (no-show). Declared before "/:id" routes that share the prefix.
+router.get("/no-shows", requireUser, requireCalendarOrAdmin, getNoShowCounts);
+router.patch("/:id/no-show", requireUser, requireCalendarOrAdmin, setNoShow);
 
 router.put("/:id", requireUser, updateAppointment); //, validatePassword it used to be here
 router.delete("/:id", requireUser, deleteAppointment); //, validatePassword it used to be here

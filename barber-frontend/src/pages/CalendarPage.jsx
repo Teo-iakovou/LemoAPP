@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import Swal from "sweetalert2";
@@ -10,6 +10,9 @@ import {
   createAppointment,
   updateAppointment,
   fetchUpcomingAppointments,
+  fetchNoShowCounts,
+  setAppointmentNoShow,
+  phoneKey,
   fetchPastAppointments,
   fetchCustomers,
 } from "../utils/api";
@@ -22,6 +25,8 @@ const MySwal = withReactContent(Swal);
 
 const CalendarPage = ({ darkCalendar = false, defaultBarber = null }) => {
   const [appointments, setAppointments] = useState([]);
+  // { "<last 8 phone digits>": how many times that customer didn't show up }
+  const [noShowCounts, setNoShowCounts] = useState({});
   // Controlled calendar date so the mobile refresh button can jump back to today.
   const [calendarDate, setCalendarDate] = useState(() => new Date());
   const [customers, setCustomers] = useState([]); // Add customers state
@@ -68,7 +73,8 @@ const [isLoading, setIsLoading] = useState(true);  // ✅ Fetch appointments
       barber: appointment.barber,
       type: appointment.type || "appointment",
       duration,
-      backgroundColor: getEventColor(appointment),
+      noShow: Boolean(appointment.noShow),
+      backgroundColor: appointment.noShow ? "#6b7280" : getEventColor(appointment),
     };
   };
 
@@ -245,10 +251,25 @@ const [isLoading, setIsLoading] = useState(true);  // ✅ Fetch appointments
   // Reusable so both the initial load AND the mobile refresh button (via the
   // "calendar:refresh" event dispatched by the Navbar) hit the SAME fetch.
   const loadUpcomingAppointments = useCallback(async () => {
-    const upcomingAppointments = await fetchUpcomingAppointments();
+    const [upcomingAppointments, counts] = await Promise.all([
+      fetchUpcomingAppointments(),
+      fetchNoShowCounts(),
+    ]);
     const events = upcomingAppointments.map(mapAppointmentToEvent);
     setAppointments(events);
+    setNoShowCounts(counts);
   }, []);
+
+  // Each appointment carries how many times its customer didn't show up (⚠️ on the event).
+  const calendarEvents = useMemo(
+    () =>
+      appointments.map((a) =>
+        a.type === "appointment" && !a.noShow
+          ? { ...a, noShowCount: noShowCounts[phoneKey(a.phoneNumber)] || 0 }
+          : a
+      ),
+    [appointments, noShowCounts]
+  );
 
   useEffect(() => {
     loadUpcomingAppointments()
@@ -325,9 +346,39 @@ const [isLoading, setIsLoading] = useState(true);  // ✅ Fetch appointments
       type: appointment.type || "appointment",
       duration: durationMinutes,
       lockReason: appointment.lockReason || "",
+      noShow: Boolean(appointment.noShow),
+      noShowCount: isAppointment ? noShowCounts[phoneKey(appointment.phoneNumber)] || 0 : 0,
     });
 
     setShowForm(true);
+  };
+
+  // "Δεν ήρθε" toggle from the form. Updates the event in place + the per-phone counts.
+  const handleToggleNoShow = async (appointmentId, noShow) => {
+    try {
+      await setAppointmentNoShow(appointmentId, noShow);
+      const target = appointments.find((a) => a.id === appointmentId);
+      setAppointments((prev) =>
+        prev.map((a) =>
+          a.id === appointmentId
+            ? { ...a, noShow, backgroundColor: noShow ? "#6b7280" : getEventColor(a) }
+            : a
+        )
+      );
+      const key = phoneKey(target?.phoneNumber);
+      if (key) {
+        setNoShowCounts((prev) => {
+          const next = { ...prev, [key]: Math.max(0, (prev[key] || 0) + (noShow ? 1 : -1)) };
+          if (!next[key]) delete next[key];
+          return next;
+        });
+      }
+      toast.success(noShow ? "Σημειώθηκε: δεν ήρθε." : "Αναιρέθηκε το «Δεν ήρθε».");
+      return true;
+    } catch (error) {
+      toast.error(error.message || "Αποτυχία ενημέρωσης.");
+      return false;
+    }
   };
 
   const handleFormSubmit = async (appointmentData) => {
@@ -527,7 +578,7 @@ const [isLoading, setIsLoading] = useState(true);  // ✅ Fetch appointments
     ) : (
       <div className={`overflow-x-hidden max-w-full flex-1 min-h-0 ${darkCalendar ? "calendar-dark" : ""}`}>
         <CalendarComponent
-          events={appointments}
+          events={calendarEvents}
           onSelectSlot={handleSelectSlot}
           onSelectEvent={handleSelectEvent}
           onUpdateAppointment={handleCalendarEventUpdate}
@@ -546,6 +597,7 @@ const [isLoading, setIsLoading] = useState(true);  // ✅ Fetch appointments
         onClose={() => setShowForm(false)}
         onSubmit={handleFormSubmit}
         onDelete={handleDelete}
+        onToggleNoShow={handleToggleNoShow}
         defaultBarber={defaultBarber}
         customers={customers}
       />

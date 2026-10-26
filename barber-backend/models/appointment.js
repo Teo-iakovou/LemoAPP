@@ -133,6 +133,17 @@ const appointmentSchema = new mongoose.Schema({
     sparse: true,
     index: true,
   },
+  // "Δεν ήρθε": the customer didn't show up. The appointment is KEPT (history + warning on
+  // their next bookings) but excluded from visit counts. Only set on past/started appointments.
+  noShow: {
+    type: Boolean,
+    default: false,
+  },
+  noShowAt: {
+    type: Date,
+    default: undefined,
+  },
+
   // When a slot is booked for someone other than the booker, their name goes here.
   // customerName stays the BOOKER's name, so all reminder/lookup code is unaffected.
   bookedFor: {

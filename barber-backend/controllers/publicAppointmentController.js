@@ -1,6 +1,7 @@
 const Appointment = require("../models/appointment");
 const moment = require("moment-timezone");
 const { sendSMS } = require("../utils/smsService");
+const { recordCancellation } = require("../utils/cancellationLog");
 
 function normalizePhone(input = "") {
   try {
@@ -182,6 +183,8 @@ const cancelUpcomingAppointment = async (req, res, next) => {
     }
 
     await Appointment.findByIdAndDelete(id);
+    // Barbers see it in the admin bell. Best-effort — never fails the cancellation.
+    await recordCancellation(appointment, { cancelledBy: "customer" });
 
     try {
       const formattedDateTime = moment(appointment.appointmentDateTime)

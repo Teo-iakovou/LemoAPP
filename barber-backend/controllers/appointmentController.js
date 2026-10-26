@@ -6,6 +6,7 @@ const { assertSlotBookable } = require("../services/bookingRules");
 const { sendSMS } = require("../utils/smsService")
 const { upsertCustomerFromIdentity } = require("../utils/customerSync");
 const { resolveBarberScope } = require("../utils/appointmentScope");
+const { recordCancellation } = require("../utils/cancellationLog");
 
 const moment = require("moment-timezone");
 const { getUserIdFromRequest, getPublicUserIdFromRequest, hasBearerToken } = require("../utils/auth");
@@ -1262,6 +1263,9 @@ const deleteAppointment = async (req, res, next) => {
       ).isBefore(now);
 
       if (deletedAppointment.type === "appointment" && !isPastAppointment) {
+        // A FUTURE appointment deleted from the admin (e.g. the customer phoned to cancel)
+        // goes to the cancellations bell as "cancelled by barber". Past ones are clean-up.
+        await recordCancellation(deletedAppointment, { cancelledBy: "barber", user: req.user });
         try {
           const formattedDateTime = moment(
             deletedAppointment.appointmentDateTime
@@ -1330,6 +1334,7 @@ const getUpcomingAppointments = async (req, res) => {
         duration: 1,
         endTime: 1,
         lockReason: 1,
+        noShow: 1,
         _id: 1,
       }
     )
@@ -1402,6 +1407,7 @@ const getPastAppointments = async (req, res) => {
       type: 1,
       duration: 1,
       endTime: 1,
+      noShow: 1,
       _id: 1,
     })
       .sort({ appointmentDateTime: -1 })
@@ -1414,6 +1420,61 @@ const getPastAppointments = async (req, res) => {
     res.json({ total, page, limit, appointments });
   } catch (error) {
     res.status(500).json({ error: "Failed to fetch past appointments" });
+  }
+};
+
+// PATCH /api/appointments/:id/no-show  { noShow: true|false }
+// Marks (or un-marks) a started appointment as "Δεν ήρθε". Keeps the appointment, sends no
+// SMS. A 'calendar' user may only mark their own barber's appointments.
+const setNoShow = async (req, res, next) => {
+  try {
+    const scope = resolveBarberScope(req.user);
+    if (scope.status) return res.status(scope.status).json({ message: scope.message });
+
+    const appointment = await Appointment.findById(req.params.id);
+    if (!appointment) return res.status(404).json({ message: "Appointment not found" });
+    if (scope.barber && appointment.barber !== scope.barber) {
+      return res.status(403).json({ message: "Insufficient permissions" });
+    }
+    if (appointment.type !== "appointment") {
+      return res.status(400).json({ message: "Μόνο ραντεβού μπορούν να σημειωθούν." });
+    }
+    if (new Date(appointment.appointmentDateTime) > new Date()) {
+      return res
+        .status(400)
+        .json({ message: "Το «Δεν ήρθε» μπαίνει μόνο αφού έρθει η ώρα του ραντεβού." });
+    }
+
+    const noShow = req.body?.noShow === true;
+    // updateOne: touch only these two fields (no full-document validation / hooks).
+    await Appointment.updateOne(
+      { _id: appointment._id },
+      noShow
+        ? { $set: { noShow: true, noShowAt: new Date() } }
+        : { $set: { noShow: false }, $unset: { noShowAt: 1 } }
+    );
+    res.json({ _id: appointment._id, noShow });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// GET /api/appointments/no-shows → { counts: { "<last 8 digits>": n } }
+// How many times each customer (by phone) didn't show up, across all barbers — used to put
+// a warning on their upcoming appointments. Phone suffixes + counts only, no names.
+const getNoShowCounts = async (req, res, next) => {
+  try {
+    const rows = await Appointment.find({ type: "appointment", noShow: true })
+      .select("phoneNumber")
+      .lean();
+    const counts = {};
+    rows.forEach((r) => {
+      const key = String(r.phoneNumber || "").replace(/\D+/g, "").slice(-8);
+      if (key) counts[key] = (counts[key] || 0) + 1;
+    });
+    res.json({ counts });
+  } catch (error) {
+    next(error);
   }
 };
 
@@ -1452,6 +1513,8 @@ module.exports = {
   getRecentLocks,
   getPastAppointments,
   getMyAppointments,
+  setNoShow,
+  getNoShowCounts,
   computeFollowupSendAt,
   RECURRENCE_SPLIT_INDEX,
 };

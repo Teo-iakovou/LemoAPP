@@ -168,7 +168,16 @@ const CalendarEvent = ({ event, title }) =>
           style={{ backgroundColor: getCustomerHexColor(event) }}
         />
       )}
-      <span className="align-middle">{title}</span>
+      {event.noShow && <span className="align-middle mr-1 font-semibold">Δεν ήρθε ·</span>}
+      {!event.noShow && Number(event.noShowCount) > 0 && (
+        <span
+          className="align-middle mr-1 rounded bg-amber-400 px-1 text-[10px] font-bold text-black"
+          title={`Δεν ήρθε ${event.noShowCount} φορ${event.noShowCount === 1 ? "ά" : "ές"} στο παρελθόν`}
+        >
+          ⚠️{event.noShowCount}
+        </span>
+      )}
+      <span className={`align-middle ${event.noShow ? "line-through" : ""}`}>{title}</span>
     </span>
   );
 
@@ -277,6 +286,18 @@ const CalendarComponent = ({
           alignItems: "flex-start",
           justifyContent: "flex-start",
           overflow: "visible",
+        },
+      };
+    }
+
+    // "Δεν ήρθε": grey and faded, so the freed history is still visible but clearly inactive.
+    if (event.noShow) {
+      return {
+        style: {
+          ...baseStyle,
+          backgroundColor: "#6b7280",
+          color: "white",
+          opacity: 0.65,
         },
       };
     }

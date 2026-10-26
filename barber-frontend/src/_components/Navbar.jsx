@@ -20,6 +20,7 @@ import { RefreshCcw } from "lucide-react";
 import Swal from "sweetalert2";
 import withReactContent from "sweetalert2-react-content";
 import LemoLogo from "../assets/LemoLogo.png";
+import CancellationsBell from "./CancellationsBell";
 
 const Navbar = ({ isAuth, role, onLogout, calendarDark, onToggleCalendarDark }) => {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -238,6 +239,9 @@ const Navbar = ({ isAuth, role, onLogout, calendarDark, onToggleCalendarDark }) 
               </button>
             </li>
           )}
+          <li className="flex items-center">
+            <CancellationsBell />
+          </li>
           <li>
             <Link
               to="/profile"
@@ -262,6 +266,7 @@ const Navbar = ({ isAuth, role, onLogout, calendarDark, onToggleCalendarDark }) 
       {/* Mobile menu — hamburger only, holds ALL features; hidden on desktop */}
       {isAuth && (
         <div className="flex items-center gap-4 md:hidden">
+          <CancellationsBell className="text-2xl" />
           {/* Calendar refresh — mobile only, next to the hamburger, on /calendar only */}
           {isCalendarPage && (
             <button

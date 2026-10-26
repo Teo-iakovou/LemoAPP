@@ -36,6 +36,7 @@ function AppointmentForm({
   onClose,
   onSubmit,
   onDelete,
+  onToggleNoShow,
   isEditing,
   appointmentData,
   defaultBarber = null,
@@ -370,6 +371,44 @@ const handleCustomerSelect = (e) => {
           <div className="mb-2 p-2 bg-red-100 text-red-700 rounded text-center">
             {error}
           </div>
+        )}
+
+        {/* "Δεν ήρθε": warning about this customer's history + the toggle (only once the
+            appointment's time has come). Marking keeps the appointment and sends no SMS. */}
+        {isEditing && appointmentData?.type === "appointment" && (
+          <>
+            {Number(appointmentData.noShowCount) > 0 && (
+              <div className="mb-3 rounded-xl border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
+                ⚠️ Ο πελάτης δεν ήρθε {appointmentData.noShowCount}{" "}
+                {Number(appointmentData.noShowCount) === 1 ? "φορά" : "φορές"} στο παρελθόν.
+              </div>
+            )}
+            {onToggleNoShow &&
+              appointmentData._id &&
+              new Date(appointmentData.appointmentDateTime) <= new Date() && (
+                <div className="mb-4 flex flex-col gap-2 rounded-xl border border-white/10 bg-white/5 p-3 sm:flex-row sm:items-center sm:justify-between">
+                  <span className="text-sm text-gray-300">
+                    {appointmentData.noShow
+                      ? "Σημειωμένο: ο πελάτης δεν ήρθε."
+                      : "Ο πελάτης δεν εμφανίστηκε;"}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const ok = await onToggleNoShow(appointmentData._id, !appointmentData.noShow);
+                      if (ok) onClose();
+                    }}
+                    className={
+                      appointmentData.noShow
+                        ? "rounded-lg border border-white/20 px-3 py-2 text-sm font-semibold text-gray-200 hover:bg-white/10"
+                        : "rounded-lg bg-amber-500 px-3 py-2 text-sm font-semibold text-black hover:bg-amber-400"
+                    }
+                  >
+                    {appointmentData.noShow ? "Αναίρεση «Δεν ήρθε»" : "Δεν ήρθε"}
+                  </button>
+                </div>
+              )}
+          </>
         )}
 
         <form onSubmit={handleSubmit(submitForm)} className="space-y-4 ">
