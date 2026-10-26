@@ -1,8 +1,11 @@
 const CancellationLog = require("../models/cancellationLog");
+const Customer = require("../models/customer");
 const Appointment = require("../models/appointment");
 const { resolveBarberScope } = require("../utils/appointmentScope");
 
-const LIST_LIMIT = 50;
+const PAGE_SIZE_DEFAULT = 50;
+const PAGE_SIZE_MAX = 200;
+const BARBERS = ["ΛΕΜΟ", "ΦΟΡΟΥ", "ΚΟΥΣΙΗΣ"];
 
 // Cancellations visible to this staff user: a 'calendar' user only sees their own barber.
 function scopedQuery(user) {
@@ -11,16 +14,36 @@ function scopedQuery(user) {
   return { query: scope.barber ? { barber: scope.barber } : {} };
 }
 
-// GET /api/cancellations → { items, unreadCount }
+// GET /api/cancellations?page=1&limit=50&barber=ΛΕΜΟ → { items, total, page, limit, unreadCount }
+// Full history (newest first), paged. `barber` is an optional filter. unreadCount ignores the
+// filter (it drives the navbar badge). ?countOnly=1 returns just { unreadCount }.
 const listCancellations = async (req, res, next) => {
   try {
     const { query, error } = scopedQuery(req.user);
     if (error) return res.status(error.status).json({ message: error.message });
 
     const userId = req.user._id;
-    const [rows, unreadCount] = await Promise.all([
-      CancellationLog.find(query).sort({ cancelledAt: -1 }).limit(LIST_LIMIT).lean(),
-      CancellationLog.countDocuments({ ...query, seenBy: { $ne: userId } }),
+    const unreadQuery = { ...query, seenBy: { $ne: userId } };
+    if (req.query.countOnly) {
+      return res.json({ unreadCount: await CancellationLog.countDocuments(unreadQuery) });
+    }
+
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const limit = Math.min(
+      PAGE_SIZE_MAX,
+      Math.max(1, parseInt(req.query.limit, 10) || PAGE_SIZE_DEFAULT)
+    );
+    const listQuery = { ...query };
+    if (BARBERS.includes(req.query.barber) && !query.barber) listQuery.barber = req.query.barber;
+
+    const [rows, total, unreadCount] = await Promise.all([
+      CancellationLog.find(listQuery)
+        .sort({ cancelledAt: -1 })
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .lean(),
+      CancellationLog.countDocuments(listQuery),
+      CancellationLog.countDocuments(unreadQuery),
     ]);
 
     // Has someone else already taken the freed slot? (only matters for future slots)
@@ -73,7 +96,7 @@ const listCancellations = async (req, res, next) => {
       unread: !(r.seenBy || []).some((id) => String(id) === String(userId)),
     }));
 
-    res.json({ items, unreadCount });
+    res.json({ items, total, page, limit, unreadCount });
   } catch (error) {
     next(error);
   }
@@ -94,4 +117,33 @@ const markCancellationsSeen = async (req, res, next) => {
   }
 };
 
-module.exports = { listCancellations, markCancellationsSeen };
+// GET /api/customers/:id/cancellations → every logged cancellation for this customer's phone
+// (matched on the last 8 digits, so "+357…" and bare numbers both match). Owner-only.
+const listCustomerCancellations = async (req, res, next) => {
+  try {
+    const customer = await Customer.findById(req.params.id).select("phoneNumber").lean();
+    if (!customer) return res.status(404).json({ message: "Customer not found." });
+    const digits = String(customer.phoneNumber || "").replace(/\D+/g, "").slice(-8);
+    if (!digits) return res.json({ items: [] });
+    const rows = await CancellationLog.find({ phoneNumber: new RegExp(`${digits}$`) })
+      .sort({ cancelledAt: -1 })
+      .limit(100)
+      .lean();
+    res.json({
+      items: rows.map((r) => ({
+        _id: r._id,
+        barber: r.barber,
+        appointmentDateTime: r.appointmentDateTime,
+        bookedFor: r.bookedFor,
+        cancelledAt: r.cancelledAt,
+        cancelledBy: r.cancelledBy,
+        cancelledByName: r.cancelledByName,
+        sameDay: r.sameDay,
+      })),
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+module.exports = { listCancellations, markCancellationsSeen, listCustomerCancellations };

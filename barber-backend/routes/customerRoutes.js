@@ -8,6 +8,8 @@ const { sendNewYearSMS } = require("../controllers/newYearSms");
 const requireUser = require("../middlewares/requireUser");
 const requireFullAdmin = require("../middlewares/requireFullAdmin");
 const requireCalendarOrAdmin = require("../middlewares/requireCalendarOrAdmin");
+const requireOwner = require("../middlewares/requireOwner");
+const { listCustomerCancellations } = require("../controllers/cancellationController");
 const {
   getCustomers,
   getCustomersForLookup,
@@ -60,6 +62,8 @@ router.post("/", createCustomer);
 router.put("/:id", updateCustomer);
 router.get("/:id", getCustomerById);
 router.get("/:id/all-appointments", getAllCustomerAppointments);
+// Owner-only (same rule as the cancellations bell / Customer Counts).
+router.get("/:id/cancellations", requireOwner, listCustomerCancellations);
 
 
 

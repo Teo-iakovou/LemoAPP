@@ -489,6 +489,8 @@ const getAllCustomerAppointments = async (req, res) => {
         customerName: a.customerName,
         appointmentDateTime: a.appointmentDateTime,
         barber: a.barber,
+        type: a.type,
+        noShow: Boolean(a.noShow),
       }))
     );
   } catch (error) {

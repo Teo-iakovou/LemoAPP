@@ -240,7 +240,7 @@ const Navbar = ({ isAuth, role, onLogout, calendarDark, onToggleCalendarDark }) 
             </li>
           )}
           <li className="flex items-center">
-            <CancellationsBell />
+            <CancellationsBell className="text-xl" />
           </li>
           <li>
             <Link
@@ -266,7 +266,10 @@ const Navbar = ({ isAuth, role, onLogout, calendarDark, onToggleCalendarDark }) 
       {/* Mobile menu — hamburger only, holds ALL features; hidden on desktop */}
       {isAuth && (
         <div className="flex items-center gap-4 md:hidden">
-          <CancellationsBell className="text-2xl" />
+          <CancellationsBell
+            className="text-2xl"
+            onNavigate={() => setIsDropdownOpen(false)}
+          />
           {/* Calendar refresh — mobile only, next to the hamburger, on /calendar only */}
           {isCalendarPage && (
             <button

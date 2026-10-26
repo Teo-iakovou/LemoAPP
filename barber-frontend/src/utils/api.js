@@ -569,15 +569,30 @@ export const patchCustomer = async (id, data) => {
 };
 
 // --- Cancellations bell -------------------------------------------------------
-// { items: [...], unreadCount } — scoped server-side ('calendar' users: own barber only).
-export const fetchCancellations = async () => {
-  const res = await apiFetch(`${API_BASE_URL}/cancellations`);
+// Full cancellation history, paged: { items, total, page, limit, unreadCount }.
+// Owner-only server-side; a 403 is thrown with err.status = 403.
+export const fetchCancellations = async ({ page = 1, limit = 50, barber = "" } = {}) => {
+  const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+  if (barber) params.set("barber", barber);
+  const res = await apiFetch(`${API_BASE_URL}/cancellations?${params.toString()}`);
   if (!res.ok) {
     const err = new Error("Failed to fetch cancellations.");
-    err.status = res.status; // 403 = not the owner → the bell hides itself
+    err.status = res.status;
     throw err;
   }
   return res.json();
+};
+
+// Just the navbar badge number. Throws with err.status (403 → not the owner).
+export const fetchCancellationsUnreadCount = async () => {
+  const res = await apiFetch(`${API_BASE_URL}/cancellations?countOnly=1`);
+  if (!res.ok) {
+    const err = new Error("Failed to fetch cancellations count.");
+    err.status = res.status;
+    throw err;
+  }
+  const data = await res.json();
+  return Number(data?.unreadCount) || 0;
 };
 
 export const markCancellationsSeen = async () => {
@@ -611,3 +626,18 @@ export const fetchNoShowCounts = async () => {
 };
 
 export const phoneKey = (phone) => String(phone || "").replace(/\D+/g, "").slice(-8);
+
+// Owner-only: a customer's cancellation history. Returns null when this user has no access
+// (403), so the card simply doesn't show the section.
+export const fetchCustomerCancellations = async (customerId) => {
+  try {
+    const res = await apiFetch(`${API_BASE_URL}/customers/${customerId}/cancellations`);
+    if (res.status === 403) return null;
+    if (!res.ok) throw new Error("Failed to fetch cancellations.");
+    const data = await res.json();
+    return Array.isArray(data?.items) ? data.items : [];
+  } catch (error) {
+    console.error("Error fetching customer cancellations:", error);
+    return null;
+  }
+};

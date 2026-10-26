@@ -4,7 +4,8 @@ const mongoose = require("mongoose");
 // deleted, so the barbers can see cancellations (bell in the admin navbar). The appointment
 // collection is left untouched: availability, the unique slot index and the SMS flows all
 // assume every stored appointment is a live, confirmed one.
-const RETENTION_DAYS = 60;
+// Kept forever (no TTL): the owner wants the full cancellation history, both on the
+// Cancellations page and on each customer's card.
 
 const cancellationLogSchema = new mongoose.Schema({
   appointmentId: { type: mongoose.Schema.Types.ObjectId, index: true },
@@ -37,10 +38,17 @@ const cancellationLogSchema = new mongoose.Schema({
 });
 
 cancellationLogSchema.index({ cancelledAt: -1 });
-cancellationLogSchema.index(
-  { cancelledAt: 1 },
-  { expireAfterSeconds: RETENTION_DAYS * 24 * 60 * 60, name: "ttl_cancelledAt" }
-);
+cancellationLogSchema.index({ barber: 1, cancelledAt: -1 });
+cancellationLogSchema.index({ phoneNumber: 1, cancelledAt: -1 });
 
-module.exports = mongoose.model("CancellationLog", cancellationLogSchema);
-module.exports.RETENTION_DAYS = RETENTION_DAYS;
+const CancellationLog = mongoose.model("CancellationLog", cancellationLogSchema);
+
+// Earlier (never released) builds declared TTL indexes that auto-deleted rows. If a dev
+// server ever created one, drop it so nothing expires.
+mongoose.connection.once("open", () => {
+  ["ttl_cancelledAt", "ttl_cancelledAt_1y"].forEach((name) =>
+    CancellationLog.collection.dropIndex(name).catch(() => {})
+  );
+});
+
+module.exports = CancellationLog;

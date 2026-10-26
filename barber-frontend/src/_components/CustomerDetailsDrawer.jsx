@@ -10,6 +10,7 @@ import {
   fetchCustomer,
   uploadCustomerPhoto,
   fetchAllCustomerAppointments,
+  fetchCustomerCancellations,
   patchCustomer,
 } from "../utils/api";
 import {
@@ -36,6 +37,9 @@ const CustomerDetailsDrawer = ({ customerId, onClose }) => {
   });
   const [saving, setSaving] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  // null = not loaded / no access (owner-only) → section hidden.
+  const [cancellations, setCancellations] = useState(null);
+  const [cancellationsOpen, setCancellationsOpen] = useState(false);
 
   useEffect(() => {
     if (!customerId) return;
@@ -65,7 +69,23 @@ const CustomerDetailsDrawer = ({ customerId, onClose }) => {
       .finally(() => setAppointmentsLoading(false));
   }, [customerId]);
 
+  useEffect(() => {
+    if (!customerId) return;
+    setCancellations(null);
+    fetchCustomerCancellations(customerId).then((items) => setCancellations(items));
+  }, [customerId]);
+
   if (!customerId) return null;
+
+  const noShowCount = appointments.filter((a) => a.noShow).length;
+  const fmtDateTime = (value) =>
+    new Date(value).toLocaleString("el-GR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
 
   const startEditing = () => setEditing(true);
   const cancelEditing = () => {
@@ -256,6 +276,22 @@ const CustomerDetailsDrawer = ({ customerId, onClose }) => {
               </div>
             </div>
 
+            {/* Reliability summary: no-shows (everyone) + cancellations (owner only) */}
+            {(noShowCount > 0 || (cancellations && cancellations.length > 0)) && (
+              <div className="mb-4 flex flex-wrap justify-center gap-2">
+                {noShowCount > 0 && (
+                  <span className="rounded-full border border-amber-400/50 bg-amber-500/10 px-3 py-1 text-sm font-semibold text-amber-300">
+                    ⚠️ Δεν ήρθε: {noShowCount}
+                  </span>
+                )}
+                {cancellations && cancellations.length > 0 && (
+                  <span className="rounded-full border border-red-400/50 bg-red-500/10 px-3 py-1 text-sm font-semibold text-red-300">
+                    Ακυρώσεις: {cancellations.length}
+                  </span>
+                )}
+              </div>
+            )}
+
             {/* Save/Cancel controls */}
             {editing && (
               <div className="flex justify-center gap-3 mb-4">
@@ -306,16 +342,12 @@ const CustomerDetailsDrawer = ({ customerId, onClose }) => {
                           key={idx}
                           className="py-2 flex justify-between items-center px-4"
                         >
-                          <span className="text-[#ede9fe]">
-                            {new Date(appt.appointmentDateTime).toLocaleString(
-                              "el-GR",
-                              {
-                                day: "2-digit",
-                                month: "2-digit",
-                                year: "2-digit",
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              }
+                          <span className={`text-[#ede9fe] ${appt.noShow ? "line-through opacity-60" : ""}`}>
+                            {fmtDateTime(appt.appointmentDateTime)}
+                            {appt.noShow && (
+                              <span className="ml-2 rounded bg-amber-500/20 px-1.5 py-0.5 text-[11px] font-semibold text-amber-300 no-underline inline-block">
+                                Δεν ήρθε
+                              </span>
                             )}
                           </span>
                           <span
@@ -338,6 +370,54 @@ const CustomerDetailsDrawer = ({ customerId, onClose }) => {
                 </div>
               )}
             </div>
+
+            {/* Cancellations (owner-only — hidden for everyone else) */}
+            {cancellations && (
+              <div className="w-full mt-4">
+                <button
+                  onClick={() => setCancellationsOpen((prev) => !prev)}
+                  className="flex items-center justify-between w-full bg-[#23263b] border border-red-400/50 px-6 py-4 rounded-xl cursor-pointer shadow-md text-lg font-bold text-red-200 tracking-wide transition"
+                >
+                  Ακυρώσεις
+                  <span className="ml-3 font-extrabold">({cancellations.length})</span>
+                  {cancellationsOpen ? <FaChevronUp /> : <FaChevronDown />}
+                </button>
+                {cancellationsOpen && (
+                  <div className="bg-[#161a23] rounded-b-xl border border-t-0 border-red-400/50 py-1">
+                    {cancellations.length === 0 ? (
+                      <div className="text-[#7c72a6] text-center py-3">Καμία ακύρωση.</div>
+                    ) : (
+                      <ul className="divide-y divide-[#23263b]">
+                        {cancellations.map((c) => (
+                          <li key={c._id} className="px-4 py-2">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-[#ede9fe]">
+                                {fmtDateTime(c.appointmentDateTime)}
+                              </span>
+                              <span className="font-bold text-[#a78bfa]">{c.barber}</span>
+                            </div>
+                            <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-[#9ba3ce]">
+                              <span>Ακυρώθηκε {fmtDateTime(c.cancelledAt)}</span>
+                              {c.sameDay && (
+                                <span className="rounded bg-red-500/20 px-1.5 py-0.5 font-semibold text-red-300">
+                                  Ίδια μέρα
+                                </span>
+                              )}
+                              <span className="rounded bg-white/10 px-1.5 py-0.5">
+                                {c.cancelledBy === "barber"
+                                  ? `Από barber${c.cancelledByName ? ` (${c.cancelledByName})` : ""}`
+                                  : "Από πελάτη"}
+                              </span>
+                              {c.bookedFor && <span>για {c.bookedFor}</span>}
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>
