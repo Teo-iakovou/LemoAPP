@@ -15,7 +15,34 @@ const {
   minutesToHHMM,
   hhmmToMinutes,
   getScopedSettingList,
+  GREEK_TO_BARBER_KEY,
+  normalizeSlotRules,
+  activeSlotRule,
+  buildDaySlots,
+  slotDurationFor,
 } = require("../services/bookingRules");
+
+// Candidate slots for one day, each with its own length (slot-duration rules from Settings).
+// A special-hours whitelist keeps its own labels; their length still follows the rules.
+function dayCandidates({ day, ds, window, whitelist, settingsDoc, barberGreek }) {
+  if (whitelist.length) {
+    return whitelist
+      .map((label) => ({ label, start: hhmmToMinutes(label) }))
+      .filter((slot) => slot.start !== null)
+      .map((slot) => ({
+        ...slot,
+        duration: slotDurationFor(settingsDoc, ds, slot.start, barberGreek),
+      }))
+      .sort((a, b) => a.start - b.start);
+  }
+  const barberKey = GREEK_TO_BARBER_KEY[String(barberGreek || "").trim().toUpperCase()] || null;
+  const rule = activeSlotRule(normalizeSlotRules(settingsDoc.slotRules), ds, barberKey);
+  return buildDaySlots({ window, rule }).map((slot) => ({
+    label: minutesToHHMM(slot.start),
+    start: slot.start,
+    duration: slot.duration,
+  }));
+}
 
 // Core month availability computation reused by multiple routes
 async function buildMonthAvailability({ from, to, barber, includeSlots, includeAll }) {
@@ -108,23 +135,21 @@ const extraDaySlots = settingsDoc.extraDaySlots || {};
       continue;
     }
     const whitelist = Array.isArray(specialDayHours?.[ds]) ? specialDayHours[ds] : [];
-    let candidateLabels = [];
-    if (whitelist.length) {
-      candidateLabels = whitelist.slice();
-    } else {
-      const win = businessWindow(d);
-      const effectiveWindow = win || (manualOpen ? { open: DEFAULT_OPEN_MINUTES, close: DEFAULT_CLOSE_MINUTES } : null);
-      if (!effectiveWindow) {
-        result[ds] = 0;
-        if (slotsMap) slotsMap[ds] = [];
-        continue;
-      }
-      const baseSlots = generateSlots({ date: d, duration: 40, step: 40, windowOverride: effectiveWindow }).map(minutesToHHMM);
-      candidateLabels = baseSlots.sort();
+    const win = businessWindow(d);
+    const effectiveWindow = win || (manualOpen ? { open: DEFAULT_OPEN_MINUTES, close: DEFAULT_CLOSE_MINUTES } : null);
+    if (!whitelist.length && !effectiveWindow) {
+      result[ds] = 0;
+      if (slotsMap) slotsMap[ds] = [];
+      continue;
     }
-    const candidates = candidateLabels
-      .map((label) => ({ label, start: hhmmToMinutes(label) }))
-      .filter((slot) => slot.start !== null);
+    const candidates = dayCandidates({
+      day: d,
+      ds,
+      window: effectiveWindow,
+      whitelist,
+      settingsDoc,
+      barberGreek: barber,
+    });
     if (!candidates.length) {
       result[ds] = 0;
       if (slotsMap) slotsMap[ds] = [];
@@ -134,13 +159,14 @@ const extraDaySlots = settingsDoc.extraDaySlots || {};
     const dayAppts = appts.filter((b) => toLocalYMD(b.start) === ds);
     const free = candidates.filter((slot) => !dayAppts.some((b) => {
       const bStart = zonedMinutes(b.start);
-      return overlaps(slot.start, 40, bStart, b.duration);
+      return overlaps(slot.start, slot.duration, bStart, b.duration);
     }));
-    // Same-day 120' cutoff
+    // Same-day 120' cutoff (compares the slot's start minutes — previously compared the slot
+    // object itself, so the cutoff never applied here)
     const now = new Date();
     if (toLocalYMD(now) === ds) {
       const cutoff = zonedMinutes(now) + 120;
-      for (let k = free.length - 1; k >= 0; k--) if (free[k] < cutoff) free.splice(k, 1);
+      for (let k = free.length - 1; k >= 0; k--) if (free[k].start < cutoff) free.splice(k, 1);
     }
     result[ds] = free.length;
     const labels = free.map((slot) => slot.label);
@@ -340,28 +366,25 @@ router.get("/availability", async (req, res, next) => {
     });
 
     const whiteListSlots = Array.isArray(specialDayHours?.[date]) ? specialDayHours[date] : [];
-
-    let candidateLabels = [];
-    if (whiteListSlots.length) {
-      candidateLabels = whiteListSlots.slice();
-    } else {
-      const win = businessWindow(dayStart);
-      const effectiveWindow = win || (manualOpen ? { open: DEFAULT_OPEN_MINUTES, close: DEFAULT_CLOSE_MINUTES } : null);
-      if (!effectiveWindow) {
-        return res.json({ slots: [] });
-      }
-      const base = generateSlots({ date: dayStart, duration: 40, step: 40, windowOverride: effectiveWindow }).map(minutesToHHMM);
-      candidateLabels = base.sort();
+    const win = businessWindow(dayStart);
+    const effectiveWindow = win || (manualOpen ? { open: DEFAULT_OPEN_MINUTES, close: DEFAULT_CLOSE_MINUTES } : null);
+    if (!whiteListSlots.length && !effectiveWindow) {
+      return res.json({ slots: [] });
     }
 
-    const candidateObjs = candidateLabels
-      .map((label) => ({ label, start: hhmmToMinutes(label) }))
-      .filter((entry) => entry.start !== null);
+    const candidateObjs = dayCandidates({
+      day: dayStart,
+      ds: date,
+      window: effectiveWindow,
+      whitelist: whiteListSlots,
+      settingsDoc,
+      barberGreek: greekBarber,
+    });
 
     const free = candidateObjs.filter((slot) => {
       return !existing.some((appt) => {
         const apptStart = zonedMinutes(appt.start);
-        return overlaps(slot.start, 40, apptStart, appt.duration);
+        return overlaps(slot.start, slot.duration, apptStart, appt.duration);
       });
     });
 

@@ -2,7 +2,12 @@ const Appointment = require("../models/appointment");
 const Customer = require("../models/customer");
 const User = require("../models/user");
 const PublicBookingSettings = require("../models/publicBookingSettings");
-const { assertSlotBookable } = require("../services/bookingRules");
+const {
+  assertSlotBookable,
+  slotDurationFor,
+  toLocalYMD: toAthensYMD,
+  zonedMinutes: athensMinutes,
+} = require("../services/bookingRules");
 const { sendSMS } = require("../utils/smsService")
 const { upsertCustomerFromIdentity } = require("../utils/customerSync");
 const { resolveBarberScope } = require("../utils/appointmentScope");
@@ -292,6 +297,18 @@ const createAppointment = async (req, res, next) => {
       endTimeUTC = duration
         ? appointmentDateUTC.clone().add(duration, "minutes").toDate()
         : appointmentDateUTC.toDate();
+    } else if (!isStaff) {
+      // PUBLIC booking: the slot length comes from the shop's slot-duration rules (Settings),
+      // never from the client — e.g. 30' after 13:00 in December, 40' otherwise.
+      const settingsForDuration = await PublicBookingSettings.getSingleton();
+      const startDate = appointmentDateUTC.toDate();
+      duration = slotDurationFor(
+        settingsForDuration,
+        toAthensYMD(startDate),
+        athensMinutes(startDate),
+        effectiveBarber
+      );
+      endTimeUTC = appointmentDateUTC.clone().add(duration, "minutes").toDate();
     } else {
       duration = Number.isFinite(parsedDuration) && parsedDuration > 0 ? parsedDuration : 40;
       endTimeUTC = appointmentDateUTC.clone().add(duration, "minutes").toDate();
@@ -516,6 +533,8 @@ const createMultiSlotBooking = async (req, res, { userId, isStaff }) => {
 
     // Validate + normalize every slot BEFORE any DB work (no partial state on a bad request).
     const nowUtc = moment().utc();
+    // Each slot's length follows the shop's slot-duration rules (Settings).
+    const durationSettings = await PublicBookingSettings.getSingleton();
     const prepared = [];
     for (let i = 0; i < slots.length; i++) {
       const s = slots[i] || {};
@@ -526,7 +545,13 @@ const createMultiSlotBooking = async (req, res, { userId, isStaff }) => {
       if (when.isBefore(nowUtc)) {
         return res.status(400).json({ error: `Slot ${i + 1}: appointment is in the past.` });
       }
-      const duration = 40;
+      const slotBarber = normalizeBarber(s.barber) || "ΛΕΜΟ";
+      const duration = slotDurationFor(
+        durationSettings,
+        toAthensYMD(when.toDate()),
+        athensMinutes(when.toDate()),
+        slotBarber
+      );
       prepared.push({
         index: i,
         startUtc: when.toDate(),

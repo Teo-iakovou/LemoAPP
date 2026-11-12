@@ -68,6 +68,96 @@ function generateSlots({ date, duration = 40, step = 40, windowOverride = null }
   return out;
 }
 
+// ── Slot-duration rules ──────────────────────────────────────────────────────────────────
+// Set by the shop in the public site's Settings (settings.slotRules). A rule changes the slot
+// length from a given time of day onwards, for a date range and for all or some barbers:
+//   { id, barbers: [] | ["LEMO","FOROU","KOUSHIS"], from: "YYYY-MM-DD", to: "YYYY-MM-DD"|"",
+//     after: "HH:MM", minutes: 10..120 }
+// barbers [] = everyone. Before `after` the normal 40' grid runs (last slot that ENDS by
+// `after`); from `after` slots are `minutes` long, back to back, until closing.
+// MUST stay identical to lib/slotRules.js in the public site.
+const SLOT_RULE_MIN_MINUTES = 10;
+const SLOT_RULE_MAX_MINUTES = 120;
+const YMD_RE = /^\d{4}-\d{2}-\d{2}$/;
+const HHMM_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
+const RULE_BARBER_KEYS = ["LEMO", "FOROU", "KOUSHIS"];
+
+function normalizeSlotRules(value) {
+  if (!Array.isArray(value)) return [];
+  const out = [];
+  value.forEach((r, i) => {
+    if (!r || typeof r !== "object") return;
+    const from = String(r.from || "").trim();
+    const to = String(r.to || "").trim();
+    const after = String(r.after || "").trim();
+    const minutes = Math.round(Number(r.minutes));
+    if (!YMD_RE.test(from) || !HHMM_RE.test(after)) return;
+    if (to && (!YMD_RE.test(to) || to < from)) return;
+    if (!Number.isFinite(minutes) || minutes < SLOT_RULE_MIN_MINUTES || minutes > SLOT_RULE_MAX_MINUTES) return;
+    const barbers = Array.isArray(r.barbers)
+      ? Array.from(new Set(r.barbers.filter((b) => RULE_BARBER_KEYS.includes(b))))
+      : [];
+    out.push({
+      id: String(r.id || `rule-${i}-${from}`).slice(0, 64),
+      barbers: barbers.length === RULE_BARBER_KEYS.length ? [] : barbers,
+      from,
+      to,
+      after,
+      minutes,
+    });
+  });
+  return out;
+}
+
+// The rule that applies to this barber on this day: a rule naming the barber beats an
+// "everyone" rule; among equals the one added last wins.
+function activeSlotRule(rules, ds, barberKey) {
+  let best = null;
+  let bestSpecific = false;
+  (Array.isArray(rules) ? rules : []).forEach((r) => {
+    if (ds < r.from || (r.to && ds > r.to)) return;
+    const everyone = !r.barbers || r.barbers.length === 0;
+    if (!everyone && !r.barbers.includes(barberKey)) return;
+    const specific = !everyone;
+    if (!best || specific || !bestSpecific) {
+      best = r;
+      bestSpecific = specific;
+    }
+  });
+  return best;
+}
+
+// Day plan: [{ start, duration }] in minutes from midnight.
+function buildDaySlots({ window, rule }) {
+  if (!window) return [];
+  const out = [];
+  const after = rule ? hhmmToMinutes(rule.after) : null;
+  let t = window.open;
+  for (let guard = 0; guard < 200; guard += 1) {
+    if (rule && t >= after) {
+      if (t + rule.minutes > window.close) break;
+      out.push({ start: t, duration: rule.minutes });
+      t += rule.minutes;
+    } else if (t + SLOT_DURATION_MINUTES <= (rule ? Math.min(after, window.close) : window.close)) {
+      out.push({ start: t, duration: SLOT_DURATION_MINUTES });
+      t += SLOT_DURATION_MINUTES;
+    } else if (rule && after < window.close) {
+      t = Math.max(t, after); // jump to where the rule starts
+    } else {
+      break;
+    }
+  }
+  return out;
+}
+
+// Length of a slot starting at `startMin` for this barber on this day.
+function slotDurationFor(settings, ds, startMin, barberGreek) {
+  const barberKey = GREEK_TO_BARBER_KEY[String(barberGreek || "").trim().toUpperCase()] || null;
+  const rule = activeSlotRule(normalizeSlotRules(settings?.slotRules), ds, barberKey);
+  if (rule && startMin >= hhmmToMinutes(rule.after)) return rule.minutes;
+  return SLOT_DURATION_MINUTES;
+}
+
 function overlaps(aStart, aDur, bStart, bDur) {
   const aEnd = aStart + aDur;
   const bEnd = bStart + bDur;
@@ -141,7 +231,10 @@ function assertSlotBookable({ startUtc, endUtc, barber, settings, now }) {
     ? endUtc instanceof Date
       ? endUtc
       : new Date(endUtc)
-    : new Date(start.getTime() + SLOT_DURATION_MINUTES * 60000);
+    : new Date(
+        start.getTime() +
+          slotDurationFor(settings, toLocalYMD(start), zonedMinutes(start), barber) * 60000
+      );
   const reference = now instanceof Date ? now : now ? new Date(now) : new Date();
   const doc = settings || {};
 
@@ -198,6 +291,10 @@ module.exports = {
   DEFAULT_STEP_MINUTES,
   SLOT_DURATION_MINUTES,
   GREEK_TO_BARBER_KEY,
+  normalizeSlotRules,
+  activeSlotRule,
+  buildDaySlots,
+  slotDurationFor,
   toLocalYMD,
   parseYMD,
   zonedMinutes,

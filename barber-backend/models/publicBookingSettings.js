@@ -46,6 +46,12 @@ const publicBookingSettingsSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.Mixed,
       default: () => ({ enabled: false, text: "", tone: "info" }),
     },
+    // Slot-duration rules (see services/bookingRules.js → normalizeSlotRules), e.g.
+    // [{ id, barbers: [], from: "2026-12-01", to: "2026-12-31", after: "13:00", minutes: 30 }]
+    slotRules: {
+      type: [mongoose.Schema.Types.Mixed],
+      default: () => [],
+    },
     visibleMonthCount: {
       type: Number,
       default: 2,

@@ -1,4 +1,5 @@
 const PublicBookingSettings = require("../models/publicBookingSettings");
+const { normalizeSlotRules } = require("../services/bookingRules");
 
 const MIN_VISIBLE_MONTHS = 1;
 const MAX_VISIBLE_MONTHS = 6;
@@ -39,6 +40,7 @@ function serializeSettings(doc) {
       barberPriceHidden: {},
       visibleMonthCount: DEFAULT_VISIBLE_MONTH_COUNT,
       announcement: normalizeAnnouncement(null),
+      slotRules: [],
       updatedAt: null,
       updatedBy: null,
     };
@@ -71,6 +73,7 @@ function serializeSettings(doc) {
     barberPriceHidden: normalizeBarberPriceHidden(doc.barberPriceHidden),
     visibleMonthCount: clampVisibleMonthCount(doc.visibleMonthCount),
     announcement: normalizeAnnouncement(doc.announcement),
+    slotRules: normalizeSlotRules(doc.slotRules),
     updatedAt: doc.updatedAt || null,
     updatedBy: doc.updatedBy || null,
   };
@@ -302,8 +305,39 @@ const updateAnnouncement = async (req, res, next) => {
   }
 };
 
+// PUT /api/public-settings/slot-rules { slotRules: [...] } — replaces ONLY the slot-duration
+// rules (own endpoint, like the announcement, so it never overwrites other settings).
+const MAX_SLOT_RULES = 30;
+const updateSlotRules = async (req, res, next) => {
+  try {
+    const incoming = req.body?.slotRules;
+    if (!Array.isArray(incoming)) {
+      return res.status(400).json({ message: "slotRules must be an array." });
+    }
+    const rules = normalizeSlotRules(incoming);
+    if (rules.length !== incoming.length) {
+      return res.status(400).json({
+        message:
+          "Μη έγκυρος κανόνας: ελέγξτε ημερομηνίες (Από ≤ Έως), ώρα και διάρκεια 10–120 λεπτά.",
+      });
+    }
+    if (rules.length > MAX_SLOT_RULES) {
+      return res.status(400).json({ message: `Έως ${MAX_SLOT_RULES} κανόνες.` });
+    }
+    const doc = await PublicBookingSettings.getSingleton();
+    doc.slotRules = rules;
+    doc.markModified("slotRules");
+    doc.updatedBy = req.publicUserId || null;
+    await doc.save();
+    res.json({ settings: serializeSettings(doc) });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getSettings,
   updateSettings,
   updateAnnouncement,
+  updateSlotRules,
 };
